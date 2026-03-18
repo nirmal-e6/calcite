@@ -4259,7 +4259,7 @@ LogicalValues(tuples=[[]])
   <TestCase name="testEmptyTableTransformsComplexQueryToSingleTableScan">
     <Resource name="sql">
       <![CDATA[select products.PRODUCTID, products.NAME from products left join
-(select * from products as e
+(select e.* from products as e
  inner join EMPTY_PRODUCTS as d on e.PRODUCTID = d.PRODUCTID
  where e.SUPPLIERID > 10) dt
  on products.PRODUCTID = dt.PRODUCTID]]>
@@ -4269,7 +4269,7 @@ LogicalValues(tuples=[[]])
 LogicalProject(PRODUCTID=[$0], NAME=[$1])
   LogicalJoin(condition=[=($0, $3)], joinType=[left])
     LogicalTableScan(table=[[CATALOG, SALES, PRODUCTS]])
-    LogicalProject(PRODUCTID=[$0], NAME=[$1], SUPPLIERID=[$2], PRODUCTID0=[$3], NAME0=[$4], SUPPLIERID0=[$5])
+    LogicalProject(PRODUCTID=[$0], NAME=[$1], SUPPLIERID=[$2])
       LogicalFilter(condition=[>($2, 10)])
         LogicalJoin(condition=[=($0, $3)], joinType=[inner])
           LogicalTableScan(table=[[CATALOG, SALES, PRODUCTS]])
@@ -9711,7 +9711,7 @@ LogicalProject(EXPR$0=['AAAAAabc':VARCHAR])
   </TestCase>
   <TestCase name="testManyFiltersOnTopOfMultiJoinShouldCollapse">
     <Resource name="sql">
-      <![CDATA[select * from (select * from emp e1 left outer join dept d
+      <![CDATA[select * from (select e1.*, d.deptno as deptno0, d.name from emp e1 left outer join dept d
 on e1.deptno = d.deptno
 where d.deptno > 3) where ename LIKE 'bar']]>
     </Resource>
@@ -11944,7 +11944,7 @@ LogicalProject(EXPR$0=[CAST(/(CASE(>($2, 0), $3, null:INTEGER), $2)):INTEGER])
     <Resource name="sql">
       <![CDATA[select e.ename, d.dname
 from (select ename, deptno from emp where deptno = 10) e
-join (select name dname, deptno, * from dept) d
+join (select name dname, deptno, deptno as deptno0, name from dept) d
 on e.deptno = d.deptno]]>
     </Resource>
     <Resource name="planBefore">
@@ -14425,15 +14425,15 @@ LogicalProject(DNAME=[$1])
   <TestCase name="testPushFilterThroughJoinWithNonDeterministic">
     <Resource name="sql">
       <![CDATA[select * from (
-  select * from dept inner join
+  select dept.name, emp.* from dept inner join
      emp on dept.deptno = emp.deptno) R
 where 0.9 <= rand()]]>
     </Resource>
     <Resource name="planBefore">
       <![CDATA[
-LogicalProject(DEPTNO=[$0], NAME=[$1], EMPNO=[$2], ENAME=[$3], JOB=[$4], MGR=[$5], HIREDATE=[$6], SAL=[$7], COMM=[$8], DEPTNO0=[$9], SLACKER=[$10])
+LogicalProject(NAME=[$0], EMPNO=[$1], ENAME=[$2], JOB=[$3], MGR=[$4], HIREDATE=[$5], SAL=[$6], COMM=[$7], DEPTNO=[$8], SLACKER=[$9])
   LogicalFilter(condition=[<=(CAST(0.9:DECIMAL(2, 1)):DOUBLE NOT NULL, RAND())])
-    LogicalProject(DEPTNO=[$0], NAME=[$1], EMPNO=[$2], ENAME=[$3], JOB=[$4], MGR=[$5], HIREDATE=[$6], SAL=[$7], COMM=[$8], DEPTNO0=[$9], SLACKER=[$10])
+    LogicalProject(NAME=[$1], EMPNO=[$2], ENAME=[$3], JOB=[$4], MGR=[$5], HIREDATE=[$6], SAL=[$7], COMM=[$8], DEPTNO=[$9], SLACKER=[$10])
       LogicalJoin(condition=[=($0, $9)], joinType=[inner])
         LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
         LogicalTableScan(table=[[CATALOG, SALES, EMP]])
@@ -14441,8 +14441,8 @@ LogicalProject(DEPTNO=[$0], NAME=[$1], EMPNO=[$2], ENAME=[$3], JOB=[$4], MGR=[$5
     </Resource>
     <Resource name="planAfter">
       <![CDATA[
-LogicalProject(DEPTNO=[$0], NAME=[$1], EMPNO=[$2], ENAME=[$3], JOB=[$4], MGR=[$5], HIREDATE=[$6], SAL=[$7], COMM=[$8], DEPTNO0=[$9], SLACKER=[$10])
-  LogicalProject(DEPTNO=[$0], NAME=[$1], EMPNO=[$2], ENAME=[$3], JOB=[$4], MGR=[$5], HIREDATE=[$6], SAL=[$7], COMM=[$8], DEPTNO0=[$9], SLACKER=[$10])
+LogicalProject(NAME=[$0], EMPNO=[$1], ENAME=[$2], JOB=[$3], MGR=[$4], HIREDATE=[$5], SAL=[$6], COMM=[$7], DEPTNO=[$8], SLACKER=[$9])
+  LogicalProject(NAME=[$1], EMPNO=[$2], ENAME=[$3], JOB=[$4], MGR=[$5], HIREDATE=[$6], SAL=[$7], COMM=[$8], DEPTNO=[$9], SLACKER=[$10])
     LogicalFilter(condition=[<=(CAST(0.9:DECIMAL(2, 1)):DOUBLE NOT NULL, RAND())])
       LogicalJoin(condition=[=($0, $9)], joinType=[inner])
         LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
@@ -14562,13 +14562,13 @@ LogicalProject(DEPTNO=[$0], DEPTNO0=[$9])
   <TestCase name="testPushJoinConditionWithNonDeterministic">
     <Resource name="sql">
       <![CDATA[select * from (
-  select * from dept inner join
+  select dept.name, emp.* from dept inner join
      emp on dept.deptno = emp.deptno and emp.mgr <= rand()) R
 ]]>
     </Resource>
     <Resource name="planBefore">
       <![CDATA[
-LogicalProject(DEPTNO=[$0], NAME=[$1], EMPNO=[$2], ENAME=[$3], JOB=[$4], MGR=[$5], HIREDATE=[$6], SAL=[$7], COMM=[$8], DEPTNO0=[$9], SLACKER=[$10])
+LogicalProject(NAME=[$1], EMPNO=[$2], ENAME=[$3], JOB=[$4], MGR=[$5], HIREDATE=[$6], SAL=[$7], COMM=[$8], DEPTNO=[$9], SLACKER=[$10])
   LogicalJoin(condition=[AND(=($0, $9), <=(CAST($5):DOUBLE, RAND()))], joinType=[inner])
     LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
     LogicalTableScan(table=[[CATALOG, SALES, EMP]])

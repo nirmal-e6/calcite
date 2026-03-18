@@ -5954,7 +5954,7 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
             + "BOOLEAN NOT NULL SLACKER, "
             + "VARCHAR(10) NOT NULL NAME, "
             + "INTEGER NOT NULL X, "
-            + "INTEGER NOT NULL DEPTNO1) NOT NULL");
+            + "INTEGER NOT NULL DEPTNO) NOT NULL");
   }
 
   /** Test case for
@@ -6011,7 +6011,7 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
             + " INTEGER NOT NULL COMM,"
             + " INTEGER NOT NULL DEPTNO,"
             + " BOOLEAN NOT NULL SLACKER,"
-            + " INTEGER DEPTNO0,"
+            + " INTEGER DEPTNO,"
             + " VARCHAR(10) NAME) NOT NULL");
 
     sql("select * from emp right join dept on emp.deptno = dept.deptno")
@@ -6024,7 +6024,7 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
             + " INTEGER COMM,"
             + " INTEGER DEPTNO,"
             + " BOOLEAN SLACKER,"
-            + " INTEGER NOT NULL DEPTNO0,"
+            + " INTEGER NOT NULL DEPTNO,"
             + " VARCHAR(10) NOT NULL NAME) NOT NULL");
 
     sql("select * from emp full join dept on emp.deptno = dept.deptno")
@@ -6037,7 +6037,7 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
             + " INTEGER COMM,"
             + " INTEGER DEPTNO,"
             + " BOOLEAN SLACKER,"
-            + " INTEGER DEPTNO0,"
+            + " INTEGER DEPTNO,"
             + " VARCHAR(10) NAME) NOT NULL");
   }
 
@@ -6465,7 +6465,7 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
     sql("with w(x, y) as (select * from dept)\n"
         + "select * from w, w as w2")
         .type("RecordType(INTEGER NOT NULL X, VARCHAR(10) NOT NULL Y, "
-            + "INTEGER NOT NULL X0, VARCHAR(10) NOT NULL Y0) NOT NULL");
+            + "INTEGER NOT NULL X, VARCHAR(10) NOT NULL Y) NOT NULL");
     sql("with w(x, y) as (select * from dept)\n"
         + "select ^deptno^ from w")
         .fails("Column 'DEPTNO' not found in any table");
@@ -9408,10 +9408,11 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         + "ORDER BY 1")
         .fails("Column 'EMPNO' not found in table 'X'");
 
-    sql("select * from (\n"
+    sql("select ^*^ from (\n"
         + "    select * from emp\n"
         + "    join dept on emp.deptno = dept.deptno\n"
-        + ") tablesample substitute('SMALL')").ok();
+        + ") tablesample substitute('SMALL')")
+        .fails("Column 'DEPTNO' is ambiguous");
 
     sql("SELECT * FROM ("
         + "SELECT deptno FROM emp "
@@ -9426,10 +9427,11 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         + "ORDER BY 1")
         .fails("Column 'EMPNO' not found in table 'X'");
 
-    sql("select * from (\n"
+    sql("select ^*^ from (\n"
         + "    select * from emp\n"
         + "    join dept on emp.deptno = dept.deptno\n"
-        + ") tablesample bernoulli(10)").ok();
+        + ") tablesample bernoulli(10)")
+        .fails("Column 'DEPTNO' is ambiguous");
 
     sql("SELECT * FROM ("
         + "SELECT deptno FROM emp "
@@ -9444,10 +9446,11 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         + "ORDER BY 1")
         .fails("Column 'EMPNO' not found in table 'X'");
 
-    sql("select * from (\n"
+    sql("select ^*^ from (\n"
         + "    select * from emp\n"
         + "    join dept on emp.deptno = dept.deptno\n"
-        + ") tablesample system(10)").ok();
+        + ") tablesample system(10)")
+        .fails("Column 'DEPTNO' is ambiguous");
 
     sql("select * from ^emp TABLESAMPLE BERNOULLI(1000)^")
         .fails("TABLESAMPLE percentage must be between 0 and 100, inclusive");
@@ -10345,6 +10348,33 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         + "select EMPNO as [e2], DEPTNO as d, 1 as [E] from EMP)";
     insensitive.withSql(sql1).ok();
     sensitive.withSql(sql1).ok();
+  }
+
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7453">[CALCITE-7453]
+   * Ambiguous references should remain ambiguous after star expansion</a>. */
+  @Test void testReferenceAmbiguousAfterAliasAndStarInSubQuery() {
+    sql("select ^deptno^ from (select empno as deptno, e.* from emp e) as t")
+        .fails("Column 'DEPTNO' is ambiguous");
+  }
+
+  @Test void testReferenceAmbiguousAfterJoinStarInSubQuery() {
+    sql("select ^deptno^ from (\n"
+        + "select * from dept d join emp e on d.deptno = e.deptno) as t")
+        .fails("Column 'DEPTNO' is ambiguous");
+  }
+
+  @Test void testOrderByAmbiguousAfterAliasAndStarInSubQuery() {
+    sql("select empno from (select empno as deptno, e.* from emp e) as t\n"
+        + "order by ^deptno^")
+        .fails("Column 'DEPTNO' is ambiguous");
+  }
+
+  @Test void testOrderByAmbiguousAfterJoinStarInSubQuery() {
+    sql("select empno from (\n"
+        + "select * from dept d join emp e on d.deptno = e.deptno) as t\n"
+        + "order by ^deptno^")
+        .fails("Column 'DEPTNO' is ambiguous");
   }
 
   /** Tests using case-insensitive matching of table names. */
@@ -13205,7 +13235,7 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
     fixture.withSql("^select *\n"
             + "from `SALES`.emp a1\n"
             + "join `SALES`.emp a2 on a1.empno = a2.empno^")
-        .fails(missingFilters("EMPNO", "EMPNO0", "JOB", "JOB0"));
+        .fails(missingFilters("EMPNO", "JOB"));
     fixture.withSql("^select *\n"
             + "from emp a1\n"
             + "join emp a2 on a1.empno = a2.empno\n"
@@ -13226,7 +13256,7 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
             + " from (select * from `SALES`.`EMP`) as a1\n"
             + "join (select * from `SALES`.`EMP`) as a2\n"
             + "  on a1.`EMPNO` = a2.`EMPNO`^")
-        .fails(missingFilters("EMPNO", "EMPNO0", "JOB", "JOB0"));
+        .fails(missingFilters("EMPNO", "JOB"));
 
 
     // USING
@@ -13466,7 +13496,7 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
     fixture.withSql("^select *\n"
             + "from `SALES`.emp a1\n"
             + "join `SALES`.emp a2 on a1.empno = a2.empno^")
-        .fails(missingFilters("EMPNO", "EMPNO0", "JOB", "JOB0"));
+        .fails(missingFilters("EMPNO", "JOB"));
 
     // Query is invalid because filtering on a bypass field in a1 disables
     // must-filter for a1, but a2 must-filters are still required.
@@ -13474,7 +13504,7 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
             + "from `SALES`.emp a1\n"
             + "join `SALES`.emp a2 on a1.empno = a2.empno\n"
             + "where a1.ename = '1'^")
-            .fails(missingFilters("EMPNO0", "JOB0"));
+            .fails(missingFilters("EMPNO", "JOB"));
 
     // Query is invalid because here are two JOB columns but only one is
     // filtered.
@@ -13505,7 +13535,7 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
             + " from (select * from `SALES`.`EMP`) as a1\n"
             + "join (select * from `SALES`.`EMP`) as a2\n"
             + "  on a1.`EMPNO` = a2.`EMPNO`^")
-        .fails(missingFilters("EMPNO", "EMPNO0", "JOB", "JOB0"));
+        .fails(missingFilters("EMPNO", "JOB"));
 
     // Query is invalid because filtering on a bypass field in a1 disables
     // must-filter for a1, but a2 must-filters are still required.
@@ -13514,12 +13544,12 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
             + "join (select * from `SALES`.`EMP`) as a2\n"
             + "  on a1.`EMPNO` = a2.`EMPNO`\n"
             + "where a1.ename = '1'^")
-        .fails(missingFilters("EMPNO0", "JOB0"));
+        .fails(missingFilters("EMPNO", "JOB"));
     fixture.withSql("^select *\n"
             + " from (select * from `SALES`.`EMP` where `ENAME` = '1') as a1\n"
             + "join (select * from `SALES`.`EMP`) as a2\n"
             + "  on a1.`EMPNO` = a2.`EMPNO`^")
-        .fails(missingFilters("EMPNO0", "JOB0"));
+        .fails(missingFilters("EMPNO", "JOB"));
 
     // USING
     fixture.withSql("^select *\n"

@@ -2206,7 +2206,7 @@ class RelOptRulesTest extends RelOptTestBase {
    * when the Filter contains non-deterministic function</a>. */
   @Test void testPushFilterThroughJoinWithNonDeterministic() {
     final String sql = "select * from (\n"
-        + "  select * from dept inner join\n"
+        + "  select dept.name, emp.* from dept inner join\n"
         + "     emp on dept.deptno = emp.deptno) R\n"
         + "where 0.9 <= rand()";
     sql(sql)
@@ -2218,7 +2218,7 @@ class RelOptRulesTest extends RelOptTestBase {
 
   @Test void testPushJoinConditionWithNonDeterministic() {
     final String sql = "select * from (\n"
-        + "  select * from dept inner join\n"
+        + "  select dept.name, emp.* from dept inner join\n"
         + "     emp on dept.deptno = emp.deptno and emp.mgr <= rand()) R\n";
     sql(sql)
         .withRule(CoreRules.FILTER_PROJECT_TRANSPOSE,
@@ -4363,7 +4363,8 @@ class RelOptRulesTest extends RelOptTestBase {
             Arrays.asList(CoreRules.FILTER_MULTI_JOIN_MERGE,
                 CoreRules.PROJECT_MULTI_JOIN_MERGE))
         .build();
-    final String sql = "select * from (select * from emp e1 left outer join dept d\n"
+    final String sql = "select * from (select e1.*, d.deptno as deptno0, "
+        + "d.name from emp e1 left outer join dept d\n"
         + "on e1.deptno = d.deptno\n"
         + "where d.deptno > 3) where ename LIKE 'bar'";
     sql(sql).withProgram(program).check();
@@ -5421,7 +5422,7 @@ class RelOptRulesTest extends RelOptTestBase {
 
   @Test void testEmptyTableTransformsComplexQueryToSingleTableScan() {
     final String sql = "select products.PRODUCTID, products.NAME from products left join\n"
-        + "(select * from products as e\n"
+        + "(select e.* from products as e\n"
         + " inner join EMPTY_PRODUCTS as d on e.PRODUCTID = d.PRODUCTID\n"
         + " where e.SUPPLIERID > 10) dt\n"
         + " on products.PRODUCTID = dt.PRODUCTID";
@@ -7500,7 +7501,7 @@ class RelOptRulesTest extends RelOptTestBase {
   @Test void testProjectPredicatePull() {
     final String sql = "select e.ename, d.dname\n"
         + "from (select ename, deptno from emp where deptno = 10) e\n"
-        + "join (select name dname, deptno, * from dept) d\n"
+        + "join (select name dname, deptno, deptno as deptno0, name from dept) d\n"
         + "on e.deptno = d.deptno";
     final HepProgram program = new HepProgramBuilder()
         .addRuleCollection(

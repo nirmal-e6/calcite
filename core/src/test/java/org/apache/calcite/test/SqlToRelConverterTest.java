@@ -1770,7 +1770,7 @@ class SqlToRelConverterTest extends SqlToRelTestBase {
 
   @Test void testSampleQuery() {
     final String sql = "select * from (\n"
-        + " select * from emp as e tablesample substitute('DATASET1')\n"
+        + " select e.*, dept.name from emp as e tablesample substitute('DATASET1')\n"
         + " join dept on e.deptno = dept.deptno\n"
         + ") tablesample substitute('DATASET2')\n"
         + "where empno > 5";
@@ -1785,7 +1785,7 @@ class SqlToRelConverterTest extends SqlToRelTestBase {
 
   @Test void testSampleBernoulliQuery() {
     final String sql = "select * from (\n"
-        + " select * from emp as e tablesample bernoulli(10) repeatable(1)\n"
+        + " select e.*, dept.name from emp as e tablesample bernoulli(10) repeatable(1)\n"
         + " join dept on e.deptno = dept.deptno\n"
         + ") tablesample bernoulli(50) repeatable(99)\n"
         + "where empno > 5";
@@ -1808,7 +1808,7 @@ class SqlToRelConverterTest extends SqlToRelTestBase {
 
   @Test void testSampleSystemQuery() {
     final String sql = "select * from (\n"
-        + " select * from emp as e tablesample system(10) repeatable(1)\n"
+        + " select e.*, dept.name from emp as e tablesample system(10) repeatable(1)\n"
         + " join dept on e.deptno = dept.deptno\n"
         + ") tablesample system(50) repeatable(99)\n"
         + "where empno > 5";
@@ -1817,7 +1817,7 @@ class SqlToRelConverterTest extends SqlToRelTestBase {
 
   @Test void testSampleSystemWithRateZero() {
     final String sql = "select * from (\n"
-        + " select * from emp as e\n"
+        + " select e.*, dept.name from emp as e\n"
         + " join dept on e.deptno = dept.deptno\n"
         + ") tablesample system(0)\n"
         + "where empno > 5";
@@ -4539,7 +4539,7 @@ class SqlToRelConverterTest extends SqlToRelTestBase {
 
   @Test void testDynamicStarInJoinAndSubQ() {
     final String sql = "select * from "
-        + " (select * from SALES.NATION T1, "
+        + " (select T1.* from SALES.NATION T1, "
         + " SALES.CUSTOMER T2 where T1.n_nationkey = T2.c_nationkey)";
     sql(sql).withDynamicTable().ok();
   }

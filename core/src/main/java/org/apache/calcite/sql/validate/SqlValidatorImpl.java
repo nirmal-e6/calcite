@@ -499,12 +499,12 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       }
     }
     final String alias =
-        SqlValidatorUtil.alias(selectItem, aliases.size());
+        SqlValidatorUtil.alias(selectItem, fields.size());
 
     // If expansion has altered the natural alias, supply an explicit 'AS'.
     if (expanded != selectItem) {
       String newAlias =
-          SqlValidatorUtil.alias(expanded, aliases.size());
+          SqlValidatorUtil.alias(expanded, fields.size());
       if (!Objects.equals(newAlias, alias)) {
         expanded =
             SqlStdOperatorTable.AS.createCall(
@@ -2342,15 +2342,10 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       SqlNode exp,
       SelectScope scope,
       final boolean includeSystemVars) {
-    final @Nullable String alias = SqlValidatorUtil.alias(exp);
-    String uniqueAlias =
-        SqlValidatorUtil.uniquify(
-            alias, aliases, SqlValidatorUtil.EXPR_SUGGESTER);
-    if (!Objects.equals(alias, uniqueAlias)) {
-      exp = SqlValidatorUtil.addAlias(exp, uniqueAlias);
-    }
+    final String alias = SqlValidatorUtil.alias(exp, fieldList.size());
+    aliases.add(alias);
     ((PairList<String, RelDataType>) fieldList)
-        .add(uniqueAlias, deriveType(scope, exp));
+        .add(alias, deriveType(scope, exp));
     list.add(exp);
   }
 
@@ -7650,6 +7645,9 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
         final RelDataType rowType =
             selectNs.getRowTypeSansSystemColumns();
         final SqlNameMatcher nameMatcher = catalogReader.nameMatcher();
+        if (nameMatcher.frequency(rowType.getFieldNames(), alias) > 1) {
+          throw newValidationError(id, RESOURCE.columnAmbiguous(alias));
+        }
         RelDataTypeField field = nameMatcher.field(rowType, alias);
         if (field != null) {
           return nthSelectItem(
