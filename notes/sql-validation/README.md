@@ -1,134 +1,190 @@
 # SQL Validation and Name Resolution in Calcite
 
-## Why this note exists
+## Why this guide exists
 
-Calcite bugs around duplicate column names, star expansion, alias lookup, and
-nested subqueries are rarely isolated syntax problems. They usually come from a
-mismatch between:
+Calcite validator bugs often look like isolated SQL oddities:
 
-- how the validator represents query output columns,
-- how that representation is propagated through nesting,
-- and where explicit name lookup is allowed to fail as ambiguous.
+- duplicate output names behave inconsistently
+- `SELECT *` works in one nesting shape and fails in another
+- `ORDER BY x` resolves differently from `SELECT x`
+- `GROUP BY alias` passes under one parser configuration and fails under another
 
-This note is a reusable mental model for contributors who need to work in
-Calcite's SQL validator and name-resolution stack. It is intentionally focused
-on the validator boundary rather than on one specific bug.
+Those are usually not four unrelated problems. They tend to come from the same
+architectural mistake: mixing together responsibilities that should stay
+separate.
+
+The main separations to preserve are:
+
+- representation: what SQL-visible shape a query produces
+- propagation: how that shape and field identity move through nesting and `*`
+- lookup: how an explicit identifier binds to one visible field
+- grouped-expression equivalence: how aggregate validation decides whether a
+  `SELECT` expression is one of the grouped expressions
+
+This guide is meant to be the reusable starting point for future contributor
+sessions in this part of Calcite.
 
 ## Plain-English model
 
-When Calcite validates a query, it is trying to answer two different questions:
+When Calcite validates a query, it is trying to answer several different
+questions.
 
 1. What columns does this query produce?
 2. If a later expression says `x`, which visible column does `x` refer to?
+3. If the query groups, is a `SELECT` expression legal because it is grouped or
+   aggregated?
 
-Those are related but distinct.
+Those questions are related, but they are not the same.
 
-A query result may legitimately contain duplicate output names. That is a fact
-about the result shape.
+Examples:
 
-An explicit reference such as `select x`, `where x = 1`, or `order by x` is a
-different operation. It asks Calcite to bind a name to one unique visible
-column. If more than one visible column matches, the reference is ambiguous.
+- A query result may legally contain duplicate output names.
+- An explicit identifier such as `select x` or `order by x` must bind to one
+  unique visible field, or fail as ambiguous.
+- `SELECT *` is not explicit lookup at all; it means "project all visible
+  fields in order".
+- Aggregate legality is not ordinary name lookup either; Calcite has to compare
+  the current `SELECT` expression against the set of grouped expressions it has
+  collected from `GROUP BY`, `SELECT DISTINCT`, or grouping functions.
 
-`SELECT *` is different again. It does not ask for a unique binding by name. It
-means "project all currently visible output columns in order".
-
-The main mistake in this area is to collapse these three ideas into one:
-
-- output representation,
-- propagation through nesting,
-- explicit lookup and ambiguity.
-
-If those concerns are mixed together, Calcite starts silently renaming fields
-too early, or it incorrectly rejects legal `SELECT *`, or it incorrectly allows
-ambiguous outer references.
+Most bugs in this area happen when Calcite treats one of those questions as if
+it were another.
 
 ## Core concepts
 
 ### Row type
 
-A row type is the ordered list of output fields produced by a relational or SQL
-expression. In validator terms, it carries field names, types, nullability, and
-order.
+A row type is the ordered list of output fields exposed by a SQL construct.
+
+In validator terms it carries:
+
+- field names
+- types
+- nullability
+- order
 
 Important rule:
 
-- the validator row type should reflect SQL-visible output shape as closely as
+- validator row types should preserve SQL-visible output shape as closely as
   possible
 
-That means duplicate names may be valid in validator row types.
+That means duplicate names may be correct in validator row types.
 
 ### Namespace
 
-A namespace is Calcite's object for "this SQL construct produces these
-columns". A table, subquery, join, or select item can all expose a namespace.
+A namespace is Calcite's object for "this SQL construct exposes these columns".
 
 A namespace answers questions like:
 
-- what row type does this thing expose?
-- where did a field come from?
-- what is visible to an outer query?
+- what row type does this construct expose?
+- where did each field come from?
+- what becomes visible to an outer query?
+
+Subqueries, tables, joins, and selects all expose namespaces.
 
 ### Scope
 
-A scope is the name-resolution context. It answers:
+A scope is the current name-resolution context.
+
+It answers:
 
 - what names are visible here?
-- how do identifiers qualify to a specific source?
-- if a name appears in more than one visible place, is it ambiguous?
+- how are identifiers qualified?
+- if more than one visible field matches a name, is the reference ambiguous?
 
-Scopes are where explicit name lookup should fail when the visible name is not
-unique.
+Scopes own explicit lookup semantics.
 
-### Field lookup
+### Identifier representation
 
-Field lookup is the operation of resolving an identifier to a visible field.
-This is where ambiguity matters.
+The parser stores identifiers as text inside the `SqlNode` tree.
 
-If there are two visible `DEPTNO` fields and the query explicitly says
-`DEPTNO`, name lookup should fail.
+That text depends on parser configuration:
 
-### `SELECT *`
+- `withUnquotedCasing(...)`
+- `withQuotedCasing(...)`
+- `withCaseSensitive(...)`
 
-`SELECT *` is not ordinary name lookup. It is expansion of the current visible
-row type by position and order.
+But the parsed spelling is not the final semantic truth. Later validator steps
+may:
 
-That means `SELECT *` should still work even when the visible row type contains
-duplicate names.
+- fully qualify identifiers
+- rewrite identifier spelling to match schema fields
+- expand aliases back into expressions
+
+Therefore parser casing can expose representation bugs even when lookup itself
+is semantically correct.
+
+### Name matcher
+
+Name lookup is controlled by a `SqlNameMatcher`, typically provided by the
+catalog reader.
+
+Its job is to answer:
+
+- whether matching is case-sensitive
+- which schema/table/field a textual name refers to
+
+This layer owns lookup semantics. It does not, by itself, define grouped
+expression equivalence.
 
 ### Alias
 
-An alias is a visible output name assigned by the query, for example
-`ename as num`.
+An alias is a SQL-visible output name, for example `ename as num`.
 
 Aliases affect the output row type. They do not guarantee uniqueness.
 
-### Outer name resolution
+Aliases also matter in aggregate validation because lenient `GROUP BY alias`
+behavior expands the alias back to the underlying select expression.
 
-A subquery result becomes visible to an outer query through its namespace. The
-outer scope then performs explicit lookup against the subquery's exposed row
-type.
+### Grouped expression
 
-If the subquery exposes duplicate `NUM` columns, `select * from (...)` is fine,
-but `select num from (...)` should be ambiguous.
+A grouped expression is an expression the validator treats as available in an
+aggregating query because it came from:
 
-## End-to-end data flow
+- `GROUP BY`
+- `SELECT DISTINCT`
+- grouping functions or related constructs
 
-For a typical nested query:
+This is not just about identifiers. Whole expressions such as `CASE`,
+`COALESCE`, or expanded aliases may need to match.
 
-1. Calcite parses SQL into a `SqlNode` tree.
-2. The validator builds or derives a row type for each `SELECT`.
-3. That row type is attached to a namespace representing the select or
-   subquery.
-4. The outer scope sees the subquery through that namespace.
-5. `SELECT *` expands the visible row type positionally.
-6. Explicit identifiers are resolved by name through scope lookup.
-7. After validation, `SqlToRelConverter` turns validated SQL into relational
-   algebra and may uniquify internal rel-field names if needed.
+## End-to-end validator flow
 
-The important architectural point is that validator semantics come first. The
-converter should consume an already-correct interpretation, not invent SQL name
-semantics on its own.
+For a typical query, the high-level flow is:
+
+1. Parse SQL into a `SqlNode` tree.
+2. Build scopes and namespaces.
+3. Derive row types and visible output names.
+4. Resolve explicit identifiers through scopes.
+5. Validate grouping, ordering, and other context-sensitive rules.
+6. Only after validation, convert to relational algebra.
+
+The important architectural point is:
+
+- validator semantics come first
+- `SqlToRelConverter` should consume an already-correct interpretation
+- rel-layer field naming should not define SQL semantics
+
+## Aggregate and `GROUP BY` validation flow
+
+Aggregate validation adds a second, more subtle pipeline:
+
+1. Parse the original expression text using the configured casing policy.
+2. Validate `GROUP BY` before the final `SELECT` aggregate legality checks.
+3. If grouping by alias is allowed, expand `GROUP BY alias` back to the
+   underlying select expression.
+4. Fully qualify identifiers through scope resolution.
+5. Derive types and apply coercion, for example in `CASE` branches.
+6. Collect grouped expressions.
+7. Later validate each `SELECT` expression in an aggregating scope by comparing
+   it against the grouped-expression set.
+
+This is where a distinct class of bugs appears:
+
+- the grouped-expression set and the `SELECT` expression being checked may have
+  traveled through different validator rewrite paths
+- if Calcite compares raw trees too literally, a semantically valid grouped
+  expression can be rejected
 
 ## The invariant model
 
@@ -137,22 +193,23 @@ semantics on its own.
 If a query produces two output columns both named `NUM`, the validator row type
 should preserve both `NUM` fields in order.
 
-This applies whether the duplicates came from:
+This applies whether duplicates come from:
 
-- repeated explicit aliases,
-- `expr, *`,
-- a nested subquery,
-- or multiple star expansions such as `e.*, d.*`.
+- repeated explicit aliases
+- `expr, *`
+- a nested subquery
+- multiple star expansions such as `e.*, d.*`
 
-### Invariant 2: `SELECT *` is positional
+### Invariant 2: `SELECT *` is positional propagation, not explicit lookup
 
-`SELECT *` means "project the visible output row type in order". It should not
-re-run ambiguous name lookup just because visible names happen to be duplicated.
+`SELECT *` means "project the current visible row type in order".
+
+It should not be rejected just because visible names happen to be duplicated.
 
 ### Invariant 3: explicit name lookup must be unique
 
 Any explicit reference by name should fail if more than one visible field
-matches that name.
+matches.
 
 This includes:
 
@@ -163,99 +220,192 @@ This includes:
 
 ### Invariant 4: rel-level uniquification is a later concern
 
-Relational operators often need unique field names for internal bookkeeping,
-digest stability, or generated plans. That does not mean SQL-visible validator
-semantics should uniquify names early.
+Relational operators often need unique field names for internal bookkeeping.
+That does not mean validator semantics should uniquify names early.
 
-The correct split is:
+Correct split:
 
 - validator: preserve SQL-visible names and ambiguity behavior
-- sql-to-rel / rel layer: uniquify internal field names if needed
+- rel layer: uniquify internal field names if needed
+
+### Invariant 5: grouped-expression equivalence must ignore validator-only
+representation noise
+
+When Calcite checks whether a `SELECT` expression is grouped, the answer should
+not depend on whether validator rewriting encoded type information:
+
+- in the tree itself
+- or only in validator metadata
+
+This rule is intentionally narrow:
+
+- ignore validator-only representation noise
+- keep semantically meaningful structure significant
+
+For example, grouped-expression comparison may need to treat:
+
+- bare `NULL`
+- `CAST(NULL AS <type>)`
+
+as equivalent when the cast was introduced only by validator coercion.
+
+### Invariant 6: grouped-expression legality must not depend on parser spelling
+or tree sharing
+
+Parser spelling may affect the initial `SqlNode` text.
+
+That does not mean aggregate legality should flip merely because:
+
+- the parser preserved lower-case spelling instead of upper-case
+- an identifier had to be fully qualified on one path but not another
+- one validator path reused a mutable tree and another rebuilt it
+
+If success depends only on shared mutable `SqlNode` identity, Calcite is not
+using a sound semantic invariant.
 
 ## Architectural boundaries
 
 ### Representation
 
-Representation is about what fields exist and what their visible names are.
+Representation is about what fields exist and what visible names they have.
 
-This belongs in validator row-type derivation and namespace construction.
+This belongs in:
 
-If duplicate names are destroyed here, every later layer is forced to work from
-the wrong model.
+- row-type derivation
+- namespace construction
+- select-list output construction
+
+If representation is wrong, every later layer is operating on the wrong model.
 
 ### Propagation
 
-Propagation is about keeping the same logical field identity through star
-expansion and nesting.
+Propagation is about carrying field identity and output shape through:
 
-This belongs in validator star expansion and qualification metadata.
+- `SELECT *`
+- subqueries
+- alias expansion
+- nesting
 
-If star-expanded fields are converted back into plain identifiers without
-preserving source-field identity, nested `SELECT *` will reintroduce ambiguity
-incorrectly.
+If propagation loses identity, later stages often fall back to name lookup and
+create false ambiguity.
 
 ### Lookup and ambiguity
 
-Lookup is about binding an explicit name to one visible field.
+Lookup is about binding an explicit textual reference to one visible field.
 
-This belongs in scopes and explicit resolution paths such as `ORDER BY` and
-alias expansion.
+This belongs in:
 
-If ambiguity is checked too early, legal `SELECT *` breaks. If ambiguity is
-checked too late, explicit references resolve when they should fail.
+- scopes
+- qualification
+- `ORDER BY`-specific lookup
+- alias lookup rules
+
+If ambiguity is checked too early, legal `SELECT *` breaks.
+If ambiguity is checked too late, illegal explicit references succeed.
+
+### Grouped-expression equivalence
+
+Grouped-expression equivalence is about deciding whether a `SELECT` expression
+is available in an aggregating query.
+
+This belongs in:
+
+- grouped-expression collection
+- grouped-expression comparison
+- aggregate validation
+
+It should not be "fixed" by:
+
+- changing parser casing defaults
+- changing schema storage case
+- forcing different validator paths to share one mutable tree
 
 ## Classes and methods to know
 
 ### `SqlValidatorImpl`
 
-The main validator. It owns select-list validation, star expansion, type
-derivation, and a large part of SQL-visible row-type behavior.
+The main validator.
 
-Methods worth inspecting first:
+It owns select-list validation, star expansion, type derivation, grouping
+validation, and several expansion paths that feed aggregate checking.
+
+Useful entry points:
 
 - `expandStar(...)`
-  - expands `*` and `t.*` into individual output expressions
+  - expands `*` and `t.*` into concrete output expressions
 - `addToSelectList(...)`
-  - adds expanded expressions and field names into the validator's output list
+  - constructs the validator-visible output list
 - `validateSelectList(...)`
-  - builds validated select output shape
-- `DeriveTypeVisitor.visit(SqlIdentifier)`
-  - derives identifier types during validation
-- `OrderExpressionExpander.visit(SqlIdentifier)`
-  - resolves `ORDER BY` expressions and alias references
-
-This is usually the first file to inspect when star expansion and duplicate
-output names behave inconsistently.
+  - validates select items and builds output row shape
+- `validateGroupClause(...)`
+  - validates and expands the `GROUP BY` clause
+- `expand(...)`
+  - expands expressions for validator comparison and qualification
 
 ### `DelegatingScope`
 
 The common scope implementation for identifier qualification.
 
-Its job is to turn a visible identifier into a qualified field reference in the
-current scope chain. This is a key place to inspect when explicit resolution and
-star-expanded field identity disagree.
+Its job is to turn visible identifiers into qualified field references in the
+current scope chain.
+
+This is the place where a parsed `ename` may become schema field `ENAME`.
 
 ### `OrderByScope`
 
-The special scope used for `ORDER BY`.
+The special scope for `ORDER BY`.
 
-Its job is to apply `ORDER BY`-specific lookup rules. This is the right place to
-check whether explicit `ORDER BY x` is correctly rejected as ambiguous.
+Its job is to apply `ORDER BY`-specific lookup rules, which may differ from the
+raw select-list scope.
 
-### `SqlValidatorNamespace`
+### `GroupByScope`
 
-The abstraction for "this SQL construct exposes these columns".
+The scope used while validating `GROUP BY`.
 
-It is the right place to think about what an outer query sees from a subquery,
-join, or table reference.
+Its job is to expand group expressions, including lenient `GROUP BY alias`
+behavior.
+
+### `AggregatingSelectScope`
+
+The scope used when validating a grouped `SELECT`.
+
+Its job is to decide whether a `SELECT` expression is legal given grouped
+expressions and aggregates.
+
+### `AggChecker`
+
+The visitor that walks `SELECT` expressions in aggregate queries.
+
+It is often the place where grouped-expression bugs surface, because it throws
+the final "expression is not being grouped" validation error.
+
+### `SqlValidatorUtil`
+
+A shared validator utility class.
+
+It is the right place for reusable helper logic such as grouped-expression
+lookup and grouped-expression equivalence rules.
+
+### `TypeCoercionImpl`
+
+Calcite's main implicit-coercion implementation.
+
+Its job is to decide or insert coercions for expressions such as `CASE`,
+`COALESCE`, comparisons, and row-type alignment.
+
+### `SqlCaseOperator`
+
+The operator that derives types for `CASE` and CASE-equivalent expressions.
+
+It infers the return type, assigns types to `NULL` branches, and cooperates
+with implicit coercion when branch types differ.
 
 ### `SqlToRelConverter`
 
 The boundary from validated SQL into relational algebra.
 
-Its job is to convert already-validated semantics into `RelNode` and `RexNode`
-form. It may need internal field ordinals and rel-level unique names, but it
-should not redefine validator ambiguity rules.
+Its job is to consume already-validated semantics and map them to rel ordinals
+and expressions. It should not redefine validator lookup or ambiguity rules.
 
 ## Common failure modes
 
@@ -265,23 +415,23 @@ Symptoms:
 
 - duplicate names disappear from subquery row types
 - explicit outer references incorrectly succeed
-- result metadata exposes synthetic suffixes too early
+- synthetic suffixes such as `DEPTNO0` appear too early
 
 Typical cause:
 
-- star expansion or row-type derivation forces unique aliases in the validator
+- validator row-type construction forces uniqueness instead of preserving the
+  SQL-visible shape
 
 ### Failure mode 2: lost field identity during `*`
 
 Symptoms:
 
+- nested `SELECT *` becomes ambiguous even though no explicit name was used
 - `select * from (select num, num from ...)` fails when it should succeed
-- nested `SELECT *` becomes ambiguous even though no explicit name reference was
-  made
 
 Typical cause:
 
-- star-expanded fields are reconstructed as ordinary identifiers and later
+- star-expanded fields were rebuilt as ordinary identifiers and later
   re-resolved by name
 
 ### Failure mode 3: ambiguity checked in the wrong layer
@@ -290,129 +440,159 @@ Symptoms:
 
 - `SELECT *` fails for duplicate names
 - `ORDER BY x` behaves differently from `SELECT x`
-- alias expansion picks the first match instead of rejecting ambiguity
+- alias resolution silently picks one match
 
 Typical cause:
 
-- explicit ambiguity checks are missing from scope resolution or `ORDER BY`
-  expansion
+- explicit ambiguity logic lives in the wrong layer or is missing from the
+  relevant scope
 
 ### Failure mode 4: rel-layer behavior leaks back into validator semantics
 
 Symptoms:
 
-- internal plan field names such as `NUM0` become treated as SQL-visible names
-- fixes are attempted in `SqlToRelConverter` without fixing validator semantics
+- internal rel names such as `NUM0` are treated as SQL-visible names
+- fixes are attempted in `SqlToRelConverter` even though the validator model is
+  wrong
 
 Typical cause:
 
-- confusion between SQL-visible row types and internal relational field naming
+- confusion between SQL-visible semantics and rel-internal field naming
+
+### Failure mode 5: inconsistent grouped-expression representation
+
+Symptoms:
+
+- `GROUP BY alias` works under one parser configuration and fails under another
+- the failure message points at an identifier that actually resolves correctly
+- `GROUP BY alias` fails while `GROUP BY <same expression>` succeeds
+
+Typical cause:
+
+- grouped expressions and select expressions were compared after traveling
+  through different validator rewrite paths
+- equality relied on raw `SqlNode.equalsDeep`
+
+### Failure mode 6: parser casing exposes a validator bug instead of causing it
+
+Symptoms:
+
+- default parser casing passes
+- `UNCHANGED + caseSensitive(false)` fails
+- changing the spelling of one leaf changes success unexpectedly
+
+Typical cause:
+
+- parser casing changed whether a tree had to be rewritten, copied, or fully
+  qualified
+- the validator depended on structural coincidence rather than a stable
+  invariant
 
 ## Debugging playbook
 
 ### Start with tests, not with code
 
-First determine which existing test class already owns the behavior:
+First determine which test class owns the behavior:
 
 - `SqlValidatorTest`
-  - validator semantics and row types
+  - validator semantics, row types, ambiguity, grouping legality
 - `SqlToRelConverterTest`
-  - validated SQL to rel boundary
+  - validator-to-rel boundary
 - `RelToSqlConverterTest`
-  - SQL regeneration constraints when names are duplicated
-- `JdbcTest`, `BabelTest`, `CoreQuidemTest`
-  - user-visible metadata and end-to-end behavior
+  - SQL regeneration when naming is constrained
+- `JdbcTest`, `BabelTest`
+  - user-visible metadata and dialect-facing behavior
+- `CoreQuidemTest`, `CoreQuidemTest2`
+  - end-to-end scripted regressions
 
-Add or inspect the smallest failing query in the validator first.
-
-### Fast entry points
-
-If you are new to this area, start from this short routing table before reading
-more code.
+### Fast routing table
 
 | Symptom | First code to inspect | Why |
 |---|---|---|
-| Inner query exposes the wrong field names or wrong duplicate behavior | `SqlValidatorImpl.expandStar(...)`, `SqlValidatorImpl.addToSelectList(...)`, `SqlValidatorImpl.validateSelectList(...)` | These methods build the validator-visible output shape. |
-| Nested `SELECT *` fails even though no explicit name is being referenced | `SqlValidatorImpl.expandStar(...)`, `DelegatingScope.fullyQualify(...)` | This usually means star-expanded field identity was lost and Calcite fell back to name lookup. |
-| `ORDER BY x` behaves differently from `SELECT x` | `OrderByScope.resolveColumn(...)`, `SqlValidatorImpl.OrderExpressionExpander` | `ORDER BY` has its own explicit resolution path. |
-| Validator behavior is right but the rel plan points at the wrong field | `SqlToRelConverter.convertIdentifier(...)` | This is where validated field identity is mapped to rel ordinals. |
-| SQL regeneration fails when duplicate output names exist | `RelToSqlConverterTest` and the rel-to-sql implementation being exercised | Rel-to-sql often needs to avoid emitting `SELECT *` when duplicate names would make later references ambiguous. |
-
-### Fast test entry points
-
-Use the smallest test surface that owns the behavior.
-
-| Concern | Test class to start with |
-|---|---|
-| Validator semantics, row types, ambiguity | `SqlValidatorTest` |
-| Validator-to-rel boundary | `SqlToRelConverterTest` |
-| Rel-to-sql regeneration constraints | `RelToSqlConverterTest` |
-| JDBC-visible result labels and metadata | `JdbcTest` |
-| Dialect-specific visible-name behavior | `BabelTest` |
-| End-to-end scripted regressions | `CoreQuidemTest`, `CoreQuidemTest2` |
+| Inner query exposes the wrong field names or wrong duplicate behavior | `SqlValidatorImpl.expandStar(...)`, `SqlValidatorImpl.addToSelectList(...)`, `SqlValidatorImpl.validateSelectList(...)` | These methods build validator-visible output shape. |
+| Nested `SELECT *` fails even though no explicit name is being referenced | `SqlValidatorImpl.expandStar(...)`, `DelegatingScope.fullyQualify(...)` | This usually means field identity was lost and Calcite fell back to name lookup. |
+| `ORDER BY x` behaves differently from `SELECT x` | `OrderByScope`, `SqlValidatorImpl.OrderExpressionExpander` | `ORDER BY` has its own explicit resolution path. |
+| `GROUP BY alias` works under default casing but fails under `UNCHANGED + caseSensitive(false)` | `GroupByScope`, `SqlValidatorImpl` group-by expansion, `AggregatingSelectScope`, `AggChecker`, `TypeCoercionImpl.caseWhenCoercion(...)` | This often means grouped-expression comparison depends on inconsistent internal trees. |
+| Validator behavior is right but the rel plan points at the wrong field | `SqlToRelConverter.convertIdentifier(...)` | This is where validated field identity becomes rel ordinals. |
 
 ### Classify the bug before editing
 
-Ask four questions:
+Ask these questions explicitly:
 
-1. Is the output row type wrong?
-2. Is the output row type right, but lost through nesting?
-3. Is propagation correct, but explicit lookup is wrong?
-4. Is the validator correct, but the rel boundary is misusing that information?
+1. Is the validator-visible row type wrong?
+2. Is the row type right, but lost through propagation?
+3. Is propagation right, but explicit lookup wrong?
+4. Is grouped-expression comparison using the wrong equivalence rule?
+5. Is the validator correct, but the rel boundary misusing that information?
 
-If you do not answer those separately, you will likely patch the wrong layer.
+If you do not classify the bug first, you will usually patch the wrong layer.
 
 ### Trace in this order
 
-1. Validator row type of the inner query
-2. Namespace row type exposed to the outer query
-3. Scope lookup for the outer identifier
+For name-resolution bugs:
+
+1. validator row type
+2. namespace row type exposed outward
+3. scope lookup for the identifier
 4. `ORDER BY` / alias-specific resolution
-5. `SqlToRelConverter` ordinal mapping
+5. rel conversion only after validator semantics are understood
 
-This order forces you to distinguish representation, propagation, and lookup.
+For grouped-expression bugs:
 
-### Prefer structural probes over guesswork
+1. parsed expression text under the configured casing policy
+2. `GROUP BY` alias expansion result
+3. fully-qualified identifier form
+4. type/coercion-rewritten form
+5. grouped-expression comparison site
 
-Useful probes:
+### Structural probes to use
 
-- assert validator field names directly in `SqlValidatorTest`
-- add targeted `SqlToRelConverterTest` plans to see rel-level naming
-- inspect `explain plan` only after validator behavior is understood
-- compare a plain query with its nested `SELECT *` version
-- compare explicit lookup (`select x`) with positional lookup (`select *`)
+Prefer comparisons that isolate one layer at a time:
+
+- explicit lookup vs `SELECT *`
+- nested `SELECT *` vs flat query
+- `GROUP BY alias` vs `GROUP BY <same expression>`
+- default parser casing vs case-preserving parser casing
+- implicit `NULL` branches vs explicit typed `NULL`
+
+These probes are more valuable than adding random surface-SQL complexity.
 
 ### Decide the correct layer for the fix
 
 Use these heuristics:
 
-- if the visible output shape is wrong, fix the validator
-- if nested `*` loses identity, fix star expansion or qualification metadata
-- if explicit lookup resolves when it should fail, fix scopes or `ORDER BY`
-- if the validator is right and only rel conversion is wrong, fix
+- if visible output shape is wrong, fix validator representation
+- if nested `*` loses field identity, fix propagation
+- if explicit lookup resolves when it should fail, fix scopes or explicit
+  lookup logic
+- if grouping legality depends on rewrite history, fix grouped-expression
+  comparison
+- only if validator semantics are already correct should you touch
   `SqlToRelConverter`
 
-### Be suspicious of "small" fixes
+### Be suspicious of small fixes
 
 Tempting but usually wrong approaches:
 
-- special-casing one query form such as subquery stars only
+- special-casing one query shape
 - preserving old suffixes just because tests expect them
 - teaching `ORDER BY` to pick a first match
-- uniquifying names early to avoid ambiguity
+- changing parser defaults to hide a grouped-expression bug
+- forcing two validator paths to share one mutable `SqlNode` tree
 
-These approaches often make one test pass while preserving the wrong model.
+These often make one test pass while preserving the wrong model.
 
-## How to use this note in future sessions
+## How to use this guide in future sessions
 
 When a bug involves validation or name resolution:
 
-1. Read this note first.
+1. Read this guide first.
 2. Write down the intended invariant before changing code.
-3. Classify the failure as representation, propagation, lookup, or rel-boundary.
+3. Classify the failure as representation, propagation, lookup, grouped
+   equivalence, or rel-boundary.
 4. Extend the smallest relevant test class first.
-5. Only after the core invariant is fixed, update downstream metadata or Quidem
-   expectations.
+5. Fix the owning layer, not the first place where the wrong behavior becomes
+   visible.
 
 ## Knowledge-maintenance workflow
 
@@ -420,6 +600,7 @@ After each major debugging session in this area:
 
 1. Extract reusable invariants and add them here.
 2. Keep this file focused on durable system knowledge.
-3. Put issue-specific details in a separate archive note.
-4. Do not fill the core note with one-off commands, temporary probes, or branch
+3. Archive the specific issue in a separate note under `notes/sql-validation/`.
+4. Update the notes index so the new archive is discoverable.
+5. Do not pollute this guide with one-off commands, temporary probes, or branch
    history.

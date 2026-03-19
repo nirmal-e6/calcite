@@ -13,15 +13,22 @@ Rules:
 - Prefer fixing the semantic/structural layer that owns the invariant.
 - A slightly larger patch is preferred over a smaller patch if the larger one removes the root cause and avoids future tech debt.
 - Still avoid unrelated refactors; broaden the patch only when needed to make the design correct.
-- Keep representation, propagation, and explicit lookup/ambiguity as separate concerns.
+- Keep representation, propagation, grouped-expression equivalence, and explicit lookup/ambiguity as separate concerns.
 - Do not let rel-layer internal naming conventions drive validator SQL semantics.
+
+Branch hygiene:
+- Keep reusable Codex knowledge capture on `config/codex`.
+- Keep upstreamable source changes on `fix/*` branches.
+- Do not mix knowledge-only markdown updates into an upstream fix branch unless they are intentionally part of the PR.
 
 Investigation requirements:
 - Inspect existing tests first.
-- Identify the invariant that should hold for duplicate output names, star expansion, and explicit name resolution.
+- Read `notes/README.md` and the relevant subsystem note before creating a second documentation structure.
+- Identify the invariant that should hold for duplicate output names, star expansion, grouped-expression comparison, and explicit name resolution.
 - Determine where that invariant should live:
     - row-type derivation
     - namespace construction
+    - grouped-expression comparison
     - scope lookup
     - ambiguity detection
     - ORDER BY / alias resolution
@@ -51,11 +58,13 @@ Communication and explanation:
 - Explain solutions in plain English first, then map them to Calcite classes and methods.
 - Preserve technical rigor; do not simplify by hiding architectural distinctions.
 - Whenever mentioning a class or method, explain its role in one sentence.
+- If the bug is exposed by parser casing or case-insensitive lookup, explain whether parsing/lookup is actually wrong or only revealing a comparison-layer bug.
 
 Knowledge capture:
 - Read `notes/sql-validation/README.md` before changing validator/name-resolution behavior.
 - After major debugging work in this area:
-  1. extract reusable invariants into `notes/sql-validation/README.md`
-  2. archive issue-specific details in a separate note under `notes/sql-validation/`
-  3. keep core notes free of one-off probes and branch history
-  4. do not duplicate the same explanation in multiple files
+  1. extract reusable invariants into the core subsystem guide
+  2. update the notes index if a new archive is added
+  3. archive the specific issue separately under the subsystem directory
+  4. keep core notes free of one-off probes, commands, and branch history
+  5. do not duplicate the same explanation across multiple files
