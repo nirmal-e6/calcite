@@ -6,14 +6,12 @@ This directory stores contributor-focused working knowledge that is useful
 across repeated Calcite sessions but is too detailed or too internal for the
 main project docs.
 
-Use these notes to:
-
-- understand subsystem architecture before editing,
-- reuse debugging strategies and invariants,
-- and archive issue-specific lessons separately from core subsystem guidance.
-
 Keep this directory small. Add notes only when they capture durable knowledge
 that is likely to help future work.
+
+Process guidance, branch hygiene, and post-session update rules live in
+`AGENTS.md`. This directory is only for the reusable knowledge itself and for
+lightweight navigation.
 
 ## Current notes
 
@@ -25,14 +23,6 @@ that is likely to help future work.
 - [sql-validation/duplicate-output-name-ambiguity.md](./sql-validation/duplicate-output-name-ambiguity.md)
   - Issue archive for the duplicate-output-name ambiguity fix through
     `SELECT *`.
-- [sql-validation/group-by-alias-typed-null-equivalence.md](./sql-validation/group-by-alias-typed-null-equivalence.md)
-  - Issue archive for grouped-expression equivalence when `GROUP BY` alias
-    validation diverges on typed-`NULL` representation.
-
-## Maintenance rule
-
-When a session produces reusable knowledge:
-
-1. update the subsystem guide with durable invariants,
-2. archive the specific issue separately,
-3. avoid filling the subsystem guide with one-off commands or branch history.
+- [sql-validation/grouped-expression-equivalence-typed-null.md](./sql-validation/grouped-expression-equivalence-typed-null.md)
+  - Issue archive for grouped-expression equivalence when validator paths
+    diverge on typed-`NULL` representation.

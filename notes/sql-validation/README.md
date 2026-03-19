@@ -386,6 +386,23 @@ A shared validator utility class.
 It is the right place for reusable helper logic such as grouped-expression
 lookup and grouped-expression equivalence rules.
 
+### `SqlValidatorFixture`
+
+The fluent test fixture used in `SqlValidatorTest`.
+
+It is the fastest way to probe validator behavior because it lets you vary
+conformance, parser config, case-sensitivity, catalog behavior, and expected
+validation outcome without leaving the validator layer.
+
+### `SqlTestFactory`
+
+The test-time factory that wires parser config, validator config, operator
+table, and catalog reader together.
+
+It is the place to inspect when a validator test changes behavior under custom
+parser casing or case-sensitivity settings, because this is where those knobs
+actually enter the test harness.
+
 ### `TypeCoercionImpl`
 
 Calcite's main implicit-coercion implementation.
@@ -596,11 +613,15 @@ When a bug involves validation or name resolution:
 
 ## Knowledge-maintenance workflow
 
-After each major debugging session in this area:
+This guide is the durable subsystem note.
 
-1. Extract reusable invariants and add them here.
-2. Keep this file focused on durable system knowledge.
-3. Archive the specific issue in a separate note under `notes/sql-validation/`.
-4. Update the notes index so the new archive is discoverable.
-5. Do not pollute this guide with one-off commands, temporary probes, or branch
-   history.
+Workflow and branch-hygiene rules live in `AGENTS.md`.
+
+When a session produces reusable knowledge, update this guide only with:
+
+- enduring invariants
+- architectural boundaries
+- reusable debugging strategy
+
+Put issue-specific details in a separate archive note and update the notes
+index so the archive is discoverable.

@@ -1,4 +1,4 @@
-# Session Archive: `GROUP BY` Alias Validation and Typed-`NULL` Equivalence
+# Session Archive: Grouped-Expression Equivalence and Typed-`NULL`
 
 ## Why this archive exists
 
