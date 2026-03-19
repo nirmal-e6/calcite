@@ -58,6 +58,7 @@ import org.apache.calcite.sql.SqlUtil;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.sql.type.SqlTypeUtil;
+import org.apache.calcite.sql.util.SqlShuttle;
 import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.calcite.util.Litmus;
 import org.apache.calcite.util.Pair;
@@ -100,7 +101,60 @@ import static java.util.Objects.requireNonNull;
 public class SqlValidatorUtil {
   private SqlValidatorUtil() {}
 
+  /** Normalizes grouped-expression trees before equality checks.
+   *
+   * <p>This is intentionally narrow. It removes syntax that may differ between
+   * validator paths even when the grouped expression is semantically the same,
+   * but it does not try to be a general canonical form for all SQL
+   * expressions. */
+  private static final SqlShuttle GROUP_EXPR_EQUIVALENCE_NORMALIZER =
+      new SqlShuttle() {
+        @Override public SqlNode visit(SqlCall call) {
+          if (call.getKind() == SqlKind.AS) {
+            return requireNonNull(call.operand(0).accept(this),
+                () -> "normalized operand for " + call);
+          }
+          if (call.getKind() == SqlKind.CAST
+              && SqlUtil.isNullLiteral(call.operand(0), false)) {
+            return requireNonNull(call.operand(0).accept(this),
+                () -> "normalized operand for " + call);
+          }
+          return super.visit(call);
+        }
+      };
+
   //~ Methods ----------------------------------------------------------------
+
+  /** Returns whether two expressions are equivalent for grouped-expression
+   * matching.
+   *
+   * <p>This comparison intentionally ignores validator-added syntactic noise
+   * such as {@code CAST(NULL AS T)} versus a bare {@code NULL}, because
+   * type information for null branches may be represented either in the tree
+   * or in validator metadata depending on the validation path.
+   *
+   * <p>Future grouped-expression normalization should extend this helper in the
+   * same layer rather than adding ad hoc comparisons at individual call sites. */
+  static boolean equalGroupExpr(SqlNode left, SqlNode right) {
+    final SqlNode normalizedLeft =
+        requireNonNull(left.accept(GROUP_EXPR_EQUIVALENCE_NORMALIZER),
+            () -> "normalized left for " + left);
+    final SqlNode normalizedRight =
+        requireNonNull(right.accept(GROUP_EXPR_EQUIVALENCE_NORMALIZER),
+            () -> "normalized right for " + right);
+    return normalizedLeft.equalsDeep(normalizedRight, Litmus.IGNORE);
+  }
+
+  /** Returns the index of an expression in a list of grouped expressions,
+   * using {@link #equalGroupExpr(SqlNode, SqlNode)} semantics. */
+  static int indexOfGroupExpr(List<SqlNode> groupExprs, SqlNode expr) {
+    for (Ord<SqlNode> node : Ord.zip(groupExprs)) {
+      if (equalGroupExpr(node.e, expr)) {
+        return node.i;
+      }
+    }
+    return -1;
+  }
 
   /**
    * Converts a {@link SqlValidatorScope} into a {@link RelOptTable}. This is
@@ -1029,10 +1083,9 @@ public class SqlValidatorUtil {
 
   private static int lookupGroupExpr(GroupAnalyzer groupAnalyzer,
       SqlNode expr) {
-    for (Ord<SqlNode> node : Ord.zip(groupAnalyzer.groupExprs)) {
-      if (node.e.equalsDeep(expr, Litmus.IGNORE)) {
-        return node.i;
-      }
+    final int index = indexOfGroupExpr(groupAnalyzer.groupExprs, expr);
+    if (index >= 0) {
+      return index;
     }
 
     switch (expr.getKind()) {

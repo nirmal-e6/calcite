@@ -194,6 +194,15 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         SqlLibrary.STANDARD, library);
   }
 
+  private SqlValidatorFixture casePreservingInsensitiveBigQueryFixture() {
+    return fixture()
+        .withConformance(SqlConformanceEnum.LENIENT)
+        .withCaseSensitive(false)
+        .withQuotedCasing(Casing.UNCHANGED)
+        .withUnquotedCasing(Casing.UNCHANGED)
+        .withOperatorTable(operatorTableFor(SqlLibrary.BIG_QUERY));
+  }
+
   @Test void testMultipleSameAsPass() {
     sql("select 1 as again,2 as \"again\", 3 as AGAiN from (values (true))")
         .ok();
@@ -7006,6 +7015,67 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
             + "'EXTRACT\\(<DATETIME_INTERVAL> FROM <DATETIME_INTERVAL>\\)'\n"
             + "'EXTRACT\\(<DATETIME_INTERVAL> FROM <DATETIME>\\)'\n"
             + "'EXTRACT\\(<INTERVAL_DAY_TIME> FROM <INTERVAL_YEAR_MONTH>\\)'");
+  }
+
+  @Test void testGroupByAliasCaseInsensitiveCasePreservingTypedNullWithSchemaCaseLeaf() {
+    final String sql = "SELECT "
+        + "CASE WHEN true then "
+        + "concat('WEEK', '_', e.ENAME)"
+        + " WHEN false then "
+        + "e.sal "
+        + "end as group_by_timeperiod "
+        + "from emp e "
+        + "group by group_by_timeperiod";
+    casePreservingInsensitiveBigQueryFixture()
+        .withSql(sql)
+        .ok();
+  }
+
+  @Test void testGroupByAliasCaseInsensitiveCasePreservingTypedNull() {
+    final String sql = "SELECT "
+        + "CASE WHEN true then "
+        + "concat('WEEK', '_', e.ename)"
+        + " WHEN false then "
+        + "e.sal "
+        + "end as group_by_timeperiod "
+        + "from emp e "
+        + "group by group_by_timeperiod";
+    casePreservingInsensitiveBigQueryFixture()
+        .withSql(sql)
+        .ok();
+  }
+
+  @Test void testGroupByAliasCaseInsensitiveCasePreservingExplicitTypedNullControl() {
+    final String sql = "SELECT "
+        + "CASE WHEN true then "
+        + "concat('WEEK', '_', e.ename)"
+        + " WHEN false then "
+        + "cast(e.sal as varchar) "
+        + "else cast(null as varchar) "
+        + "end as group_by_timeperiod "
+        + "from emp e "
+        + "group by group_by_timeperiod";
+    casePreservingInsensitiveBigQueryFixture()
+        .withSql(sql)
+        .ok();
+  }
+
+  @Test void testGroupByExpressionCaseInsensitiveCasePreservingTypedNullControl() {
+    final String sql = "SELECT "
+        + "CASE WHEN true then "
+        + "concat('WEEK', '_', e.ename)"
+        + " WHEN false then "
+        + "e.sal "
+        + "end as group_by_timeperiod "
+        + "from emp e "
+        + "group by CASE WHEN true then "
+        + "concat('WEEK', '_', e.ename)"
+        + " WHEN false then "
+        + "e.sal "
+        + "end";
+    casePreservingInsensitiveBigQueryFixture()
+        .withSql(sql)
+        .ok();
   }
 
   /**
