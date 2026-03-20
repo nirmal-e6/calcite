@@ -186,6 +186,126 @@ This is where a distinct class of bugs appears:
 - if Calcite compares raw trees too literally, a semantically valid grouped
   expression can be rejected
 
+## Clause-local front-end flow
+
+Some SQL features are not "just another expression inside `SELECT`". They are
+clause-local constructs with their own small front-end pipeline.
+
+Plain English first:
+
+- the parser has to admit the clause syntax
+- the SQL tree has to remember the clause structure
+- the validator has to decide what the clause means and what row type it
+  exposes
+- `SqlToRelConverter` has to lower that validated meaning into rel algebra
+
+If one of those layers still assumes an older semantic model, the feature is
+not actually implemented even if another layer was relaxed.
+
+Typical examples are:
+
+- `PIVOT`
+- clause-local grouping constructs
+- other SQL features whose semantics are not just "ordinary expression
+  validation inside `SELECT`"
+
+For these features, the important distinctions are:
+
+- what syntax the parser admits
+- what structure the clause AST records
+- what forms the validator accepts as legal
+- what output shape the validator exposes
+- how `sql2rel` lowers the validated meaning
+
+Those are different questions. They should not be collapsed into one method or
+one flag.
+
+### `PIVOT` as a model example
+
+`PIVOT` is a good model problem because it exercises all four layers at once.
+
+It has:
+
+- a dedicated clause node
+- clause-local validation rules
+- implicit grouping derived from clause structure
+- a lowering step that often rewrites into filtered aggregates plus final
+  projection logic
+
+The reusable lesson is not "`PIVOT` is special". The lesson is:
+
+- if a clause-local feature changes semantic shape, parser admission, AST
+  bookkeeping, validator legality, and lowering all need to be checked
+
+For `PIVOT`, one common example is when a measure stops being "one aggregate
+call" and becomes "a larger scalar expression built from aggregate terms".
+
+### Parser, validator, and converter must agree on the semantic shape
+
+For a clause-local feature, there is a recurring failure pattern:
+
+1. The parser still admits only the old syntax shape.
+2. The validator is relaxed to accept a richer semantic shape.
+3. The converter still lowers according to the old assumption.
+
+This creates a design mismatch, not a small bug.
+
+Example:
+
+- if validator starts accepting "scalar expression over aggregate terms"
+- but converter still assumes "one measure = one aggregate call"
+
+then the feature is only half implemented. The correct fix is not to add a
+special-case rejection later. The correct fix is to teach the converter the new
+semantic shape.
+
+### Structural bookkeeping versus support policy
+
+Clause-local AST helpers often need to be broader than the currently supported
+public surface.
+
+For `PIVOT`, a structural helper may need to answer:
+
+- "is this subtree an aggregate term?"
+- "which input columns are consumed by the clause?"
+
+That is different from:
+
+- "is this measure form supported under the current conformance?"
+
+This distinction matters because structural bookkeeping is used for:
+
+- implicit grouping
+- aggregate-term extraction
+- expression decomposition
+
+while support policy belongs in validator legality checks.
+
+If those concerns are merged, Calcite often ends up with one of two bad
+outcomes:
+
+- structural analysis becomes too weak to support future extensions
+- or unsupported syntax accidentally becomes accepted because the structural
+  helper was mistaken for the policy layer
+
+### Generic rel helpers are not the SQL semantic authority
+
+Calcite often uses generic rel-building helpers under the SQL front end.
+
+That does not make those helpers the owner of SQL semantics.
+
+For `PIVOT`, a rel helper such as `RelBuilder.pivot(...)` can reasonably own:
+
+- a generic "filtered aggregate pivot" construction
+
+But it should not silently decide:
+
+- which `PIVOT` measures are legal SQL
+- how output names should be validated
+- whether a richer measure is a scalar expression over aggregate terms
+
+Those belong to parser, AST, validator, and `SqlToRelConverter` respectively.
+
 ## The invariant model
 
 ### Invariant 1: validator row types preserve SQL-visible output names
@@ -386,6 +506,35 @@ A shared validator utility class.
 It is the right place for reusable helper logic such as grouped-expression
 lookup and grouped-expression equivalence rules.
 
+### `SqlPivot`
+
+The SQL parse-tree node for `PIVOT`.
+
+It owns the clause structure:
+
+- input query
+- measure list
+- axis list
+- `IN` list
+
+This is also the right place for structural helpers such as:
+
+- aggregate-term discovery inside a measure expression
+- consumed-column discovery for implicit grouping
+
+### `PivotScope`
+
+The name-resolution scope used inside a `PIVOT` clause.
+
+Its job is to resolve expressions in pivot measures and pivot axes against the
+input query.
+
+### `PivotNamespace`
+
+The validator namespace for a `PIVOT` result.
+
+Its job is to expose the row type that the validated `PIVOT` clause produces.
+
 ### `SqlValidatorFixture`
 
 The fluent test fixture used in `SqlValidatorTest`.
@@ -423,6 +572,21 @@ The boundary from validated SQL into relational algebra.
 
 Its job is to consume already-validated semantics and map them to rel ordinals
 and expressions. It should not redefine validator lookup or ambiguity rules.
+
+For clause-local features such as `PIVOT`, this is also the layer that must
+perform structural lowering:
+
+- decompose validated SQL constructs into rel-friendly pieces
+- preserve the validated meaning while doing so
+- keep rel-internal names from leaking back into SQL semantics
+
+### `RelBuilder`
+
+Calcite's helper for constructing relational algebra trees.
+
+Its job is to provide convenient generic rel-building operations. When used from
+the SQL front end, it is a lowering tool, not the owner of SQL validation
+rules.
 
 ## Common failure modes
 
@@ -505,6 +669,50 @@ Typical cause:
 - the validator depended on structural coincidence rather than a stable
   invariant
 
+### Failure mode 7: syntax, validation, and lowering disagree on clause-local
+feature shape
+
+Symptoms:
+
+- the parser rejects syntax that validator and converter conceptually support
+- validation accepts a construct that rel conversion cannot lower
+- a feature works for one trivial expression shape but fails for the first
+  composed expression
+
+Typical cause:
+
+- parser, validator, and `SqlToRelConverter` are still modeling different
+  versions of the same feature
+
+### Failure mode 8: consumed-column accounting is wrong
+
+Symptoms:
+
+- `PIVOT` groups by a column that should have been consumed by a measure
+- adding scalar structure around an aggregate changes the grouping result
+- a feature appears to "work" only because the query was accidentally grouped
+  more finely than intended
+
+Typical cause:
+
+- the AST layer tracks identifiers naively instead of tracking identifiers
+  inside aggregate terms or other semantically consuming contexts
+
+### Failure mode 9: structural helper is mistaken for the support policy
+
+Symptoms:
+
+- a broad AST classifier is treated as proof that a syntax form is supported
+- validator rejects forms that structural decomposition still needs to
+  understand
+- future extensions become harder because structural analysis was narrowed to
+  the current policy boundary
+
+Typical cause:
+
+- structural bookkeeping and conformance policy were implemented in the same
+  helper instead of separate layers
+
 ## Debugging playbook
 
 ### Start with tests, not with code
@@ -530,6 +738,8 @@ First determine which test class owns the behavior:
 | Nested `SELECT *` fails even though no explicit name is being referenced | `SqlValidatorImpl.expandStar(...)`, `DelegatingScope.fullyQualify(...)` | This usually means field identity was lost and Calcite fell back to name lookup. |
 | `ORDER BY x` behaves differently from `SELECT x` | `OrderByScope`, `SqlValidatorImpl.OrderExpressionExpander` | `ORDER BY` has its own explicit resolution path. |
 | `GROUP BY alias` works under default casing but fails under `UNCHANGED + caseSensitive(false)` | `GroupByScope`, `SqlValidatorImpl` group-by expansion, `AggregatingSelectScope`, `AggChecker`, `TypeCoercionImpl.caseWhenCoercion(...)` | This often means grouped-expression comparison depends on inconsistent internal trees. |
+| `PIVOT` accepts a measure during validation but fails or lowers incorrectly in `sql2rel` | `SqlValidatorImpl.validatePivot(...)`, `SqlPivot`, `SqlToRelConverter.convertPivot(...)` | Clause-local features need parser, AST, validator, and lowering to agree on the same semantic shape. |
+| Changing a `PIVOT` measure from `SUM(x)` to `SUM(x) / SUM(y)` changes the implicit grouping unexpectedly | `SqlPivot.usedColumnNames(...)`, `SqlPivot` aggregate-term helpers, `SqlToRelConverter.convertPivot(...)` | This usually means Calcite is not tracking which input columns are consumed by the measure correctly. |
 | Validator behavior is right but the rel plan points at the wrong field | `SqlToRelConverter.convertIdentifier(...)` | This is where validated field identity becomes rel ordinals. |
 
 ### Classify the bug before editing
@@ -562,6 +772,15 @@ For grouped-expression bugs:
 4. type/coercion-rewritten form
 5. grouped-expression comparison site
 
+For clause-local features such as `PIVOT`:
+
+1. exact parser admission rule
+2. clause-local AST shape
+3. validator legality rule
+4. output row-type and implicit-grouping derivation
+5. `SqlToRelConverter` lowering shape
+6. rel helper usage only after the first five are understood
+
 ### Structural probes to use
 
 Prefer comparisons that isolate one layer at a time:
@@ -584,6 +803,9 @@ Use these heuristics:
   lookup logic
 - if grouping legality depends on rewrite history, fix grouped-expression
   comparison
+- if a clause-local feature has the wrong semantic shape, fix the layer that
+  owns that part of the shape: parser admission, AST bookkeeping, validator
+  legality, or lowering
 - only if validator semantics are already correct should you touch
   `SqlToRelConverter`
 
@@ -596,6 +818,8 @@ Tempting but usually wrong approaches:
 - teaching `ORDER BY` to pick a first match
 - changing parser defaults to hide a grouped-expression bug
 - forcing two validator paths to share one mutable `SqlNode` tree
+- relaxing clause-local validation without updating lowering
+- teaching a generic rel helper SQL-semantics it should not own
 
 These often make one test pass while preserving the wrong model.
 
