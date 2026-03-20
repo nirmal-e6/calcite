@@ -6517,6 +6517,10 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
 
   public void validatePivot(SqlPivot pivot) {
     final PivotScope scope = (PivotScope) getJoinScope(pivot);
+    final boolean allowPivotAggregateExpression =
+        config.conformance().allowPivotAggregateExpression();
+    final boolean pivotValueNullOnEmpty =
+        config.conformance().isPivotValueNullOnEmpty();
 
     final PivotNamespace ns =
         getNamespaceOrThrow(pivot).unwrap(PivotNamespace.class);
@@ -6532,13 +6536,18 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     // where k1, ... kN are columns that are not referenced as an argument to
     // an aggregate or as an axis.
 
-    // Aggregates, e.g. "PIVOT (sum(x) AS sum_x, count(*) AS c)"
+    // Measures, e.g. "PIVOT (sum(x) AS sum_x, count(*) AS c, 1 AS one)"
     final PairList<@Nullable String, RelDataType> aggNames = PairList.of();
     pivot.forEachAgg((alias, call) -> {
       call.validate(this, scope);
-      final RelDataType type = deriveType(scope, call);
+      RelDataType type = deriveType(scope, call);
+      if (pivotValueNullOnEmpty) {
+        type = typeFactory.createTypeWithNullability(type, true);
+      }
       aggNames.add(alias, type);
-      if (!(call instanceof SqlCall)
+      if (allowPivotAggregateExpression) {
+        validatePivotMeasureExpression(call);
+      } else if (!(call instanceof SqlCall)
           || !(((SqlCall) call).getOperator() instanceof SqlAggFunction)) {
         throw newValidationError(call, RESOURCE.pivotAggMalformed());
       }
@@ -6589,6 +6598,64 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
 
     final RelDataType rowType = typeBuilder.build();
     ns.setType(rowType);
+  }
+
+  private void validatePivotMeasureExpression(SqlNode node) {
+    // Input-independent scalar expressions are valid when richer PIVOT
+    // measures are enabled. The recursive walk throws only when it finds an
+    // input-dependent construct outside an aggregate term.
+    validatePivotMeasureExpressionInternal(node);
+  }
+
+  private boolean validatePivotMeasureExpressionInternal(SqlNode node) {
+    if (node == null) {
+      return false;
+    }
+    if (node.isA(SqlKind.QUERY)) {
+      throw newValidationError(node, RESOURCE.pivotAggExpressionMalformed());
+    }
+    if (node instanceof SqlIdentifier) {
+      throw newValidationError(node, RESOURCE.pivotAggExpressionMalformed());
+    }
+    if (node instanceof SqlCall) {
+      final SqlCall call = (SqlCall) node;
+      if (call.getKind() == SqlKind.OVER) {
+        throw newValidationError(call,
+            RESOURCE.windowedAggregateIllegalInClause("PIVOT"));
+      }
+      if (isUnsupportedPivotAggregateWrapper(call)) {
+        throw newValidationError(call, RESOURCE.pivotAggExpressionMalformed());
+      }
+      if (SqlPivot.isAggregateTerm(call)) {
+        return true;
+      }
+      boolean foundAggregate = false;
+      for (SqlNode operand : call.getOperandList()) {
+        foundAggregate |= validatePivotMeasureExpressionInternal(operand);
+      }
+      return foundAggregate;
+    }
+    if (node instanceof SqlNodeList) {
+      boolean foundAggregate = false;
+      for (SqlNode child : (SqlNodeList) node) {
+        foundAggregate |= validatePivotMeasureExpressionInternal(child);
+      }
+      return foundAggregate;
+    }
+    return false;
+  }
+
+  private static boolean isUnsupportedPivotAggregateWrapper(SqlCall call) {
+    switch (call.getKind()) {
+    case FILTER:
+    case WITHIN_DISTINCT:
+    case WITHIN_GROUP:
+    case IGNORE_NULLS:
+    case RESPECT_NULLS:
+      return true;
+    default:
+      return false;
+    }
   }
 
   public void validateUnpivot(SqlUnpivot unpivot) {

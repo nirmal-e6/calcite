@@ -825,6 +825,9 @@ public interface CalciteResource {
   @BaseMessage("Measure expression in PIVOT must use aggregate function")
   ExInst<SqlValidatorException> pivotAggMalformed();
 
+  @BaseMessage("Measure expression in PIVOT must be input-independent or an aggregate expression")
+  ExInst<SqlValidatorException> pivotAggExpressionMalformed();
+
   @BaseMessage("Value count in PIVOT ({0,number,#}) must match number of FOR columns ({1,number,#})")
   ExInst<SqlValidatorException> pivotValueArityMismatch(int valueCount, int forCount);
 

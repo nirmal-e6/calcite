@@ -156,6 +156,7 @@ import org.apache.calcite.sql.type.SqlReturnTypeInference;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.type.TableFunctionReturnTypeInference;
 import org.apache.calcite.sql.util.SqlBasicVisitor;
+import org.apache.calcite.sql.util.SqlShuttle;
 import org.apache.calcite.sql.util.SqlVisitor;
 import org.apache.calcite.sql.validate.AggregatingSelectScope;
 import org.apache.calcite.sql.validate.CollectNamespace;
@@ -2863,6 +2864,34 @@ public class SqlToRelConverter {
   }
 
   protected void convertPivot(Blackboard bb, SqlPivot pivot) {
+    // Extended PIVOT conformance only needs the aggregate-expression lowering
+    // when a measure is not a plain aggregate call, or when null-on-empty
+    // semantics require a final projection.
+    if (requiresPivotAggregateExpressionRewrite(pivot)) {
+      convertPivotAggregateExpressions(bb, pivot);
+      return;
+    }
+    convertSimplePivot(bb, pivot);
+  }
+
+  private boolean requiresPivotAggregateExpressionRewrite(SqlPivot pivot) {
+    if (validator().config().conformance().isPivotValueNullOnEmpty()) {
+      return true;
+    }
+    if (!validator().config().conformance().allowPivotAggregateExpression()) {
+      return false;
+    }
+    for (SqlNode agg : pivot.aggList) {
+      final SqlNode measure = SqlUtil.stripAs(agg);
+      if (!(measure instanceof SqlCall)
+          || !(((SqlCall) measure).getOperator() instanceof SqlAggFunction)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private void convertSimplePivot(Blackboard bb, SqlPivot pivot) {
     final SqlValidatorScope scope = validator().getJoinScope(pivot);
     final Blackboard pivotBb = createBlackboard(scope, null, false);
 
@@ -2942,6 +2971,223 @@ public class SqlToRelConverter {
         relBuilder.pivot(groupKey, aggCalls, axes, valueList.build())
             .build();
     bb.setRoot(rel, true);
+  }
+
+  private void convertPivotAggregateExpressions(Blackboard bb, SqlPivot pivot) {
+    final SqlValidatorScope scope = validator().getJoinScope(pivot);
+    final Blackboard pivotBb = createBlackboard(scope, null, false);
+
+    // Convert input.
+    convertFrom(pivotBb, pivot.query);
+    final RelNode input = pivotBb.root();
+    final RelDataType inputRowType = input.getRowType();
+    relBuilder.push(input);
+
+    final PivotAggregationContext aggregationContext =
+        collectPivotAggregationContext(pivotBb, pivot, inputRowType);
+
+    // Project the fields that we will need.
+    relBuilder
+        .project(aggregationContext.aggConverter.convertedInputExprs.leftList(),
+            aggregationContext.aggConverter.convertedInputExprs.rightList());
+
+    final ImmutableList.Builder<Pair<String, List<RexNode>>> valueList =
+        ImmutableList.builder();
+    pivot.forEachNameValues((alias, nodeList) ->
+        valueList.add(
+            Pair.of(alias,
+                nodeList.stream().map(bb::convertExpression)
+                    .collect(toImmutableList()))));
+    final ImmutableList<Pair<String, List<RexNode>>> values = valueList.build();
+    final boolean pivotValueNullOnEmpty =
+        validator().config().conformance().isPivotValueNullOnEmpty();
+    final RelBuilder.GroupKey groupKey =
+        relBuilder.groupKey(
+            aggregationContext.groupFields.stream()
+                .map(field ->
+                    aggregationContext.aggConverter.addGroupExpr(
+                        new SqlIdentifier(field.getName(), SqlParserPos.ZERO)))
+                .collect(ImmutableBitSet.toImmutableBitSet()));
+
+    final List<RexNode> axes = new ArrayList<>();
+    for (SqlNode axis : pivot.axisList) {
+      axes.add(relBuilder.field(aggregationContext.aggConverter.addGroupExpr(axis)));
+    }
+
+    final List<RelBuilder.AggCall> aggCalls = new ArrayList<>();
+    for (int i = 0; i < aggregationContext.aggConverter.aggCalls.size(); i++) {
+      aggCalls.add(
+          relBuilder.aggregateCall(aggregationContext.aggConverter.aggCalls.get(i))
+              .as(pivotAggregateAlias(i)));
+    }
+    if (pivotValueNullOnEmpty) {
+      aggCalls.add(relBuilder.countStar(pivotValueCountAlias()));
+    }
+    relBuilder.pivot(groupKey, aggCalls, axes, values);
+
+    final RelNode pivotRel = relBuilder.peek();
+    final RelDataType pivotRowType = pivotRel.getRowType();
+    final List<RelDataTypeField> pivotFields = pivotRowType.getFieldList();
+    final List<List<String>> pivotAggregateFieldNames = new ArrayList<>();
+    final List<String> pivotValueCountFieldNames = new ArrayList<>();
+    // RelBuilder.pivot returns group columns first, then one block of
+    // aggregate outputs per pivot value in values x aggCalls order. Read the
+    // actual field names from the row type because they may be uniquified.
+    int pivotFieldOrdinal = aggregationContext.groupFields.size();
+    for (int valueOrdinal = 0; valueOrdinal < values.size(); valueOrdinal++) {
+      final List<String> aggregateFieldNames = new ArrayList<>();
+      for (int aggregateOrdinal = 0;
+          aggregateOrdinal < aggregationContext.aggConverter.aggCalls.size();
+          aggregateOrdinal++) {
+        aggregateFieldNames.add(pivotFields.get(pivotFieldOrdinal++).getName());
+      }
+      pivotAggregateFieldNames.add(aggregateFieldNames);
+      if (pivotValueNullOnEmpty) {
+        pivotValueCountFieldNames.add(
+            pivotFields.get(pivotFieldOrdinal++).getName());
+      }
+    }
+    assert pivotFieldOrdinal == pivotFields.size();
+    final Map<String, RexNode> nameToNodeMap = new HashMap<>();
+    for (int i = 0; i < pivotFields.size(); i++) {
+      nameToNodeMap.put(pivotFields.get(i).getName(), relBuilder.field(i));
+    }
+    nameToNodeMap.put("_table_", rexBuilder.makeRangeReference(pivotRel));
+    final Map<String, RelDataType> nameToTypeMap = new HashMap<>();
+    for (Map.Entry<String, RexNode> entry : nameToNodeMap.entrySet()) {
+      nameToTypeMap.put(entry.getKey(), entry.getValue().getType());
+    }
+    final ParameterScope projectScope =
+        new ParameterScope((SqlValidatorImpl) validator(), nameToTypeMap);
+    final Blackboard projectBb =
+        createBlackboard(projectScope, nameToNodeMap, false);
+    projectBb.setRoot(pivotRel, true);
+
+    final List<RexNode> finalExprs = new ArrayList<>();
+    final List<String> finalNames = new ArrayList<>();
+    final RelDataType validatedPivotType = getNamespace(pivot).getRowType();
+    int outputFieldOrdinal = 0;
+    for (int i = 0; i < aggregationContext.groupFields.size(); i++) {
+      finalExprs.add(relBuilder.field(i));
+      finalNames.add(validatedPivotType.getFieldList().get(outputFieldOrdinal++).getName());
+    }
+    for (int valueOrdinal = 0; valueOrdinal < values.size(); valueOrdinal++) {
+      for (PivotMeasureExpression measure : aggregationContext.measures) {
+        final SqlNode rewrittenMeasure =
+            replacePivotAggregateTerms(
+                measure.expression, measure.aggregateOrdinals,
+                pivotAggregateFieldNames.get(valueOrdinal));
+        final SqlNode validatedMeasure =
+            projectBb.validateExpression(pivotRowType, rewrittenMeasure);
+        RexNode finalExpr = projectBb.convertExpression(validatedMeasure);
+        if (pivotValueNullOnEmpty) {
+          finalExpr =
+              nullIfPivotValueEmpty(
+                  pivotValueCountFieldNames.get(valueOrdinal), finalExpr);
+        }
+        finalExprs.add(finalExpr);
+        finalNames.add(validatedPivotType.getFieldList().get(outputFieldOrdinal++).getName());
+      }
+    }
+    relBuilder.projectNamed(finalExprs, finalNames, true);
+    bb.setRoot(relBuilder.build(), true);
+  }
+
+  private PivotAggregationContext collectPivotAggregationContext(
+      Blackboard pivotBb, SqlPivot pivot, RelDataType inputRowType) {
+    final AggConverter aggConverter = AggConverter.create(pivotBb);
+    final Set<String> usedColumnNames = pivot.usedColumnNames();
+    final List<RelDataTypeField> groupFields = inputRowType.getFieldList().stream()
+        .filter(field -> !usedColumnNames.contains(field.getName()))
+        .collect(toImmutableList());
+
+    groupFields.forEach(field ->
+        aggConverter.addGroupExpr(
+            new SqlIdentifier(field.getName(), SqlParserPos.ZERO)));
+    pivot.axisList.forEach(aggConverter::addGroupExpr);
+
+    final List<PivotMeasureExpression> measures = new ArrayList<>();
+    final List<PivotAggregateTerm> aggregateTerms = new ArrayList<>();
+    pivotBb.agg = aggConverter;
+    try {
+      pivot.forEachAgg((alias, expression) -> {
+        replaceSubQueries(pivotBb, expression, RelOptUtil.Logic.TRUE_FALSE_UNKNOWN);
+        final Map<SqlCall, Integer> aggregateOrdinals = new HashMap<>();
+        SqlPivot.forEachAggregateTerm(expression, aggregateTerm -> {
+          final int aggregateOrdinal =
+              addPivotAggregateTerm(aggConverter, aggregateTerms, aggregateTerm);
+          aggregateOrdinals.put(aggregateTerm, aggregateOrdinal);
+        });
+        measures.add(new PivotMeasureExpression(expression, aggregateOrdinals));
+      });
+    } finally {
+      pivotBb.agg = null;
+    }
+    return new PivotAggregationContext(aggConverter, groupFields, measures);
+  }
+
+  private RexNode nullIfPivotValueEmpty(String pivotValueCountFieldName,
+      RexNode value) {
+    final RexNode pivotValueCount = relBuilder.field(pivotValueCountFieldName);
+    final RexNode isEmpty =
+        relBuilder.equals(pivotValueCount,
+            rexBuilder.makeExactLiteral(BigDecimal.ZERO, pivotValueCount.getType()));
+    return rexBuilder.makeCall(SqlStdOperatorTable.CASE,
+        ImmutableList.of(isEmpty, rexBuilder.makeNullLiteral(value.getType()), value));
+  }
+
+  private int addPivotAggregateTerm(AggConverter aggConverter,
+      List<PivotAggregateTerm> aggregateTerms, SqlCall aggregateTerm) {
+    @Nullable Integer aggregateOrdinal =
+        lookupPivotAggregateOrdinal(aggregateTerms, aggregateTerm);
+    if (aggregateOrdinal != null) {
+      return aggregateOrdinal;
+    }
+    aggregateTerm.accept(aggConverter);
+    final RexNode rex =
+        requireNonNull(aggConverter.lookupAggregates(aggregateTerm),
+            () -> "aggregate RexNode for " + aggregateTerm);
+    if (!(rex instanceof RexInputRef)) {
+      throw new AssertionError("Expected RexInputRef for " + aggregateTerm
+          + " but found " + rex);
+    }
+    aggregateOrdinal =
+        ((RexInputRef) rex).getIndex() - aggConverter.groupExprs.size();
+    aggregateTerms.add(new PivotAggregateTerm(aggregateTerm, aggregateOrdinal));
+    return aggregateOrdinal;
+  }
+
+  private static @Nullable Integer lookupPivotAggregateOrdinal(
+      List<PivotAggregateTerm> aggregateTerms, SqlCall aggregateTerm) {
+    for (PivotAggregateTerm existingTerm : aggregateTerms) {
+      if (existingTerm.term.equalsDeep(aggregateTerm, Litmus.IGNORE)) {
+        return existingTerm.aggregateOrdinal;
+      }
+    }
+    return null;
+  }
+
+  private static String pivotAggregateAlias(int aggregateOrdinal) {
+    return "PIVOT_AGG_" + aggregateOrdinal;
+  }
+
+  private static String pivotValueCountAlias() {
+    return "PIVOT_COUNT";
+  }
+
+  private SqlNode replacePivotAggregateTerms(SqlNode expression,
+      Map<SqlCall, Integer> aggregateOrdinals, List<String> aggregateFieldNames) {
+    return requireNonNull(expression.accept(new SqlShuttle() {
+      @Override public @Nullable SqlNode visit(SqlCall call) {
+        final Integer aggregateOrdinal = aggregateOrdinals.get(call);
+        if (aggregateOrdinal != null) {
+          return new SqlIdentifier(
+              aggregateFieldNames.get(aggregateOrdinal),
+              call.getParserPosition());
+        }
+        return super.visit(call);
+      }
+    }), expression::toString);
   }
 
   protected void convertUnpivot(Blackboard bb, SqlUnpivot unpivot) {
@@ -6887,6 +7133,47 @@ public class SqlToRelConverter {
         return measureScope.lookupMeasure(identifier.getSimple());
       }
       return super.lookupMeasure(identifier);
+    }
+  }
+
+  /** Aggregate collection and grouping state needed to lower a PIVOT through
+   * filtered aggregate calls plus a final projection. */
+  private static class PivotAggregationContext {
+    private final AggConverter aggConverter;
+    private final List<RelDataTypeField> groupFields;
+    private final List<PivotMeasureExpression> measures;
+
+    PivotAggregationContext(AggConverter aggConverter,
+        List<RelDataTypeField> groupFields,
+        List<PivotMeasureExpression> measures) {
+      this.aggConverter = aggConverter;
+      this.groupFields = groupFields;
+      this.measures = measures;
+    }
+  }
+
+  /** Original PIVOT measure expression plus the aggregate ordinals it uses
+   * after decomposition. */
+  private static class PivotMeasureExpression {
+    private final SqlNode expression;
+    private final Map<SqlCall, Integer> aggregateOrdinals;
+
+    PivotMeasureExpression(SqlNode expression,
+        Map<SqlCall, Integer> aggregateOrdinals) {
+      this.expression = expression;
+      this.aggregateOrdinals = aggregateOrdinals;
+    }
+  }
+
+  /** Aggregate term inside a richer PIVOT measure and the underlying
+   * AggregateCall ordinal it maps to. */
+  private static class PivotAggregateTerm {
+    private final SqlCall term;
+    private final int aggregateOrdinal;
+
+    PivotAggregateTerm(SqlCall term, int aggregateOrdinal) {
+      this.term = term;
+      this.aggregateOrdinal = aggregateOrdinal;
     }
   }
 }

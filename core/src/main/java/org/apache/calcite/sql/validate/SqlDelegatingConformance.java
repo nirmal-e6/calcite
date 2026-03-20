@@ -91,6 +91,14 @@ public class SqlDelegatingConformance implements SqlConformance {
     return delegate.isBangEqualAllowed();
   }
 
+  @Override public boolean allowPivotAggregateExpression() {
+    return delegate.allowPivotAggregateExpression();
+  }
+
+  @Override public boolean isPivotValueNullOnEmpty() {
+    return delegate.isPivotValueNullOnEmpty();
+  }
+
   @Override public boolean isPercentRemainderAllowed() {
     return delegate.isPercentRemainderAllowed();
   }

@@ -276,6 +276,34 @@ public interface SqlConformance {
   boolean isBangEqualAllowed();
 
   /**
+   * Whether to allow a {@code PIVOT} measure to be a scalar expression over
+   * aggregate terms, or a scalar expression that is independent of the input
+   * row, rather than requiring a top-level aggregate call.
+   *
+   * <p>Among built-in conformance levels, true in
+   * {@link SqlConformanceEnum#SPARK};
+   * false otherwise.
+   *
+   * <p>If true, expressions such as {@code sum(x) / sum(y)} and
+   * {@code coalesce(sum(x), 0)} are valid in the aggregate list of a
+   * {@code PIVOT}, and input-independent scalar measures such as {@code 1} are
+   * also valid. Column references must still occur only inside aggregate
+   * terms. The behavior of output columns for missing pivot buckets is
+   * controlled separately by {@link #isPivotValueNullOnEmpty()}.
+   */
+  boolean allowPivotAggregateExpression();
+
+  /**
+   * Whether a generated {@code PIVOT} value should be {@code NULL} when no
+   * input row matches the corresponding pivot bucket.
+   *
+   * <p>Among built-in conformance levels, true in
+   * {@link SqlConformanceEnum#SPARK};
+   * false otherwise.
+   */
+  boolean isPivotValueNullOnEmpty();
+
+  /**
    * Whether the "%" operator is allowed by the parser as an alternative to the
    * {@code mod} function.
    *

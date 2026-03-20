@@ -3161,7 +3161,12 @@ void AddPivotAgg(List<SqlNode> list) :
     final SqlIdentifier alias;
 }
 {
-    e = NamedFunctionCall()
+    (
+        LOOKAHEAD({ this.conformance.allowPivotAggregateExpression() })
+        e = Expression(ExprContext.ACCEPT_NON_QUERY)
+    |
+        e = NamedFunctionCall()
+    )
     (
         // Because babel put FOR into non-reserved keyword set.
         LOOKAHEAD({getToken(1).kind != COMMA && getToken(1).kind != FOR})

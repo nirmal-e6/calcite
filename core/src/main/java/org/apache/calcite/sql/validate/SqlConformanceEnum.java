@@ -78,6 +78,10 @@ public enum SqlConformanceEnum implements SqlConformance {
   PRESTO,
 
   /** Conformance value that instructs Calcite to use SQL semantics
+   * consistent with Apache Spark. */
+  SPARK,
+
+  /** Conformance value that instructs Calcite to use SQL semantics
    * consistent with Microsoft SQL Server version 2008. */
   SQL_SERVER_2008;
 
@@ -245,6 +249,14 @@ public enum SqlConformanceEnum implements SqlConformance {
     default:
       return false;
     }
+  }
+
+  @Override public boolean allowPivotAggregateExpression() {
+    return this == SPARK;
+  }
+
+  @Override public boolean isPivotValueNullOnEmpty() {
+    return this == SPARK;
   }
 
   @Override public boolean isMinusAllowed() {

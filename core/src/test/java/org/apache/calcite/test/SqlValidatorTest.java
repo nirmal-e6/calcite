@@ -2352,6 +2352,66 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
     sql(sql).type("RecordType(INTEGER MGR, INTEGER C, INTEGER A) NOT NULL");
   }
 
+  @Test void testPivotAggregateExpressionConformance() {
+    final SqlConformance conformance =
+        new SqlDelegatingConformance(SqlConformanceEnum.DEFAULT) {
+          @Override public boolean allowPivotAggregateExpression() {
+            return true;
+          }
+        };
+
+    sql("SELECT * FROM emp\n"
+        + "PIVOT ((sum(sal) / sum(comm)) AS ratio"
+        + " FOR job in ('CLERK' AS c, 'MANAGER' AS m))")
+        .withConformance(conformance)
+        .ok();
+    sql("SELECT * FROM emp\n"
+        + "PIVOT ((coalesce(sum(comm), 0)) AS comm0"
+        + " FOR job in ('CLERK' AS c, 'MANAGER' AS m))")
+        .withConformance(conformance)
+        .ok();
+    sql("SELECT * FROM emp\n"
+        + "PIVOT ((count(distinct sal)) AS cds"
+        + " FOR job in ('CLERK' AS c, 'MANAGER' AS m))")
+        .withConformance(conformance)
+        .ok();
+    sql("SELECT * FROM emp\n"
+        + "PIVOT ((coalesce(1, 0)) AS c1 FOR job in ('CLERK' AS c, 'MANAGER' AS m))")
+        .withConformance(conformance)
+        .ok();
+
+    sql("SELECT * FROM emp\n"
+        + "PIVOT (^(sal)^ AS sal1 FOR job in ('CLERK' AS c, 'MANAGER'))")
+        .withConformance(conformance)
+        .fails("Measure expression in PIVOT must be input-independent or an aggregate expression");
+    sql("SELECT * FROM emp\n"
+        + "PIVOT ((sum(sal) + ^deptno^) AS sal1 FOR job in ('CLERK' AS c, 'MANAGER'))")
+        .withConformance(conformance)
+        .fails("Measure expression in PIVOT must be input-independent or an aggregate expression");
+    sql("SELECT * FROM emp\n"
+        + "PIVOT (^(sum(sum(sal)))^ AS sal1 FOR job in ('CLERK' AS c, 'MANAGER'))")
+        .withConformance(conformance)
+        .fails("(?s).*Aggregate expressions cannot be nested.*");
+    sql("SELECT * FROM emp\n"
+        + "PIVOT (^(sum(sal) over (partition by deptno))^ AS sal1"
+        + " FOR job in ('CLERK' AS c, 'MANAGER'))")
+        .withConformance(conformance)
+        .fails("Windowed aggregate expression is illegal in PIVOT clause");
+    sql("SELECT * FROM emp\n"
+        + "PIVOT (^(sum(sal) FILTER (WHERE deptno > 10))^ AS sal1"
+        + " FOR job in ('CLERK' AS c, 'MANAGER'))")
+        .withConformance(conformance)
+        .fails("Measure expression in PIVOT must be input-independent or an aggregate expression");
+  }
+
+  @Test void testPivotSparkConformance() {
+    sql("SELECT * FROM (SELECT job FROM emp)\n"
+        + "PIVOT ((123) AS c1, COUNT(*) AS cnt"
+        + " FOR job in ('CLERK' AS c, 'MISSING' AS m))")
+        .withConformance(SqlConformanceEnum.SPARK)
+        .type("RecordType(INTEGER C_C1, BIGINT C_CNT, INTEGER M_C1, BIGINT M_CNT) NOT NULL");
+  }
+
   @Test void testPivotValueMismatch() {
     final String sql = "SELECT * FROM Emp\n"
         + "PIVOT (SUM(sal) FOR job IN (^('A', 'B')^, ('C', 'D')))";

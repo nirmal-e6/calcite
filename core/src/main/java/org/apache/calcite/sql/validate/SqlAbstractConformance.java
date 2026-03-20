@@ -85,6 +85,14 @@ public abstract class SqlAbstractConformance implements SqlConformance {
     return SqlConformanceEnum.DEFAULT.isBangEqualAllowed();
   }
 
+  @Override public boolean allowPivotAggregateExpression() {
+    return SqlConformanceEnum.DEFAULT.allowPivotAggregateExpression();
+  }
+
+  @Override public boolean isPivotValueNullOnEmpty() {
+    return SqlConformanceEnum.DEFAULT.isPivotValueNullOnEmpty();
+  }
+
   @Override public boolean isMinusAllowed() {
     return SqlConformanceEnum.DEFAULT.isMinusAllowed();
   }

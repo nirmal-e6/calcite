@@ -8054,6 +8054,41 @@ public class SqlParserTest {
     sql(sql).ok(expected);
   }
 
+  @Test void testPivotAggregateExpressionConformance() {
+    final String invalidSql = "SELECT * FROM emp\n"
+        + "PIVOT (^(^sum(sal) / sum(comm)) AS ratio FOR job in ('CLERK' AS c))";
+    sql(invalidSql).fails("(?s)Encountered \"\\(\" at .*");
+    final String invalidConstantSql = "SELECT * FROM emp\n"
+        + "PIVOT (^1^ AS c1 FOR job in ('CLERK' AS c))";
+    sql(invalidConstantSql).fails("(?s).*Encountered \"1\" at .*");
+
+    final String constantSql = "SELECT * FROM emp\n"
+        + "PIVOT (1 AS c1 FOR job in ('CLERK' AS c))";
+
+    final String sql = "SELECT * FROM emp\n"
+        + "PIVOT ((sum(sal) / sum(comm)) AS ratio FOR job in ('CLERK' AS c))";
+    final String expected = "SELECT *\n"
+        + "FROM `EMP` PIVOT ((SUM(`SAL`) / SUM(`COMM`)) AS `RATIO`"
+        + " FOR `JOB` IN ('CLERK' AS `C`))";
+    sql(sql)
+        .withConformance(new SqlAbstractConformance() {
+          @Override public boolean allowPivotAggregateExpression() {
+            return true;
+          }
+        })
+        .ok(expected);
+
+    final String constantExpected = "SELECT *\n"
+        + "FROM `EMP` PIVOT (1 AS `C1` FOR `JOB` IN ('CLERK' AS `C`))";
+    sql(constantSql)
+        .withConformance(new SqlAbstractConformance() {
+          @Override public boolean allowPivotAggregateExpression() {
+            return true;
+          }
+        })
+        .ok(constantExpected);
+  }
+
   /** In PIVOT, FOR clause must contain only simple identifiers. */
   @Test void testPivotErrorExpressionInFor() {
     final String sql = "SELECT * FROM emp\n"

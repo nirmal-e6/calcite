@@ -4701,6 +4701,78 @@ class SqlToRelConverterTest extends SqlToRelTestBase {
     sql(sql).ok();
   }
 
+  @Test void testPivotAggregateExpressionConformance() {
+    final String sql = "SELECT *\n"
+        + "FROM (SELECT mgr, deptno, job, sal, comm FROM emp)\n"
+        + "PIVOT ((SUM(sal) / SUM(comm)) AS ratio\n"
+        + "    FOR (job, deptno)\n"
+        + "    IN (('CLERK', 10) AS c10, ('MANAGER', 20) AS m20))";
+    final SqlConformance conformance =
+        new SqlDelegatingConformance(SqlConformanceEnum.DEFAULT) {
+          @Override public boolean allowPivotAggregateExpression() {
+            return true;
+          }
+        };
+    sql(sql).withConformance(conformance).ok();
+  }
+
+  @Test void testPivotSimpleAggregateConformanceKeepsSimpleNames() {
+    final String sql = "SELECT *\n"
+        + "FROM (SELECT mgr, deptno, job, sal FROM emp)\n"
+        + "PIVOT (SUM(sal), COUNT(*) AS cnt\n"
+        + "    FOR (job, deptno)\n"
+        + "    IN (('CLERK', 10) AS c10, ('MANAGER', 20) AS m20))";
+    final SqlConformance conformance =
+        new SqlDelegatingConformance(SqlConformanceEnum.DEFAULT) {
+          @Override public boolean allowPivotAggregateExpression() {
+            return true;
+          }
+        };
+    sql(sql).withConformance(conformance).ok();
+  }
+
+  @Test void testPivotConstantMeasureConformance() {
+    final String sql = "SELECT *\n"
+        + "FROM (SELECT mgr, job FROM emp)\n"
+        + "PIVOT (1 AS c1\n"
+        + "    FOR job\n"
+        + "    IN ('CLERK' AS c, 'MANAGER' AS m))";
+    final SqlConformance conformance =
+        new SqlDelegatingConformance(SqlConformanceEnum.DEFAULT) {
+          @Override public boolean allowPivotAggregateExpression() {
+            return true;
+          }
+        };
+    sql(sql).withConformance(conformance).ok();
+  }
+
+  @Test void testPivotConstantMeasureNoGroupKeySparkConformance() {
+    final String sql = "SELECT *\n"
+        + "FROM (SELECT job FROM emp)\n"
+        + "PIVOT (1 AS c1\n"
+        + "    FOR job\n"
+        + "    IN ('CLERK' AS c, 'MISSING' AS m))";
+    sql(sql).withConformance(SqlConformanceEnum.SPARK).ok();
+  }
+
+  @Test void testPivotMixedMeasureSparkConformance() {
+    final String sql = "SELECT *\n"
+        + "FROM (SELECT mgr, job, sal, comm FROM emp)\n"
+        + "PIVOT (COUNT(*) AS cnt, 1 AS c1, (SUM(sal) / SUM(comm)) AS ratio\n"
+        + "    FOR job\n"
+        + "    IN ('CLERK' AS c, 'MISSING' AS m))";
+    sql(sql).withConformance(SqlConformanceEnum.SPARK).ok();
+  }
+
+  @Test void testPivotFieldNameCollisionSparkConformance() {
+    final String sql = "SELECT *\n"
+        + "FROM (SELECT mgr AS pivot_value_0_count, job FROM emp)\n"
+        + "PIVOT (1 AS c1\n"
+        + "    FOR job\n"
+        + "    IN ('CLERK' AS c, 'MISSING' AS m))";
+    sql(sql).withConformance(SqlConformanceEnum.SPARK).ok();
+  }
+
   @Test void testUnpivot() {
     final String sql = "SELECT * FROM emp\n"
         + "UNPIVOT INCLUDE NULLS (remuneration\n"

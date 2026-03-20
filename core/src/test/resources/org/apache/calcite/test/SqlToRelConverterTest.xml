@@ -6710,6 +6710,108 @@ LogicalSort(sort0=[$0], dir0=[ASC])
 ]]>
     </Resource>
   </TestCase>
+  <TestCase name="testPivotAggregateExpressionConformance">
+    <Resource name="sql">
+      <![CDATA[SELECT *
+FROM (SELECT mgr, deptno, job, sal, comm FROM emp)
+PIVOT ((SUM(sal) / SUM(comm)) AS ratio
+    FOR (job, deptno)
+    IN (('CLERK', 10) AS c10, ('MANAGER', 20) AS m20))]]>
+    </Resource>
+    <Resource name="plan">
+      <![CDATA[
+LogicalProject(MGR=[$0], C10_RATIO=[/($1, $2)], M20_RATIO=[/($3, $4)])
+  LogicalAggregate(group=[{0}], C10_PIVOT_AGG_0=[SUM($3) FILTER $5], C10_PIVOT_AGG_1=[SUM($4) FILTER $5], M20_PIVOT_AGG_0=[SUM($3) FILTER $6], M20_PIVOT_AGG_1=[SUM($4) FILTER $6])
+    LogicalProject(MGR=[$3], JOB=[$2], DEPTNO=[$7], SAL=[$5], COMM=[$6], $f5=[AND(=($2, 'CLERK'), =($7, 10))], $f6=[AND(=($2, 'MANAGER'), =($7, 20))])
+      LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+]]>
+    </Resource>
+  </TestCase>
+  <TestCase name="testPivotConstantMeasureConformance">
+    <Resource name="sql">
+      <![CDATA[SELECT *
+FROM (SELECT mgr, job FROM emp)
+PIVOT (1 AS c1
+    FOR job
+    IN ('CLERK' AS c, 'MANAGER' AS m))]]>
+    </Resource>
+    <Resource name="plan">
+      <![CDATA[
+LogicalProject(MGR=[$0], C_C1=[1], M_C1=[1])
+  LogicalAggregate(group=[{0}])
+    LogicalProject(MGR=[$3], JOB=[$2])
+      LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+]]>
+    </Resource>
+  </TestCase>
+  <TestCase name="testPivotConstantMeasureNoGroupKeySparkConformance">
+    <Resource name="sql">
+      <![CDATA[SELECT *
+FROM (SELECT job FROM emp)
+PIVOT (1 AS c1
+    FOR job
+    IN ('CLERK' AS c, 'MISSING' AS m))]]>
+    </Resource>
+    <Resource name="plan">
+      <![CDATA[
+LogicalProject(C_C1=[CASE(=($0, 0), null:INTEGER, 1)], M_C1=[CASE(=($1, 0), null:INTEGER, 1)])
+  LogicalAggregate(group=[{}], C_PIVOT_COUNT=[COUNT() FILTER $1], M_PIVOT_COUNT=[COUNT() FILTER $2])
+    LogicalProject(JOB=[$2], $f1=[=($2, 'CLERK')], $f2=[=($2, 'MISSING')])
+      LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+]]>
+    </Resource>
+  </TestCase>
+  <TestCase name="testPivotFieldNameCollisionSparkConformance">
+    <Resource name="sql">
+      <![CDATA[SELECT *
+FROM (SELECT mgr AS pivot_value_0_count, job FROM emp)
+PIVOT (1 AS c1
+    FOR job
+    IN ('CLERK' AS c, 'MISSING' AS m))]]>
+    </Resource>
+    <Resource name="plan">
+      <![CDATA[
+LogicalProject(PIVOT_VALUE_0_COUNT=[$0], C_C1=[CASE(=($1, 0), null:INTEGER, 1)], M_C1=[CASE(=($2, 0), null:INTEGER, 1)])
+  LogicalAggregate(group=[{0}], C_PIVOT_COUNT=[COUNT() FILTER $2], M_PIVOT_COUNT=[COUNT() FILTER $3])
+    LogicalProject(PIVOT_VALUE_0_COUNT=[$3], JOB=[$2], $f2=[=($2, 'CLERK')], $f3=[=($2, 'MISSING')])
+      LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+]]>
+    </Resource>
+  </TestCase>
+  <TestCase name="testPivotMixedMeasureSparkConformance">
+    <Resource name="sql">
+      <![CDATA[SELECT *
+FROM (SELECT mgr, job, sal, comm FROM emp)
+PIVOT (COUNT(*) AS cnt, 1 AS c1, (SUM(sal) / SUM(comm)) AS ratio
+    FOR job
+    IN ('CLERK' AS c, 'MISSING' AS m))]]>
+    </Resource>
+    <Resource name="plan">
+      <![CDATA[
+LogicalProject(MGR=[$0], C_CNT=[CASE(=($1, 0), null:BIGINT, $1)], C_C1=[CASE(=($1, 0), null:INTEGER, 1)], C_RATIO=[CASE(=($1, 0), null:INTEGER, /($2, $3))], M_CNT=[CASE(=($4, 0), null:BIGINT, $4)], M_C1=[CASE(=($4, 0), null:INTEGER, 1)], M_RATIO=[CASE(=($4, 0), null:INTEGER, /($5, $6))])
+  LogicalAggregate(group=[{0}], C_PIVOT_AGG_0=[COUNT() FILTER $4], C_PIVOT_AGG_1=[SUM($2) FILTER $4], C_PIVOT_AGG_2=[SUM($3) FILTER $4], M_PIVOT_AGG_0=[COUNT() FILTER $5], M_PIVOT_AGG_1=[SUM($2) FILTER $5], M_PIVOT_AGG_2=[SUM($3) FILTER $5])
+    LogicalProject(MGR=[$3], JOB=[$2], SAL=[$5], COMM=[$6], $f4=[=($2, 'CLERK')], $f5=[=($2, 'MISSING')])
+      LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+]]>
+    </Resource>
+  </TestCase>
+  <TestCase name="testPivotSimpleAggregateConformanceKeepsSimpleNames">
+    <Resource name="sql">
+      <![CDATA[SELECT *
+FROM (SELECT mgr, deptno, job, sal FROM emp)
+PIVOT (SUM(sal), COUNT(*) AS cnt
+    FOR (job, deptno)
+    IN (('CLERK', 10) AS c10, ('MANAGER', 20) AS m20))]]>
+    </Resource>
+    <Resource name="plan">
+      <![CDATA[
+LogicalProject(MGR=[$0], C10=[$1], C10_CNT=[$2], M20=[$3], M20_CNT=[$4])
+  LogicalAggregate(group=[{0}], C10_null=[SUM($3) FILTER $4], C10_CNT=[COUNT() FILTER $4], M20_null=[SUM($3) FILTER $5], M20_CNT=[COUNT() FILTER $5])
+    LogicalProject(MGR=[$3], JOB=[$2], DEPTNO=[$7], SAL=[$5], $f4=[AND(=($2, 'CLERK'), =($7, 10))], $f5=[AND(=($2, 'MANAGER'), =($7, 20))])
+      LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+]]>
+    </Resource>
+  </TestCase>
   <TestCase name="testPrevClassifier">
     <Resource name="sql">
       <![CDATA[SELECT *
