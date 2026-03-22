@@ -572,3 +572,109 @@ help/policy hints needed so the new skill is discoverable.
   `docs/ai/USAGE.md`, and `docs/ai/MAINTENANCE.md`.
 - Verified the new skill is explicit-only and that the help/policy layer now
   references it.
+
+# ExecPlan: Calcite foundational docs bootstrap
+
+Last Updated: 2026-03-23
+Status: done
+
+## Goal
+
+Bootstrap the smallest high-signal foundational docs layer in `docs/ai` from
+the current Calcite codebase, tests, and repo docs.
+
+## Scope / Non-Goals
+
+- In scope: reviewed knowledge docs, candidate-note cleanup, and
+  classification of existing `docs/ai` knowledge-like content.
+- Out of scope: Calcite production code and tests, skill routing docs,
+  workflow help docs, or a broad architecture rewrite.
+
+## Routing Choice
+
+- Primary workflow / skill: `calcite-research-deep-dive` followed by
+  `calcite-knowledge-capture`
+- Nearby alternatives rejected: `calcite-workflow-sync`, because this task is
+  about Calcite knowledge content rather than workflow-layer sync.
+
+## Milestones
+
+- [x] M1: Inventory current knowledge-like docs and decide whether
+  architecture docs are justified
+  Target evidence: explicit keep, refine, and discard decisions plus an
+  architecture decision.
+- [x] M2: Implement the minimal reviewed docs tree
+  Target evidence: new reviewed docs plus refreshed knowledge and candidate
+  README files.
+- [x] M3: Verify the final docs layer and summarize removals
+  Target evidence: final file list, concise changelog, and a foundational
+  purpose table.
+
+## Validation Commands
+
+- `rg --files AGENTS.md docs/ai .agents/skills`
+  Purpose: inventory current AI-layer docs and skills.
+  Result: pass
+- `sed -n '1,260p' docs/ai/knowledge/*.md`
+  Purpose: inspect the reviewed knowledge baseline.
+  Result: pass
+- `sed -n '1,260p' docs/ai/candidates/*.md`
+  Purpose: classify current candidate notes before editing.
+  Result: pass
+- `sed -n '1,220p' README.md`
+  Purpose: confirm what the main repo docs already cover.
+  Result: pass
+- `sed -n '1,220p' site/_docs/algebra.md`
+  Purpose: confirm public planner and algebra docs already exist.
+  Result: pass
+- `find docs/ai -maxdepth 3 -type f | sort`
+  Purpose: verify the final docs tree after cleanup.
+  Result: pass
+- `test ! -d docs/ai/architecture`
+  Purpose: verify that no architecture directory was created.
+  Result: pass
+- `git diff -- docs/ai .agents/PLANS.md`
+  Purpose: review the exact docs-only diff before handoff.
+  Result: pass
+
+## Decision Log
+
+- 2026-03-23: Do not create `docs/ai/architecture/`.
+  Reason: the repo already has durable public algebra and planner docs; the
+  missing internal gap is a compact pipeline map and test-fixture map.
+- 2026-03-23: Drop the current candidate archive notes instead of keeping a
+  second archive layer.
+  Reason: their durable parts are already covered or can be generalized into
+  the reviewed docs.
+- 2026-03-23: Remove the validator-specific reviewed doc from the foundational
+  layer.
+  Reason: one deeper layer doc without matching docs for other layers makes the
+  base inconsistent and easier to bloat.
+
+## Discoveries
+
+- 2026-03-23: Existing `docs/ai` content is workflow-heavy and has only one
+  reviewed subsystem doc.
+  Evidence: inventory of `docs/ai/**`.
+- 2026-03-23: The most expensive repo facts to repeatedly rediscover are layer
+  boundaries and which test surface matches each layer.
+  Evidence: review of `PlannerImpl`, `SqlValidator`, `SqlToRelConverter`,
+  planner package docs, and test fixtures.
+
+## Risks / Open Questions
+
+- The new docs must stay broad enough to be reusable without duplicating the
+  public `site/_docs` material.
+- The reviewed docs should mention representative entrypoints without turning
+  into a package catalog.
+
+## Outcomes
+
+- Added the reviewed docs `docs/ai/knowledge/calcite-mental-model.md` and
+  `docs/ai/knowledge/testing-and-fixtures.md`.
+- Trimmed the reviewed docs further and removed the validator-specific reviewed
+  doc to keep the base consistently cross-cutting.
+- Removed the three session-shaped validator candidate archives instead of
+  keeping redundant bug-shaped notes.
+- Verified the final `docs/ai` tree has no architecture directory and only the
+  intended foundational reviewed docs.

@@ -1,9 +1,22 @@
 # Reviewed Knowledge
 
-Only reviewed, generalized, reusable lessons belong here.
+## Purpose and scope
 
-This area is for durable guidance that has been checked for overlap, phrased in
-stable terms, and stripped of session history.
+This directory holds the smallest reviewed docs layer for Calcite. Keep only
+cross-cutting, stable guidance that helps with first-pass orientation.
 
-Do not place raw investigation logs, issue archives, or branch-specific notes
-here.
+## Why this matters
+
+Calcite is broad. A small base reduces repeated orientation work without
+turning `docs/ai` into a second code manual.
+
+## Current docs
+
+- `calcite-mental-model.md`: the main query pipeline and ownership boundaries.
+- `testing-and-fixtures.md`: the main test surfaces and when to start with each.
+
+## Keep out
+
+- issue diaries
+- layer-specific deep dives unless they are clearly worth the maintenance cost
+- workflow instructions that belong in `AGENTS.md` or skill docs
