@@ -1,0 +1,7 @@
+interface:
+  display_name: "Calcite Workflow Help"
+  short_description: "Summarize this repo's workflow layer"
+  default_prompt: "Use $calcite-workflow-help to summarize this repo's current workflow setup, common invocations, and multi-skill flows."
+
+policy:
+  allow_implicit_invocation: false

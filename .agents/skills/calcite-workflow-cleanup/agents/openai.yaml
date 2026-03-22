@@ -1,0 +1,7 @@
+interface:
+  display_name: "Calcite Workflow Cleanup"
+  short_description: "Clean up Calcite workflow docs and skills"
+  default_prompt: "Use $calcite-workflow-cleanup to inspect and clean up this repo's workflow docs and skill metadata without touching Calcite code or tests."
+
+policy:
+  allow_implicit_invocation: false

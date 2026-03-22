@@ -1,0 +1,7 @@
+interface:
+  display_name: "Calcite Workflow Sync"
+  short_description: "sync workflow docs and skill help after workflow changes"
+  default_prompt: "Use $calcite-workflow-sync to sync the workflow layer so skills, help, and maintenance docs match the current repo state."
+
+policy:
+  allow_implicit_invocation: false
