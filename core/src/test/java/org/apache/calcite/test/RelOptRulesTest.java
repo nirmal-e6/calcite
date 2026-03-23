@@ -8871,6 +8871,98 @@ class RelOptRulesTest extends RelOptTestBase {
     sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
   }
 
+  // Regression for correlated ARRAY query constructors with ORDER BY/LIMIT;
+  // planAfter should decorrelate to ARRAY_AGG WITHIN GROUP.
+  @Test void testProjectCorrelatedArraySubQueryWithOrderByLimit() {
+    final String sql = "select d.deptno,\n"
+        + "  array (\n"
+        + "    select e.sal\n"
+        + "    from emp e\n"
+        + "    where e.deptno = d.deptno\n"
+        + "    order by e.sal desc\n"
+        + "    limit 2) as top_sals\n"
+        + "from dept d";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
+  // Regression for the minimal correlated MULTISET query constructor.
+  @Test void testProjectCorrelatedMultisetSubQuery() {
+    final String sql = "select d.deptno,\n"
+        + "  multiset(\n"
+        + "    select e.empno\n"
+        + "    from emp e\n"
+        + "    where e.deptno = d.deptno) as empset\n"
+        + "from dept d";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
+  // Regression for correlated ARRAY query constructors that combine DISTINCT
+  // with ORDER BY/LIMIT.
+  @Test void testProjectCorrelatedArrayDistinctOrderByLimit() {
+    final String sql = "select d.deptno,\n"
+        + "  array(\n"
+        + "    select distinct e.sal\n"
+        + "    from emp e\n"
+        + "    where e.deptno = d.deptno\n"
+        + "    order by e.sal desc\n"
+        + "    limit 2) as top_sals\n"
+        + "from dept d";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
+  // Regression for correlated ARRAY query constructors over INTERSECT inputs.
+  @Test void testProjectCorrelatedArrayOverIntersectInput() {
+    final String sql = "select d.deptno,\n"
+        + "  array(\n"
+        + "    select x.empno\n"
+        + "    from (\n"
+        + "      select e.empno\n"
+        + "      from emp e\n"
+        + "      where e.deptno = d.deptno\n"
+        + "      intersect\n"
+        + "      select n.empno\n"
+        + "      from empnullables n\n"
+        + "      where n.deptno = d.deptno\n"
+        + "    ) x) as overlap_empnos\n"
+        + "from dept d";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
+  // Regression for correlated MULTISET query constructors over INTERSECT inputs.
+  @Test void testProjectCorrelatedMultisetOverIntersectInput() {
+    final String sql = "select d.deptno,\n"
+        + "  multiset(\n"
+        + "    select x.empno\n"
+        + "    from (\n"
+        + "      select e.empno\n"
+        + "      from emp e\n"
+        + "      where e.deptno = d.deptno\n"
+        + "      intersect\n"
+        + "      select n.empno\n"
+        + "      from empnullables n\n"
+        + "      where n.deptno = d.deptno\n"
+        + "    ) x) as overlap_empnos\n"
+        + "from dept d";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
+  // Positive control: scalar INTERSECT should continue to decorrelate through
+  // the same SetOp path.
+  @Test void testProjectCorrelatedScalarOverIntersectDistinctInput() {
+    final String sql = "select d.deptno,\n"
+        + "  (select count(*)\n"
+        + "   from (\n"
+        + "     select e.empno\n"
+        + "     from emp e\n"
+        + "     where e.deptno = d.deptno\n"
+        + "     intersect\n"
+        + "     select n.empno\n"
+        + "     from empnullables n\n"
+        + "     where n.deptno = d.deptno) x) as overlap_count\n"
+        + "from dept d";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
   @Test void testSomeWithEquality() {
     final String sql = "select * from emp e1\n"
         + "  where e1.deptno = SOME (select deptno from dept)";

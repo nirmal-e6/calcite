@@ -37,6 +37,7 @@ import org.apache.calcite.rel.RelHomogeneousShuttle;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.Aggregate;
 import org.apache.calcite.rel.core.AggregateCall;
+import org.apache.calcite.rel.core.Collect;
 import org.apache.calcite.rel.core.Correlate;
 import org.apache.calcite.rel.core.CorrelationId;
 import org.apache.calcite.rel.core.Filter;
@@ -83,8 +84,10 @@ import org.apache.calcite.sql.SqlFunction;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.fun.SqlCountAggFunction;
+import org.apache.calcite.sql.fun.SqlLibraryOperators;
 import org.apache.calcite.sql.fun.SqlSingleValueAggFunction;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
+import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.tools.RelBuilder;
 import org.apache.calcite.tools.RelBuilderFactory;
 import org.apache.calcite.tools.RuleSet;
@@ -853,6 +856,28 @@ public class RelDecorrelator implements ReflectiveVisitor {
     return register(rel, newRel, outputMap, corDefOutputs);
   }
 
+  public @Nullable Frame decorrelateRel(Collect rel, boolean isCorVarDefined,
+      boolean parentPropagatesNullValues) {
+    final RelNode oldInput = rel.getInput();
+    final Frame frame = getInvoke(oldInput, isCorVarDefined, rel, parentPropagatesNullValues);
+    if (frame == null) {
+      return null;
+    }
+
+    if (frame.corDefOutputs.isEmpty()) {
+      final RelNode newRel = rel.copy(rel.getTraitSet(), frame.r);
+      return register(rel, newRel, identityMap(rel.getRowType().getFieldCount()),
+          new TreeMap<>());
+    }
+
+    final SqlAggFunction aggFunction = collectionAggFunction(rel);
+    if (aggFunction == null) {
+      return null;
+    }
+
+    return rewriteCollection(rel, frame, aggFunction);
+  }
+
   /**
    * Special case where the group by is static (i.e., aggregation functions without group by).
    *
@@ -1012,6 +1037,177 @@ public class RelDecorrelator implements ReflectiveVisitor {
     return relBuilder.push(join)
         .project(newProjects, newRel.getRowType().getFieldNames())
         .build();
+  }
+
+  /** Rewrites a correlated {@link Collect} to aggregate one collection per
+   * correlation-key set, then left-joins the aggregate back to a distinct
+   * value generator so empty correlated inputs become empty collections. */
+  private Frame rewriteCollection(Collect rel, Frame frame,
+      SqlAggFunction aggFunction) {
+    final RelNode newInput = frame.r;
+    final List<RelDataTypeField> newInputFields = newInput.getRowType().getFieldList();
+    final PairList<RexNode, String> projects = PairList.of();
+    final NavigableMap<CorDef, Integer> corDefOutputs = new TreeMap<>();
+    final Map<Integer, Integer> projectedPositions = new HashMap<>();
+    int newPos = 0;
+
+    for (Map.Entry<CorDef, Integer> entry : frame.corDefOutputs.entrySet()) {
+      final int inputPos = entry.getValue();
+      final Integer existingPos = projectedPositions.get(inputPos);
+      if (existingPos != null) {
+        corDefOutputs.put(entry.getKey(), existingPos);
+        continue;
+      }
+      RexInputRef.add2(projects, inputPos, newInputFields);
+      corDefOutputs.put(entry.getKey(), newPos);
+      projectedPositions.put(inputPos, newPos);
+      newPos++;
+    }
+
+    final List<Integer> valuePositions = new ArrayList<>();
+    for (int i = 0; i < rel.getInput().getRowType().getFieldCount(); i++) {
+      final int inputPos =
+          requireNonNull(frame.oldToNewOutputs.get(i), "frame.oldToNewOutputs.get(i)");
+      Integer projectedPos = projectedPositions.get(inputPos);
+      if (projectedPos == null) {
+        RexInputRef.add2(projects, inputPos, newInputFields);
+        projectedPos = newPos++;
+        projectedPositions.put(inputPos, projectedPos);
+      }
+      valuePositions.add(projectedPos);
+    }
+
+    final List<RelFieldCollation> orderCollations = new ArrayList<>();
+    if (rel.getCollectionType() == SqlTypeName.ARRAY && rel.getInput() instanceof Sort) {
+      final Sort sort = (Sort) rel.getInput();
+      orderCollations.addAll(sort.getCollation().getFieldCollations());
+      for (RelFieldCollation collation : orderCollations) {
+        final int inputPos =
+            requireNonNull(frame.oldToNewOutputs.get(collation.getFieldIndex()),
+                "frame.oldToNewOutputs.get(collation.getFieldIndex())");
+        if (!projectedPositions.containsKey(inputPos)) {
+          RexInputRef.add2(projects, inputPos, newInputFields);
+          projectedPositions.put(inputPos, newPos++);
+        }
+      }
+    }
+
+    final RelNode aggregateInput = relBuilder.push(newInput)
+        .projectNamed(projects.leftList(), projects.rightList(), true)
+        .build();
+    final RelDataType aggregateInputRowType = aggregateInput.getRowType();
+    final RelDataType collectedType =
+        rel.getRowType().getFieldList().get(0).getType();
+    RelBuilder.AggCall aggCall;
+    if (valuePositions.size() == 1) {
+      aggCall =
+          relBuilder.aggregateCall(aggFunction,
+              RexInputRef.of(valuePositions.get(0), aggregateInputRowType));
+    } else {
+      final List<RexNode> rowOperands = valuePositions.stream()
+          .map(valuePosition -> RexInputRef.of(valuePosition, aggregateInputRowType))
+          .collect(ImmutableList.toImmutableList());
+      final RexNode rowValue =
+          relBuilder.getRexBuilder().makeCall(
+              requireNonNull(collectedType.getComponentType(),
+                  () -> "collectedType.getComponentType() for " + collectedType),
+              SqlStdOperatorTable.ROW,
+              rowOperands);
+      aggCall = relBuilder.aggregateCall(aggFunction, rowValue);
+    }
+    if (!orderCollations.isEmpty()) {
+      final List<RexNode> orderKeys = new ArrayList<>(orderCollations.size());
+      for (RelFieldCollation collation : orderCollations) {
+        final int inputPos =
+            requireNonNull(frame.oldToNewOutputs.get(collation.getFieldIndex()),
+                "frame.oldToNewOutputs.get(collation.getFieldIndex())");
+        final int projectedPos =
+            requireNonNull(projectedPositions.get(inputPos),
+                "projectedPositions.get(inputPos)");
+        RexNode orderKey = RexInputRef.of(projectedPos, aggregateInputRowType);
+        if (collation.direction == RelFieldCollation.Direction.DESCENDING
+            || collation.direction == RelFieldCollation.Direction.STRICTLY_DESCENDING) {
+          orderKey = relBuilder.desc(orderKey);
+        }
+        if (collation.nullDirection == RelFieldCollation.NullDirection.FIRST) {
+          orderKey = relBuilder.nullsFirst(orderKey);
+        } else if (collation.nullDirection == RelFieldCollation.NullDirection.LAST) {
+          orderKey = relBuilder.nullsLast(orderKey);
+        }
+        orderKeys.add(orderKey);
+      }
+      aggCall = aggCall.sort(orderKeys);
+    }
+
+    final RelNode aggregate = relBuilder.push(aggregateInput)
+        .aggregate(relBuilder.groupKey(ImmutableBitSet.range(corDefOutputs.size())),
+            aggCall.as(rel.getFieldName()))
+        .build();
+
+    final List<CorRef> corVarList = collectExternalCorVars(rel);
+    final NavigableMap<CorDef, Integer> valueGenCorDefOutputs = new TreeMap<>();
+    final RelNode valueGen =
+        requireNonNull(createValueGenerator(corVarList, 0, valueGenCorDefOutputs));
+    final int valueGenFieldCount = valueGen.getRowType().getFieldCount();
+
+    final List<RexNode> conditions =
+        buildCorDefJoinConditions(valueGenCorDefOutputs, corDefOutputs,
+            valueGen, aggregate, relBuilder);
+    final RexNode joinCond =
+        RexUtil.composeConjunction(relBuilder.getRexBuilder(), conditions);
+    final RelNode join = relBuilder.push(valueGen).push(aggregate)
+        .join(JoinRelType.LEFT, joinCond).build();
+
+    final PairList<RexNode, String> finalProjects = PairList.of();
+    final NavigableMap<CorDef, Integer> finalCorDefOutputs = new TreeMap<>();
+    int finalPos = 0;
+    for (Map.Entry<CorDef, Integer> entry : valueGenCorDefOutputs.entrySet()) {
+      final int inputPos = entry.getValue();
+      RexInputRef.add2(finalProjects, inputPos, join.getRowType().getFieldList());
+      finalCorDefOutputs.put(entry.getKey(), finalPos++);
+    }
+
+    final int collectionPos = valueGenFieldCount + corDefOutputs.size();
+    final RexInputRef collectionRef = RexInputRef.of(collectionPos, join.getRowType());
+    finalProjects.add(
+        relBuilder.call(SqlStdOperatorTable.COALESCE, collectionRef,
+            emptyCollectionValue(relBuilder.getRexBuilder(),
+                rel.getCollectionType(), collectedType)),
+        rel.getFieldName());
+
+    final RelNode finalRel = relBuilder.push(join)
+        .projectNamed(finalProjects.leftList(), finalProjects.rightList(), true)
+        .build();
+
+    return register(rel, finalRel, ImmutableMap.of(0, finalPos), finalCorDefOutputs);
+  }
+
+  private static @Nullable SqlAggFunction collectionAggFunction(Collect rel) {
+    switch (rel.getCollectionType()) {
+    case ARRAY:
+      return SqlLibraryOperators.ARRAY_AGG;
+    case MULTISET:
+      return SqlStdOperatorTable.COLLECT;
+    default:
+      return null;
+    }
+  }
+
+  private static RexNode emptyCollectionValue(RexBuilder rexBuilder,
+      SqlTypeName collectionType, RelDataType collectedType) {
+    switch (collectionType) {
+    case ARRAY:
+      return rexBuilder.makeCall(collectedType, SqlStdOperatorTable.ARRAY_VALUE_CONSTRUCTOR,
+          ImmutableList.of());
+    case MULTISET:
+      return rexBuilder.makeCall(collectedType, SqlStdOperatorTable.MULTISET_VALUE,
+          ImmutableList.of());
+    case MAP:
+      return rexBuilder.makeCall(collectedType, SqlStdOperatorTable.MAP_VALUE_CONSTRUCTOR,
+          ImmutableList.of());
+    default:
+      throw new AssertionError("unexpected collection type " + collectionType);
+    }
   }
 
   /**

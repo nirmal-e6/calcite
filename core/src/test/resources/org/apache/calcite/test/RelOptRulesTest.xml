@@ -11584,6 +11584,381 @@ LogicalProject(EXPR$0=[SUM($2) OVER (PARTITION BY $0)], EXPR$1=[COUNT($3) OVER (
 ]]>
     </Resource>
   </TestCase>
+  <TestCase name="testProjectCorrelatedArrayDistinctOrderByLimit">
+    <Resource name="sql">
+      <![CDATA[select d.deptno,
+  array(
+    select distinct e.sal
+    from emp e
+    where e.deptno = d.deptno
+    order by e.sal desc
+    limit 2) as top_sals
+from dept d]]>
+    </Resource>
+    <Resource name="planBefore">
+      <![CDATA[
+LogicalProject(variablesSet=[[$cor0]], DEPTNO=[$0], TOP_SALS=[ARRAY({
+LogicalSort(sort0=[$0], dir0=[DESC], fetch=[2])
+  LogicalAggregate(group=[{0}])
+    LogicalProject(SAL=[$5])
+      LogicalFilter(condition=[=($7, $cor0.DEPTNO)])
+        LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+})])
+  LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+]]>
+    </Resource>
+    <Resource name="planMid">
+      <![CDATA[
+LogicalProject(DEPTNO=[$0], TOP_SALS=[$2])
+  LogicalCorrelate(correlation=[$cor0], joinType=[inner], requiredColumns=[{0}])
+    LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+    Collect(field=[x])
+      LogicalSort(sort0=[$0], dir0=[DESC], fetch=[2])
+        LogicalAggregate(group=[{0}])
+          LogicalProject(SAL=[$5])
+            LogicalFilter(condition=[=($7, $cor0.DEPTNO)])
+              LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+]]>
+    </Resource>
+    <Resource name="planAfter">
+      <![CDATA[
+LogicalProject(DEPTNO=[$0], TOP_SALS=[$3])
+  LogicalJoin(condition=[=($0, $2)], joinType=[inner])
+    LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+    LogicalProject(DEPTNO=[$0], x=[COALESCE($2, ARRAY())])
+      LogicalJoin(condition=[IS NOT DISTINCT FROM($0, $1)], joinType=[left])
+        LogicalProject(DEPTNO=[$0])
+          LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+        LogicalAggregate(group=[{0}], x=[ARRAY_AGG($1) WITHIN GROUP ([1 DESC])])
+          LogicalProject(DEPTNO=[$1], SAL=[$0])
+            LogicalFilter(condition=[<=($2, 2)])
+              LogicalProject(SAL=[$0], DEPTNO=[$1], rn=[ROW_NUMBER() OVER (PARTITION BY $1 ORDER BY $0 DESC NULLS FIRST)])
+                LogicalAggregate(group=[{0, 1}])
+                  LogicalProject(SAL=[$5], DEPTNO=[$7])
+                    LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+]]>
+    </Resource>
+  </TestCase>
+  <TestCase name="testProjectCorrelatedArrayOverIntersectInput">
+    <Resource name="sql">
+      <![CDATA[select d.deptno,
+  array(
+    select x.empno
+    from (
+      select e.empno
+      from emp e
+      where e.deptno = d.deptno
+      intersect
+      select n.empno
+      from empnullables n
+      where n.deptno = d.deptno
+    ) x) as overlap_empnos
+from dept d]]>
+    </Resource>
+    <Resource name="planBefore">
+      <![CDATA[
+LogicalProject(variablesSet=[[$cor0]], DEPTNO=[$0], OVERLAP_EMPNOS=[ARRAY({
+LogicalProject(EMPNO=[$0])
+  LogicalIntersect(all=[false])
+    LogicalProject(EMPNO=[$0])
+      LogicalFilter(condition=[=($7, $cor0.DEPTNO)])
+        LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+    LogicalProject(EMPNO=[$0])
+      LogicalFilter(condition=[=($7, $cor0.DEPTNO)])
+        LogicalTableScan(table=[[CATALOG, SALES, EMPNULLABLES]])
+})])
+  LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+]]>
+    </Resource>
+    <Resource name="planMid">
+      <![CDATA[
+LogicalProject(DEPTNO=[$0], OVERLAP_EMPNOS=[$2])
+  LogicalCorrelate(correlation=[$cor0], joinType=[inner], requiredColumns=[{0}])
+    LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+    Collect(field=[x])
+      LogicalProject(EMPNO=[$0])
+        LogicalIntersect(all=[false])
+          LogicalProject(EMPNO=[$0])
+            LogicalFilter(condition=[=($7, $cor0.DEPTNO)])
+              LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+          LogicalProject(EMPNO=[$0])
+            LogicalFilter(condition=[=($7, $cor0.DEPTNO)])
+              LogicalTableScan(table=[[CATALOG, SALES, EMPNULLABLES]])
+]]>
+    </Resource>
+    <Resource name="planAfter">
+      <![CDATA[
+LogicalProject(DEPTNO=[$0], OVERLAP_EMPNOS=[$3])
+  LogicalJoin(condition=[=($0, $2)], joinType=[inner])
+    LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+    LogicalProject(DEPTNO=[$0], x=[COALESCE($2, ARRAY())])
+      LogicalJoin(condition=[IS NOT DISTINCT FROM($0, $1)], joinType=[left])
+        LogicalProject(DEPTNO=[$0])
+          LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+        LogicalAggregate(group=[{0}], x=[ARRAY_AGG($1)])
+          LogicalProject(DEPTNO=[$0], EMPNO=[$1])
+            LogicalIntersect(all=[false])
+              LogicalProject(DEPTNO=[$0], EMPNO=[$1])
+                LogicalJoin(condition=[IS NOT DISTINCT FROM($0, $2)], joinType=[inner])
+                  LogicalProject(DEPTNO=[$0])
+                    LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+                  LogicalProject(EMPNO=[$0], DEPTNO=[$7])
+                    LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+              LogicalProject(DEPTNO=[$0], EMPNO=[$1])
+                LogicalJoin(condition=[IS NOT DISTINCT FROM($0, $2)], joinType=[inner])
+                  LogicalProject(DEPTNO=[$0])
+                    LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+                  LogicalProject(EMPNO=[$0], DEPTNO=[$7])
+                    LogicalFilter(condition=[IS NOT NULL($7)])
+                      LogicalTableScan(table=[[CATALOG, SALES, EMPNULLABLES]])
+]]>
+    </Resource>
+  </TestCase>
+  <TestCase name="testProjectCorrelatedArraySubQueryWithOrderByLimit">
+    <Resource name="sql">
+      <![CDATA[select d.deptno,
+  array (
+    select e.sal
+    from emp e
+    where e.deptno = d.deptno
+    order by e.sal desc
+    limit 2) as top_sals
+from dept d]]>
+    </Resource>
+    <Resource name="planBefore">
+      <![CDATA[
+LogicalProject(variablesSet=[[$cor0]], DEPTNO=[$0], TOP_SALS=[ARRAY({
+LogicalSort(sort0=[$0], dir0=[DESC], fetch=[2])
+  LogicalProject(SAL=[$5])
+    LogicalFilter(condition=[=($7, $cor0.DEPTNO)])
+      LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+})])
+  LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+]]>
+    </Resource>
+    <Resource name="planMid">
+      <![CDATA[
+LogicalProject(DEPTNO=[$0], TOP_SALS=[$2])
+  LogicalCorrelate(correlation=[$cor0], joinType=[inner], requiredColumns=[{0}])
+    LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+    Collect(field=[x])
+      LogicalSort(sort0=[$0], dir0=[DESC], fetch=[2])
+        LogicalProject(SAL=[$5])
+          LogicalFilter(condition=[=($7, $cor0.DEPTNO)])
+            LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+]]>
+    </Resource>
+    <Resource name="planAfter">
+      <![CDATA[
+LogicalProject(DEPTNO=[$0], TOP_SALS=[$3])
+  LogicalJoin(condition=[=($0, $2)], joinType=[inner])
+    LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+    LogicalProject(DEPTNO=[$0], x=[COALESCE($2, ARRAY())])
+      LogicalJoin(condition=[IS NOT DISTINCT FROM($0, $1)], joinType=[left])
+        LogicalProject(DEPTNO=[$0])
+          LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+        LogicalAggregate(group=[{0}], x=[ARRAY_AGG($1) WITHIN GROUP ([1 DESC])])
+          LogicalProject(DEPTNO=[$1], SAL=[$0])
+            LogicalFilter(condition=[<=($2, 2)])
+              LogicalProject(SAL=[$5], DEPTNO=[$7], rn=[ROW_NUMBER() OVER (PARTITION BY $7 ORDER BY $5 DESC NULLS FIRST)])
+                LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+]]>
+    </Resource>
+  </TestCase>
+  <TestCase name="testProjectCorrelatedMultisetOverIntersectInput">
+    <Resource name="sql">
+      <![CDATA[select d.deptno,
+  multiset(
+    select x.empno
+    from (
+      select e.empno
+      from emp e
+      where e.deptno = d.deptno
+      intersect
+      select n.empno
+      from empnullables n
+      where n.deptno = d.deptno
+    ) x) as overlap_empnos
+from dept d]]>
+    </Resource>
+    <Resource name="planBefore">
+      <![CDATA[
+LogicalProject(variablesSet=[[$cor0]], DEPTNO=[$0], OVERLAP_EMPNOS=[MULTISET({
+LogicalProject(EMPNO=[$0])
+  LogicalIntersect(all=[false])
+    LogicalProject(EMPNO=[$0])
+      LogicalFilter(condition=[=($7, $cor0.DEPTNO)])
+        LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+    LogicalProject(EMPNO=[$0])
+      LogicalFilter(condition=[=($7, $cor0.DEPTNO)])
+        LogicalTableScan(table=[[CATALOG, SALES, EMPNULLABLES]])
+})])
+  LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+]]>
+    </Resource>
+    <Resource name="planMid">
+      <![CDATA[
+LogicalProject(DEPTNO=[$0], OVERLAP_EMPNOS=[$2])
+  LogicalCorrelate(correlation=[$cor0], joinType=[inner], requiredColumns=[{0}])
+    LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+    Collect(field=[x])
+      LogicalProject(EMPNO=[$0])
+        LogicalIntersect(all=[false])
+          LogicalProject(EMPNO=[$0])
+            LogicalFilter(condition=[=($7, $cor0.DEPTNO)])
+              LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+          LogicalProject(EMPNO=[$0])
+            LogicalFilter(condition=[=($7, $cor0.DEPTNO)])
+              LogicalTableScan(table=[[CATALOG, SALES, EMPNULLABLES]])
+]]>
+    </Resource>
+    <Resource name="planAfter">
+      <![CDATA[
+LogicalProject(DEPTNO=[$0], OVERLAP_EMPNOS=[$3])
+  LogicalJoin(condition=[=($0, $2)], joinType=[inner])
+    LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+    LogicalProject(DEPTNO=[$0], x=[COALESCE($2, MULTISET())])
+      LogicalJoin(condition=[IS NOT DISTINCT FROM($0, $1)], joinType=[left])
+        LogicalProject(DEPTNO=[$0])
+          LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+        LogicalAggregate(group=[{0}], x=[COLLECT($1)])
+          LogicalProject(DEPTNO=[$0], EMPNO=[$1])
+            LogicalIntersect(all=[false])
+              LogicalProject(DEPTNO=[$0], EMPNO=[$1])
+                LogicalJoin(condition=[IS NOT DISTINCT FROM($0, $2)], joinType=[inner])
+                  LogicalProject(DEPTNO=[$0])
+                    LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+                  LogicalProject(EMPNO=[$0], DEPTNO=[$7])
+                    LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+              LogicalProject(DEPTNO=[$0], EMPNO=[$1])
+                LogicalJoin(condition=[IS NOT DISTINCT FROM($0, $2)], joinType=[inner])
+                  LogicalProject(DEPTNO=[$0])
+                    LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+                  LogicalProject(EMPNO=[$0], DEPTNO=[$7])
+                    LogicalFilter(condition=[IS NOT NULL($7)])
+                      LogicalTableScan(table=[[CATALOG, SALES, EMPNULLABLES]])
+]]>
+    </Resource>
+  </TestCase>
+  <TestCase name="testProjectCorrelatedMultisetSubQuery">
+    <Resource name="sql">
+      <![CDATA[select d.deptno,
+  multiset(
+    select e.empno
+    from emp e
+    where e.deptno = d.deptno) as empset
+from dept d]]>
+    </Resource>
+    <Resource name="planBefore">
+      <![CDATA[
+LogicalProject(variablesSet=[[$cor0]], DEPTNO=[$0], EMPSET=[MULTISET({
+LogicalProject(EMPNO=[$0])
+  LogicalFilter(condition=[=($7, $cor0.DEPTNO)])
+    LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+})])
+  LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+]]>
+    </Resource>
+    <Resource name="planMid">
+      <![CDATA[
+LogicalProject(DEPTNO=[$0], EMPSET=[$2])
+  LogicalCorrelate(correlation=[$cor0], joinType=[inner], requiredColumns=[{0}])
+    LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+    Collect(field=[x])
+      LogicalProject(EMPNO=[$0])
+        LogicalFilter(condition=[=($7, $cor0.DEPTNO)])
+          LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+]]>
+    </Resource>
+    <Resource name="planAfter">
+      <![CDATA[
+LogicalProject(DEPTNO=[$0], EMPSET=[$3])
+  LogicalJoin(condition=[=($0, $2)], joinType=[inner])
+    LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+    LogicalProject(DEPTNO=[$0], x=[COALESCE($2, MULTISET())])
+      LogicalJoin(condition=[IS NOT DISTINCT FROM($0, $1)], joinType=[left])
+        LogicalProject(DEPTNO=[$0])
+          LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+        LogicalAggregate(group=[{0}], x=[COLLECT($1)])
+          LogicalProject(DEPTNO=[$7], EMPNO=[$0])
+            LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+]]>
+    </Resource>
+  </TestCase>
+  <TestCase name="testProjectCorrelatedScalarOverIntersectDistinctInput">
+    <Resource name="sql">
+      <![CDATA[select d.deptno,
+  (select count(*)
+   from (
+     select e.empno
+     from emp e
+     where e.deptno = d.deptno
+     intersect
+     select n.empno
+     from empnullables n
+     where n.deptno = d.deptno) x) as overlap_count
+from dept d]]>
+    </Resource>
+    <Resource name="planBefore">
+      <![CDATA[
+LogicalProject(variablesSet=[[$cor0]], DEPTNO=[$0], OVERLAP_COUNT=[$SCALAR_QUERY({
+LogicalAggregate(group=[{}], EXPR$0=[COUNT()])
+  LogicalProject($f0=[0])
+    LogicalIntersect(all=[false])
+      LogicalProject(EMPNO=[$0])
+        LogicalFilter(condition=[=($7, $cor0.DEPTNO)])
+          LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+      LogicalProject(EMPNO=[$0])
+        LogicalFilter(condition=[=($7, $cor0.DEPTNO)])
+          LogicalTableScan(table=[[CATALOG, SALES, EMPNULLABLES]])
+})])
+  LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+]]>
+    </Resource>
+    <Resource name="planMid">
+      <![CDATA[
+LogicalProject(DEPTNO=[$0], OVERLAP_COUNT=[$2])
+  LogicalCorrelate(correlation=[$cor0], joinType=[left], requiredColumns=[{0}])
+    LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+    LogicalAggregate(group=[{}], EXPR$0=[COUNT()])
+      LogicalProject($f0=[0])
+        LogicalIntersect(all=[false])
+          LogicalProject(EMPNO=[$0])
+            LogicalFilter(condition=[=($7, $cor0.DEPTNO)])
+              LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+          LogicalProject(EMPNO=[$0])
+            LogicalFilter(condition=[=($7, $cor0.DEPTNO)])
+              LogicalTableScan(table=[[CATALOG, SALES, EMPNULLABLES]])
+]]>
+    </Resource>
+    <Resource name="planAfter">
+      <![CDATA[
+LogicalProject(DEPTNO=[$0], OVERLAP_COUNT=[CASE(IS NULL($3), 0:BIGINT, $3)])
+  LogicalJoin(condition=[=($0, $2)], joinType=[left])
+    LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+    LogicalProject(DEPTNO=[$0], EXPR$0=[CASE(IS NOT NULL($2), $2, 0)])
+      LogicalJoin(condition=[IS NOT DISTINCT FROM($0, $1)], joinType=[left])
+        LogicalProject(DEPTNO=[$0])
+          LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+        LogicalAggregate(group=[{0}], EXPR$0=[COUNT()])
+          LogicalProject(DEPTNO=[$0])
+            LogicalIntersect(all=[false])
+              LogicalProject(DEPTNO=[$0], EMPNO=[$1])
+                LogicalJoin(condition=[IS NOT DISTINCT FROM($0, $2)], joinType=[inner])
+                  LogicalProject(DEPTNO=[$0])
+                    LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+                  LogicalProject(EMPNO=[$0], DEPTNO=[$7])
+                    LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+              LogicalProject(DEPTNO=[$0], EMPNO=[$1])
+                LogicalJoin(condition=[IS NOT DISTINCT FROM($0, $2)], joinType=[inner])
+                  LogicalProject(DEPTNO=[$0])
+                    LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+                  LogicalProject(EMPNO=[$0], DEPTNO=[$7])
+                    LogicalFilter(condition=[IS NOT NULL($7)])
+                      LogicalTableScan(table=[[CATALOG, SALES, EMPNULLABLES]])
+]]>
+    </Resource>
+  </TestCase>
   <TestCase name="testProjectFilterTransposeRuleOnEmptyRowType">
     <Resource name="planBefore">
       <![CDATA[
