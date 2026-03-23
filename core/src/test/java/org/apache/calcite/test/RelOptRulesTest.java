@@ -10430,6 +10430,64 @@ class RelOptRulesTest extends RelOptTestBase {
         .checkUnchanged();
   }
 
+  // Regression coverage for the right-side join rewrite seeing both the
+  // current join correlation and an outer correlation. FILTER_SUB_QUERY_TO_CORRELATE
+  // exposes the nested join to JOIN_SUB_QUERY_TO_CORRELATE; this used to throw
+  // IllegalArgumentException from Iterables.getOnlyElement.
+  @Test void testJoinSubQueryRemoveRuleWithInRightSideAndOuterCorrelation() {
+    final String sql = "select e1.empno\n"
+        + "from emp e1\n"
+        + "where exists (\n"
+        + "  select 1\n"
+        + "  from dept d1\n"
+        + "  join dept d2\n"
+        + "    on d2.deptno in (\n"
+        + "      select e3.deptno\n"
+        + "      from emp e3\n"
+        + "      where d2.name = e3.job\n"
+        + "        and e1.deptno = e3.deptno))";
+    sql(sql)
+        .withRule(CoreRules.FILTER_SUB_QUERY_TO_CORRELATE,
+            CoreRules.JOIN_SUB_QUERY_TO_CORRELATE)
+        .check();
+  }
+
+  @Test void testJoinSubQueryRemoveRuleWithExistsRightSideAndOuterCorrelation() {
+    final String sql = "select e1.empno\n"
+        + "from emp e1\n"
+        + "where exists (\n"
+        + "  select 1\n"
+        + "  from dept d1\n"
+        + "  join dept d2\n"
+        + "    on exists (\n"
+        + "      select 1\n"
+        + "      from emp e2\n"
+        + "      where d2.name = e2.job\n"
+        + "        and e1.deptno = e2.deptno))";
+    sql(sql)
+        .withRule(CoreRules.FILTER_SUB_QUERY_TO_CORRELATE,
+            CoreRules.JOIN_SUB_QUERY_TO_CORRELATE)
+        .check();
+  }
+
+  @Test void testJoinSubQueryRemoveRuleWithScalarRightSideAndOuterCorrelation() {
+    final String sql = "select e1.empno\n"
+        + "from emp e1\n"
+        + "where exists (\n"
+        + "  select 1\n"
+        + "  from dept d1\n"
+        + "  join dept d2\n"
+        + "    on (\n"
+        + "      select max(e2.deptno)\n"
+        + "      from emp e2\n"
+        + "      where d2.name = e2.job\n"
+        + "        and e1.deptno = e2.deptno) > 0)";
+    sql(sql)
+        .withRule(CoreRules.FILTER_SUB_QUERY_TO_CORRELATE,
+            CoreRules.JOIN_SUB_QUERY_TO_CORRELATE)
+        .check();
+  }
+
   /** Test case for
    * <a href="https://issues.apache.org/jira/browse/CALCITE-6176">[CALCITE-6176]
    * JOIN_SUB_QUERY_TO_CORRELATE rule incorrectly handles EXISTS in LEFT JOIN ON clause</a>. */

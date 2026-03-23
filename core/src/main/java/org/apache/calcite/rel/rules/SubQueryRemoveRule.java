@@ -55,6 +55,7 @@ import com.google.common.collect.Iterables;
 import org.immutables.value.Value;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -1040,8 +1041,8 @@ public class SubQueryRemoveRule
     //   LogicalFilter(condition=[=(CAST($0):CHAR(11) NOT NULL, $cor0.DNAME)])
     //
     // In such a case $cor0.DNAME need to be accounted as input form left side.
-    final Set<CorrelationId> variablesSet = RelOptUtil.getVariablesUsed(e.rel);
-    for (CorrelationId id : variablesSet) {
+    final Set<CorrelationId> allVariablesSet = RelOptUtil.getVariablesUsed(e.rel);
+    for (CorrelationId id : allVariablesSet) {
       ImmutableBitSet requiredColumns = RelOptUtil.correlationColumns(id, e.rel);
       inputSet = ImmutableBitSet.union(ImmutableList.of(requiredColumns, inputSet));
     }
@@ -1066,7 +1067,7 @@ public class SubQueryRemoveRule
               ImmutableList.of(join.getCondition()), e);
 
       final RexNode target =
-          rule.apply(e, variablesSet, logic, builder, 1, nFieldsLeft, 0);
+          rule.apply(e, allVariablesSet, logic, builder, 1, nFieldsLeft, 0);
       final RexShuttle shuttle = new ReplaceSubQueryShuttle(e, target);
 
       final RexNode newCond =
@@ -1090,8 +1091,13 @@ public class SubQueryRemoveRule
               ImmutableList.of(join.getCondition()), e);
 
       RexSubQuery subQuery = e;
+      // Descendant correlation ids still matter for side detection above, but
+      // only the current join-level ids can be remapped into the new right
+      // input row type created below.
+      final Set<CorrelationId> currentLevelVariablesSet = new LinkedHashSet<>(allVariablesSet);
+      currentLevelVariablesSet.retainAll(join.getVariablesSet());
 
-      if (!variablesSet.isEmpty()) {
+      if (!currentLevelVariablesSet.isEmpty()) {
         // Original correlates reference joint row type, but we are about to create
         // new join of original right side and correlated sub-query. Therefore we have
         // to adjust correlated variables in following way:
@@ -1130,7 +1136,7 @@ public class SubQueryRemoveRule
         //         LogicalProject(EMPNO=[$0])
         //           LogicalFilter(condition=[>(CAST($cor0.DEPTNO):DECIMAL(7, 2) NOT NULL, $6)])
         //             LogicalTableScan(table=[[scott, EMP]])
-        CorrelationId id = Iterables.getOnlyElement(variablesSet);
+        CorrelationId id = Iterables.getOnlyElement(currentLevelVariablesSet);
         RexBuilder rexBuilder = builder.getRexBuilder();
 
         RelNode newSubQueryRel = e.rel.accept(new RelHomogeneousShuttle() {
@@ -1148,7 +1154,7 @@ public class SubQueryRemoveRule
 
       final int nFields = join.getRowType().getFieldCount();
       final RexNode target =
-          rule.apply(subQuery, variablesSet, logic, builder, 1, nFieldsRight, 0);
+          rule.apply(subQuery, currentLevelVariablesSet, logic, builder, 1, nFieldsRight, 0);
       final RexShuttle shuttle = new ReplaceSubQueryShuttle(e, RexUtil.shift(target, nFieldsLeft));
 
       RelNode newRight = builder.build();

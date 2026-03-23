@@ -8564,6 +8564,104 @@ LogicalProject(ID=[$0], ID0=[$1])
 ]]>
     </Resource>
   </TestCase>
+  <TestCase name="testJoinSubQueryRemoveRuleWithExistsRightSideAndOuterCorrelation">
+    <Resource name="sql">
+      <![CDATA[select e1.empno
+from emp e1
+where exists (
+  select 1
+  from dept d1
+  join dept d2
+    on exists (
+      select 1
+      from emp e2
+      where d2.name = e2.job
+        and e1.deptno = e2.deptno))]]>
+    </Resource>
+    <Resource name="planBefore">
+      <![CDATA[
+LogicalProject(EMPNO=[$0])
+  LogicalFilter(condition=[EXISTS({
+LogicalJoin(condition=[EXISTS({
+LogicalFilter(condition=[AND(=($cor0.NAME0, $2), =($cor1.DEPTNO, $7))])
+  LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+})], joinType=[inner], variablesSet=[[$cor0]])
+  LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+  LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+})], variablesSet=[[$cor1]])
+    LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+]]>
+    </Resource>
+    <Resource name="planAfter">
+      <![CDATA[
+LogicalProject(EMPNO=[$0])
+  LogicalProject(EMPNO=[$0], ENAME=[$1], JOB=[$2], MGR=[$3], HIREDATE=[$4], SAL=[$5], COMM=[$6], DEPTNO=[$7], SLACKER=[$8])
+    LogicalCorrelate(correlation=[$cor1], joinType=[inner], requiredColumns=[{7}])
+      LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+      LogicalAggregate(group=[{0}])
+        LogicalProject(i=[true])
+          LogicalProject(DEPTNO=[$0], NAME=[$1], DEPTNO0=[$2], NAME0=[$3])
+            LogicalJoin(condition=[true], joinType=[inner])
+              LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+              LogicalCorrelate(correlation=[$cor0], joinType=[inner], requiredColumns=[{1}])
+                LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+                LogicalAggregate(group=[{0}])
+                  LogicalProject(i=[true])
+                    LogicalFilter(condition=[AND(=($cor0.NAME, $2), =($cor1.DEPTNO, $7))])
+                      LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+]]>
+    </Resource>
+  </TestCase>
+  <TestCase name="testJoinSubQueryRemoveRuleWithInRightSideAndOuterCorrelation">
+    <Resource name="sql">
+      <![CDATA[select e1.empno
+from emp e1
+where exists (
+  select 1
+  from dept d1
+  join dept d2
+    on d2.deptno in (
+      select e3.deptno
+      from emp e3
+      where d2.name = e3.job
+        and e1.deptno = e3.deptno))]]>
+    </Resource>
+    <Resource name="planBefore">
+      <![CDATA[
+LogicalProject(EMPNO=[$0])
+  LogicalFilter(condition=[EXISTS({
+LogicalJoin(condition=[IN($2, {
+LogicalProject(DEPTNO=[$7])
+  LogicalFilter(condition=[AND(=($cor0.NAME0, $2), =($cor1.DEPTNO, $7))])
+    LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+})], joinType=[inner], variablesSet=[[$cor0]])
+  LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+  LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+})], variablesSet=[[$cor1]])
+    LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+]]>
+    </Resource>
+    <Resource name="planAfter">
+      <![CDATA[
+LogicalProject(EMPNO=[$0])
+  LogicalProject(EMPNO=[$0], ENAME=[$1], JOB=[$2], MGR=[$3], HIREDATE=[$4], SAL=[$5], COMM=[$6], DEPTNO=[$7], SLACKER=[$8])
+    LogicalCorrelate(correlation=[$cor1], joinType=[inner], requiredColumns=[{7}])
+      LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+      LogicalAggregate(group=[{0}])
+        LogicalProject(i=[true])
+          LogicalProject(DEPTNO=[$0], NAME=[$1], DEPTNO0=[$2], NAME0=[$3])
+            LogicalJoin(condition=[true], joinType=[inner])
+              LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+              LogicalFilter(condition=[=($0, $2)])
+                LogicalCorrelate(correlation=[$cor0], joinType=[inner], requiredColumns=[{1}])
+                  LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+                  LogicalAggregate(group=[{0}])
+                    LogicalProject(DEPTNO=[$7])
+                      LogicalFilter(condition=[AND(=($cor0.NAME, $2), =($cor1.DEPTNO, $7))])
+                        LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+]]>
+    </Resource>
+  </TestCase>
   <TestCase name="testJoinSubQueryRemoveRuleWithNotExists">
     <Resource name="sql">
       <![CDATA[select *
@@ -8721,6 +8819,56 @@ LogicalProject(EMPNO=[$0])
             LogicalProject(DEPTNO=[$0])
               LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
       LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+]]>
+    </Resource>
+  </TestCase>
+  <TestCase name="testJoinSubQueryRemoveRuleWithScalarRightSideAndOuterCorrelation">
+    <Resource name="sql">
+      <![CDATA[select e1.empno
+from emp e1
+where exists (
+  select 1
+  from dept d1
+  join dept d2
+    on (
+      select max(e2.deptno)
+      from emp e2
+      where d2.name = e2.job
+        and e1.deptno = e2.deptno) > 0)]]>
+    </Resource>
+    <Resource name="planBefore">
+      <![CDATA[
+LogicalProject(EMPNO=[$0])
+  LogicalFilter(condition=[EXISTS({
+LogicalJoin(condition=[>($SCALAR_QUERY({
+LogicalAggregate(group=[{}], EXPR$0=[MAX($0)])
+  LogicalProject(DEPTNO=[$7])
+    LogicalFilter(condition=[AND(=($cor0.NAME0, $2), =($cor1.DEPTNO, $7))])
+      LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+}), 0)], joinType=[inner], variablesSet=[[$cor0]])
+  LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+  LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+})], variablesSet=[[$cor1]])
+    LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+]]>
+    </Resource>
+    <Resource name="planAfter">
+      <![CDATA[
+LogicalProject(EMPNO=[$0])
+  LogicalProject(EMPNO=[$0], ENAME=[$1], JOB=[$2], MGR=[$3], HIREDATE=[$4], SAL=[$5], COMM=[$6], DEPTNO=[$7], SLACKER=[$8])
+    LogicalCorrelate(correlation=[$cor1], joinType=[inner], requiredColumns=[{7}])
+      LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+      LogicalAggregate(group=[{0}])
+        LogicalProject(i=[true])
+          LogicalProject(DEPTNO=[$0], NAME=[$1], DEPTNO0=[$2], NAME0=[$3])
+            LogicalJoin(condition=[>($4, 0)], joinType=[inner])
+              LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+              LogicalCorrelate(correlation=[$cor0], joinType=[left], requiredColumns=[{1}])
+                LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+                LogicalAggregate(group=[{}], EXPR$0=[MAX($0)])
+                  LogicalProject(DEPTNO=[$7])
+                    LogicalFilter(condition=[AND(=($cor0.NAME, $2), =($cor1.DEPTNO, $7))])
+                      LogicalTableScan(table=[[CATALOG, SALES, EMP]])
 ]]>
     </Resource>
   </TestCase>
