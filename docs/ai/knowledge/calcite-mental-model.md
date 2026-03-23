@@ -39,3 +39,10 @@ instead of the layer that owns the invariant.
 - Wrong rewrite, trait, or convention choice: planner.
 - Wrong pushdown or engine-specific operator choice: adapter rules and
   conventions.
+
+## Related deep dives
+
+- For the full subquery and decorrelation pipeline, including `RexSubQuery`,
+  subquery-removal rules, `RelDecorrelator`, `TopDownGeneralDecorrelator`, and
+  planner program sequencing, see
+  `docs/ai/knowledge/subquery-and-decorrelation-pipeline.md`.

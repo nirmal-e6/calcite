@@ -16,7 +16,7 @@ Keep this file short and operational. Keep reusable procedure details in
 - For large, ambiguous, or multi-step work, keep an ExecPlan current in
   `.agents/PLANS.md`.
 - For non-trivial upstream work, start from a JIRA issue and use the
-  `[CALCITE-####]` commit prefix.
+  `[CALCITE-####]/p` commit prefix.
 
 ## Skill Usage Rules
 

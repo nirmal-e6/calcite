@@ -13,6 +13,9 @@ turning `docs/ai` into a second code manual.
 ## Current docs
 
 - `calcite-mental-model.md`: the main query pipeline and ownership boundaries.
+- `subquery-and-decorrelation-pipeline.md`: the end-to-end map for subquery
+  lowering, rule-driven rewrite, both decorrelators, and recommended planner
+  program usage.
 - `testing-and-fixtures.md`: the main test surfaces and when to start with each.
 
 ## Keep out
