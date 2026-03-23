@@ -170,6 +170,7 @@ import static org.hamcrest.CoreMatchers.sameInstance;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -8871,6 +8872,250 @@ class RelOptRulesTest extends RelOptTestBase {
     sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
   }
 
+  // STRESS_OK_RELDECORR: aggregate and HAVING subqueries should still fully
+  // decorrelate on the legacy default path.
+  @Test void testHavingExistsCorrelatedInnerHaving() {
+    final String sql = "select deptno\n"
+        + "from emp e1\n"
+        + "group by deptno\n"
+        + "having count(*) > 0\n"
+        + "and exists (\n"
+        + "  select 1\n"
+        + "  from emp e2\n"
+        + "  where e2.deptno = e1.deptno\n"
+        + "  group by e2.deptno\n"
+        + "  having count(*) > 1)";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
+  @Test void testHavingScalarCorrelatedDistinctAgg() {
+    final String sql = "select deptno\n"
+        + "from emp e1\n"
+        + "group by deptno\n"
+        + "having count(*) > (\n"
+        + "  select count(distinct e2.job)\n"
+        + "  from emp e2\n"
+        + "  where e2.deptno = e1.deptno)";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
+  // STRESS_OK_RELDECORR: nullable and three-valued-logic predicates should
+  // preserve semantics after late decorrelation.
+  @Test void testWhereCorrelatedAllNullable() {
+    final String sql = "select * from emp e1\n"
+        + "where e1.sal > ALL (\n"
+        + "  select e2.comm\n"
+        + "  from empnullables e2\n"
+        + "  where e2.deptno = e1.deptno)";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
+  @Test void testProjectCaseWhenCorrelatedExistsWithCoalesce() {
+    final String sql = "select e1.empno,\n"
+        + "  case when exists (\n"
+        + "    select 1\n"
+        + "    from empnullables e2\n"
+        + "    where e2.deptno = e1.deptno\n"
+        + "      and coalesce(e2.ename, 'X') = coalesce(e1.ename, 'X'))\n"
+        + "  then 1 else 0 end as has_match\n"
+        + "from empnullables e1";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
+  @Test void testWhereIsNotDistinctFromCorrelatedScalar() {
+    final String sql = "select * from empnullables e1\n"
+        + "where e1.comm is not distinct from (\n"
+        + "  select max(e2.comm)\n"
+        + "  from empnullables e2\n"
+        + "  where e2.deptno = e1.deptno)";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
+  // STRESS_OK_RELDECORR: unusual correlated inputs like windowed, DISTINCT,
+  // and GROUPING SETS should still decorrelate cleanly.
+  @Test void testProjectCorrelatedScalarOverWindowedInput() {
+    final String sql = "select d.deptno,\n"
+        + "  (select max(x.sal)\n"
+        + "   from (\n"
+        + "     select sal, deptno,\n"
+        + "       row_number() over (partition by deptno order by empno) as rn\n"
+        + "     from emp) x\n"
+        + "   where x.deptno = d.deptno\n"
+        + "     and x.rn <= 2) as top2_max\n"
+        + "from dept d";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
+  @Test void testWhereExistsCorrelatedDistinctInput() {
+    final String sql = "select * from dept d\n"
+        + "where exists (\n"
+        + "  select 1\n"
+        + "  from (select distinct deptno, job from emp) e2\n"
+        + "  where e2.deptno = d.deptno\n"
+        + "    and e2.job = d.name)";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
+  @Test void testWhereExistsCorrelatedGroupingSets() {
+    final String sql = "select * from emp e1\n"
+        + "where exists (\n"
+        + "  select 1\n"
+        + "  from emp e2\n"
+        + "  where e2.job = e1.job\n"
+        + "    and e2.sal > e1.sal\n"
+        + "  group by grouping sets ((e2.deptno), ())\n"
+        + "  having count(*) > 0)";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
+  @Test void testWhereCorrelatedUniqueNullableProjection() {
+    final String sql = "select * from dept d\n"
+        + "where unique (\n"
+        + "  select e.comm\n"
+        + "  from empnullables e\n"
+        + "  where e.deptno = d.deptno)";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
+  @Test void testProjectCorrelatedNotUniqueMultiColumnNullableProjection() {
+    final String sql = "select d.deptno,\n"
+        + "  not unique (\n"
+        + "    select e.comm, e.job\n"
+        + "    from empnullables e\n"
+        + "    where e.deptno = d.deptno) as has_dupes\n"
+        + "from dept d";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
+  // STRESS_OK_RELDECORR: trim must run after late decorrelation even when a
+  // correlated aggregate subquery hangs off the nullable join side.
+  @Test void testTrimLateDecorrelateRightSideCorrelatedExistsAggregate() {
+    final String sql = "select empno\n"
+        + "from emp as e\n"
+        + "left join dept as d\n"
+        + "  on d.deptno = e.deptno\n"
+        + " and exists (\n"
+        + "   select e2.deptno\n"
+        + "   from emp as e2\n"
+        + "   where e2.deptno = d.deptno\n"
+        + "   group by e2.deptno\n"
+        + "   having sum(e2.sal) > 1000000)";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).withTrim(true).check();
+  }
+
+  // STRESS_OK_RELDECORR: left-side correlation is the control for the trim
+  // bucket, proving the nullable-RHS variant is not just generic EXISTS noise.
+  @Test void testTrimLateDecorrelateLeftSideCorrelatedExistsAggregate() {
+    final String sql = "select empno\n"
+        + "from emp as e\n"
+        + "left join dept as d\n"
+        + "  on d.name = e.ename\n"
+        + " and exists (\n"
+        + "   select e2.deptno\n"
+        + "   from emp as e2\n"
+        + "   where e2.deptno = e.deptno\n"
+        + "   group by e2.deptno\n"
+        + "   having sum(e2.sal) > 1000000)";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).withTrim(true).check();
+  }
+
+  // STRESS_GAP_RELDECORR: collection constructors are the known residual gap
+  // where legacy RelDecorrelator still leaves LogicalCorrelate + Collect.
+  // STRESS_GAP_RELDECORR: legacy RelDecorrelator leaves this correlated
+  // ARRAY subquery as LogicalCorrelate + Collect in planAfter.
+  @Test void testProjectCorrelatedArraySubQueryWithOrderByLimit() {
+    final String sql = "select d.deptno,\n"
+        + "  array (\n"
+        + "    select e.sal\n"
+        + "    from emp e\n"
+        + "    where e.deptno = d.deptno\n"
+        + "    order by e.sal desc\n"
+        + "    limit 2) as top_sals\n"
+        + "from dept d";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
+  // STRESS_GAP_RELDECORR: plain correlated MULTISET still ends as
+  // LogicalCorrelate + Collect in planAfter.
+  @Test void testProjectCorrelatedMultisetSubQuery() {
+    final String sql = "select d.deptno,\n"
+        + "  multiset(\n"
+        + "    select e.empno\n"
+        + "    from emp e\n"
+        + "    where e.deptno = d.deptno) as empset\n"
+        + "from dept d";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
+  // STRESS_GAP_RELDECORR: DISTINCT does not unblock ARRAY collection
+  // decorrelation; Collect remains in planAfter.
+  @Test void testProjectCorrelatedArrayDistinctOrderByLimit() {
+    final String sql = "select d.deptno,\n"
+        + "  array(\n"
+        + "    select distinct e.sal\n"
+        + "    from emp e\n"
+        + "    where e.deptno = d.deptno\n"
+        + "    order by e.sal desc\n"
+        + "    limit 2) as top_sals\n"
+        + "from dept d";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
+  // STRESS_GAP_RELDECORR: INTERSECT under ARRAY keeps the collection path
+  // correlated in planAfter.
+  @Test void testProjectCorrelatedArrayOverIntersectInput() {
+    final String sql = "select d.deptno,\n"
+        + "  array(\n"
+        + "    select x.empno\n"
+        + "    from (\n"
+        + "      select e.empno\n"
+        + "      from emp e\n"
+        + "      where e.deptno = d.deptno\n"
+        + "      intersect\n"
+        + "      select n.empno\n"
+        + "      from empnullables n\n"
+        + "      where n.deptno = d.deptno\n"
+        + "    ) x) as overlap_empnos\n"
+        + "from dept d";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
+  // STRESS_GAP_RELDECORR: MULTISET shows the same residual INTERSECT gap as
+  // ARRAY, ending as LogicalCorrelate + Collect.
+  @Test void testProjectCorrelatedMultisetOverIntersectInput() {
+    final String sql = "select d.deptno,\n"
+        + "  multiset(\n"
+        + "    select x.empno\n"
+        + "    from (\n"
+        + "      select e.empno\n"
+        + "      from emp e\n"
+        + "      where e.deptno = d.deptno\n"
+        + "      intersect\n"
+        + "      select n.empno\n"
+        + "      from empnullables n\n"
+        + "      where n.deptno = d.deptno\n"
+        + "    ) x) as overlap_empnos\n"
+        + "from dept d";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
+  // STRESS_OK_RELDECORR: scalar INTERSECT is the positive control showing the
+  // residual gap is specific to collection constructors, not generic SetOp.
+  @Test void testProjectCorrelatedScalarOverIntersectDistinctInput() {
+    final String sql = "select d.deptno,\n"
+        + "  (select count(*)\n"
+        + "   from (\n"
+        + "     select e.empno\n"
+        + "     from emp e\n"
+        + "     where e.deptno = d.deptno\n"
+        + "     intersect\n"
+        + "     select n.empno\n"
+        + "     from empnullables n\n"
+        + "     where n.deptno = d.deptno) x) as overlap_count\n"
+        + "from dept d";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
+  }
+
   @Test void testSomeWithEquality() {
     final String sql = "select * from emp e1\n"
         + "  where e1.deptno = SOME (select deptno from dept)";
@@ -9567,6 +9812,66 @@ class RelOptRulesTest extends RelOptTestBase {
         .withLateDecorrelate(true)
         .withTrim(true)
         .check();
+  }
+
+  // STRESS_OK_RELDECORR_SORT: second-level outer correlation must survive the
+  // sort-to-row-number path used for nested LIMIT 1 scalar subqueries.
+  @Test void testProjectNestedCorrelatedScalarWithInnerOrderByLimit() {
+    final String sql = "select d1.name,\n"
+        + "  (select e1.empno\n"
+        + "   from emp e1\n"
+        + "   where e1.sal = (\n"
+        + "     select e2.sal\n"
+        + "     from emp e2\n"
+        + "     where e1.sal = e2.sal\n"
+        + "       and e1.deptno = e2.deptno\n"
+        + "       and d1.deptno < e2.deptno\n"
+        + "     order by e2.sal\n"
+        + "     limit 1))\n"
+        + "from dept d1";
+    sql(sql)
+        .withSubQueryRules()
+        .withLateDecorrelate(true)
+        .withTrim(true)
+        .check();
+  }
+
+  // STRESS_OK_RELDECORR_SORT: OFFSET extends the nested LIMIT bucket so late
+  // decorrelation still exercises the row-number rewrite under multi-level correlation.
+  @Test void testWhereNestedCorrelatedScalarWithInnerOrderByLimitOffset() {
+    final String sql = "select d1.name\n"
+        + "from dept d1\n"
+        + "where d1.deptno < (\n"
+        + "  select max(e1.empno)\n"
+        + "  from emp e1\n"
+        + "  where e1.sal = (\n"
+        + "    select e2.sal\n"
+        + "    from emp e2\n"
+        + "    where e1.sal = e2.sal\n"
+        + "      and e1.deptno = e2.deptno\n"
+        + "      and d1.deptno < e2.deptno\n"
+        + "    order by e2.sal\n"
+        + "    limit 1 offset 1))";
+    sql(sql)
+        .withSubQueryRules()
+        .withLateDecorrelate(true)
+        .withTrim(true)
+        .check();
+  }
+
+  // STRESS_OK_RELDECORR_SORT: correlated aggregate plus LIMIT/OFFSET is a
+  // late-decorrelation sort stress case, so keep it next to the CALCITE-6652 anchors.
+  @Test void testWhereExistsCorrelatedAggregateWithLimitOffset() {
+    final String sql = "select e.ename\n"
+        + "from emp e\n"
+        + "where exists (\n"
+        + "  select max(d.deptno)\n"
+        + "  from dept d\n"
+        + "  where d.deptno = e.deptno\n"
+        + "  group by d.name\n"
+        + "  order by d.name\n"
+        + "  limit 2 offset 1)";
+    sql(sql).withSubQueryRules().withLateDecorrelate(true).check();
   }
 
   /** Test case for
@@ -10428,6 +10733,115 @@ class RelOptRulesTest extends RelOptTestBase {
     sql(sql)
         .withRule(CoreRules.JOIN_SUB_QUERY_TO_CORRELATE)
         .checkUnchanged();
+  }
+
+  // STRESS_GAP_SUBQUERY_REMOVE: correlated refs span both join sides, so
+  // JOIN_SUB_QUERY_TO_CORRELATE must leave the ON subquery unchanged.
+  @Test void testJoinSubQueryRemoveRuleWithExistsBothSidesCorrelation() {
+    final String sql = "select emp.empno\n"
+        + "from emp join dept\n"
+        + "on exists (\n"
+        + "  select 1\n"
+        + "  from emp e2\n"
+        + "  where e2.empno = emp.empno\n"
+        + "    and e2.deptno = dept.deptno)";
+    sql(sql)
+        .withRule(CoreRules.JOIN_SUB_QUERY_TO_CORRELATE)
+        .checkUnchanged();
+  }
+
+  @Test void testJoinSubQueryRemoveRuleWithNotExistsBothSidesCorrelation() {
+    final String sql = "select emp.empno\n"
+        + "from emp join dept\n"
+        + "on not exists (\n"
+        + "  select 1\n"
+        + "  from emp e2\n"
+        + "  where e2.empno = emp.empno\n"
+        + "    and e2.deptno = dept.deptno)";
+    sql(sql)
+        .withRule(CoreRules.JOIN_SUB_QUERY_TO_CORRELATE)
+        .checkUnchanged();
+  }
+
+  @Test void testJoinSubQueryRemoveRuleWithScalarBothSidesOperand() {
+    final String sql = "select emp.empno\n"
+        + "from emp join dept\n"
+        + "on (\n"
+        + "  select max(e2.deptno)\n"
+        + "  from emp e2\n"
+        + "  where e2.empno = emp.empno\n"
+        + "    and e2.deptno = dept.deptno) > 0";
+    sql(sql)
+        .withRule(CoreRules.JOIN_SUB_QUERY_TO_CORRELATE)
+        .checkUnchanged();
+  }
+
+  @Test void testJoinSubQueryRemoveRuleWithInLeftOperandAndRightCorrelation() {
+    final String sql = "select emp.empno\n"
+        + "from emp join dept\n"
+        + "on emp.deptno in (\n"
+        + "  select d2.deptno\n"
+        + "  from dept d2\n"
+        + "  where d2.name = dept.name)";
+    sql(sql)
+        .withRule(CoreRules.JOIN_SUB_QUERY_TO_CORRELATE)
+        .checkUnchanged();
+  }
+
+  // STRESS_BUG_SUBQUERY_REMOVE: right-side join rewrite with both current and
+  // outer correlation ids still throws IllegalArgumentException today.
+  @Test void testJoinSubQueryRemoveRuleWithInRightSideAndOuterCorrelation() {
+    final String sql = "select e1.empno\n"
+        + "from emp e1\n"
+        + "where exists (\n"
+        + "  select 1\n"
+        + "  from dept d1\n"
+        + "  join dept d2\n"
+        + "    on d2.deptno in (\n"
+        + "      select e3.deptno\n"
+        + "      from emp e3\n"
+        + "      where d2.name = e3.job\n"
+        + "        and e1.deptno = e3.deptno))";
+    assertJoinSubQueryRemoveRuleThrowsMultipleCorrelationIds(sql);
+  }
+
+  @Test void testJoinSubQueryRemoveRuleWithExistsRightSideAndOuterCorrelation() {
+    final String sql = "select e1.empno\n"
+        + "from emp e1\n"
+        + "where exists (\n"
+        + "  select 1\n"
+        + "  from dept d1\n"
+        + "  join dept d2\n"
+        + "    on exists (\n"
+        + "      select 1\n"
+        + "      from emp e2\n"
+        + "      where d2.name = e2.job\n"
+        + "        and e1.deptno = e2.deptno))";
+    assertJoinSubQueryRemoveRuleThrowsMultipleCorrelationIds(sql);
+  }
+
+  @Test void testJoinSubQueryRemoveRuleWithScalarRightSideAndOuterCorrelation() {
+    final String sql = "select e1.empno\n"
+        + "from emp e1\n"
+        + "where exists (\n"
+        + "  select 1\n"
+        + "  from dept d1\n"
+        + "  join dept d2\n"
+        + "    on (\n"
+        + "      select max(e2.deptno)\n"
+        + "      from emp e2\n"
+        + "      where d2.name = e2.job\n"
+        + "        and e1.deptno = e2.deptno) > 0)";
+    assertJoinSubQueryRemoveRuleThrowsMultipleCorrelationIds(sql);
+  }
+
+  private void assertJoinSubQueryRemoveRuleThrowsMultipleCorrelationIds(
+      String query) {
+    assertThrows(IllegalArgumentException.class,
+        () -> super.fixture().sql(query)
+            .withRule(CoreRules.FILTER_SUB_QUERY_TO_CORRELATE,
+                CoreRules.JOIN_SUB_QUERY_TO_CORRELATE)
+            .check());
   }
 
   /** Test case for

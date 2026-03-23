@@ -20,6 +20,7 @@ import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.config.CalciteConnectionConfigImpl;
 import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.plan.RelOptCluster;
+import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.plan.RelTraitDef;
 import org.apache.calcite.plan.hep.HepProgram;
 import org.apache.calcite.prepare.CalciteCatalogReader;
@@ -61,6 +62,8 @@ import java.util.Properties;
 import static org.apache.calcite.test.Matchers.hasTree;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 
 import static java.util.Objects.requireNonNull;
 
@@ -77,6 +80,7 @@ public class RelDecorrelatorTest {
         .traitDefs((List<RelTraitDef>) null);
   }
 
+  // STRESS_OK_RELDECORR: row-type and field-map stability anchors.
   /** Test case for <a href="https://issues.apache.org/jira/browse/CALCITE-7058">[CALCITE-7058]
    * Decorrelator may produce different column names</a>. */
   @Test void testDecorrelatorNames() throws SqlParseException {
@@ -454,6 +458,7 @@ public class RelDecorrelatorTest {
     assertThat(after, hasTree(planAfter));
   }
 
+  // STRESS_OK_RELDECORR: multi-level correlation and SetOp anchors.
   /** Test case for <a href="https://issues.apache.org/jira/browse/CALCITE-7394">[CALCITE-7394]
    * Nested sub-query with multiple levels of correlation returns incorrect results</a>. */
   @Test void testNestedSubQueryWithMultiLevelCorrelation() {
@@ -1230,6 +1235,7 @@ public class RelDecorrelatorTest {
     assertThat(decorrelatedNoRules, hasTree(planDecorrelatedNoRules));
   }
 
+  // STRESS_OK_RELDECORR_SORT: owner-level sort, LIMIT, and OFFSET anchors.
   @Test void testDecorrelateCorrelatedOrderByLimitToRowNumber() {
     final FrameworkConfig frameworkConfig = config().build();
     final RelBuilder builder = RelBuilder.create(frameworkConfig);
@@ -1429,6 +1435,65 @@ public class RelDecorrelatorTest {
     assertThat(after, hasTree(planAfter));
   }
 
+  // STRESS_OK_RELDECORR_SORT: nested LIMIT 1 with second-level correlation
+  // should still decorrelate, even if the legacy sort path picks MIN instead
+  // of ROW_NUMBER for this shape.
+  @Test void testDecorrelateNestedCorrelationOrderByLimitToRowNumber() {
+    final FrameworkConfig frameworkConfig = config().build();
+    final RelBuilder builder = RelBuilder.create(frameworkConfig);
+    final RelOptCluster cluster = builder.getCluster();
+    final Planner planner = Frameworks.getPlanner(frameworkConfig);
+    final String sql = ""
+        + "SELECT d1.dname, d1.deptno +(\n"
+        + "SELECT e1.empno\n"
+        + "FROM emp e1\n"
+        + "WHERE e1.sal = (\n"
+        + "  SELECT e2.sal\n"
+        + "  FROM emp e2\n"
+        + "  WHERE e1.sal = e2.sal\n"
+        + "      AND e1.deptno = e2.deptno\n"
+        + "      AND d1.deptno < e2.deptno\n"
+        + "  ORDER BY e2.sal\n"
+        + "  LIMIT 1))\n"
+        + "FROM dept d1";
+    final RelNode originalRel;
+    try {
+      final SqlNode parse = planner.parse(sql);
+      final SqlNode validate = planner.validate(parse);
+      originalRel = planner.rel(validate).rel;
+    } catch (Exception e) {
+      throw TestUtil.rethrow(e);
+    }
+
+    final HepProgram hepProgram = HepProgram.builder()
+        .addRuleCollection(
+            ImmutableList.of(
+                // SubQuery program rules
+                CoreRules.FILTER_SUB_QUERY_TO_CORRELATE,
+                CoreRules.PROJECT_SUB_QUERY_TO_CORRELATE,
+                CoreRules.JOIN_SUB_QUERY_TO_CORRELATE))
+        .build();
+    final Program program =
+        Programs.of(hepProgram, true,
+            requireNonNull(cluster.getMetadataProvider()));
+    final RelNode before =
+        program.run(cluster.getPlanner(), originalRel, cluster.traitSet(),
+            Collections.emptyList(), Collections.emptyList());
+    final String beforePlan = RelOptUtil.toString(before);
+    assertThat(beforePlan, containsString("LogicalCorrelate"));
+    assertThat(beforePlan, containsString("LogicalSort"));
+
+    final RelNode after =
+        RelDecorrelator.decorrelateQuery(before, builder, RuleSets.ofList(Collections.emptyList()),
+            RuleSets.ofList(Collections.emptyList()));
+    final String afterPlan = RelOptUtil.toString(after);
+    assertThat(afterPlan, not(containsString("LogicalCorrelate")));
+    assertThat(afterPlan, not(containsString("LogicalSort")));
+    assertThat(afterPlan, containsString("agg#0=[MIN($0)]"));
+    assertThat(afterPlan, containsString("LogicalJoin"));
+  }
+
+  // STRESS_OK_RELDECORR: RexFieldAccess and correlation-remap anchors.
   /** Test case for <a href="https://issues.apache.org/jira/browse/CALCITE-7257">[CALCITE-7257]
    * Subqueries cannot be decorrelated if join condition contains RexFieldAccess</a>. */
   @Test void testJoinConditionContainsRexFieldAccess() {
@@ -1669,6 +1734,7 @@ public class RelDecorrelatorTest {
     assertThat(after, hasTree(planAfter));
   }
 
+  // STRESS_OK_RELDECORR: lexical-scoping anchor for reused correlation ids.
   /** Test case for <a href="https://issues.apache.org/jira/browse/CALCITE-5390">[CALCITE-5390]
    * RelDecorrelator throws NullPointerException</a>. */
   @Test void testCorrelationLexicalScoping() {
