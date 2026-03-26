@@ -12,6 +12,9 @@
 - Inspect current repo files before summarizing or editing anything.
 - Do not touch Calcite production code or tests from maintenance work.
 - Keep the workflow layer concise and operational.
+- Workflow-layer maintenance stays on `config/codex`.
+- `calcite-branch` and `calcite-commit` are explicit repo controls, not
+  maintenance skills.
 - `.agents/PLANS.md` is for active or recently handed-off multi-step work, not
   retained session history.
 - `docs/ai/knowledge/` contains only reviewed, generalized knowledge.
@@ -37,6 +40,12 @@
   `$skill-creator -> $calcite-workflow-sync`.
 - If the skill change also changed boundaries or descriptions materially, then
   run `$calcite-workflow-routing-audit`.
+- For workflow-layer changes, stay on `config/codex`.
+- `calcite-branch` may auto-start non-workflow local branches from `main` when
+  implementation begins on `config/codex`, and later explicitly finalize
+  normal work back to one clean surviving branch.
+- Use `$calcite-commit` only when you want an explicit local snapshot; do not
+  turn it into an automatic final step.
 
 ## Mandatory Triggers
 

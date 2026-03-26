@@ -18,14 +18,26 @@ Keep this file short and operational. Keep reusable procedure details in
 - For large, ambiguous, or multi-step work, keep an ExecPlan current in
   `.agents/PLANS.md` while the work is active, then retire it after durable
   outcomes are routed or discarded.
+- Workflow-layer maintenance stays on `config/codex`. Use work branches from
+  `main` for non-workflow Calcite tasks.
 - For non-trivial upstream work, start from a JIRA issue and use the
-  `[CALCITE-####]/p` commit prefix.
+  `[CALCITE-####] <summary>` subject for the final upstream commit. Local
+  snapshot commits may use simpler local subjects.
+- Before calling normal Calcite work fully handoff-ready, end on one clean
+  surviving branch and remove temporary exploratory worktrees or side branches
+  unless they are explicitly preserved.
 
 ## Skill Usage Rules
 
 - Prefer explicit user invocation with `$skill-name`. Use
   `SKILL.md` as canonical skill behavior, `docs/ai/USAGE.md` as the concise
   human quick-reference, and `docs/ai/MAINTENANCE.md` as maintenance policy.
+- Codex may use `$calcite-branch` implicitly to start non-workflow local work
+  branches from `main` when implementation begins from `config/codex`. Keep
+  workflow-layer edits on `config/codex`. Finalize back to one clean surviving
+  branch remains explicit.
+- Use `$calcite-commit` when you want an explicit local commit. It does not
+  push, and it does not rewrite the final upstream commit subject for you.
 - If the task is bug diagnosis or a regression, use `$calcite-bug-root-cause`
   before editing, identify the owning layer first, and inventory adjacent
   affected surfaces.
@@ -93,6 +105,10 @@ Keep this file short and operational. Keep reusable procedure details in
 - The owning layer is identified and the fix lives there.
 - The patch is reviewable, upstreamable, free of unrelated churn, and any
   changed expectations, goldens, or test outputs are explained.
+- Normal Calcite work ends on one clean surviving branch, and leftover
+  exploratory worktrees or side branches are removed or explicitly justified.
+- For split or bucketed campaigns, every selected bucket reached a terminal
+  state before the parent task was called done.
 - Targeted validation ran at the right scope and unexpected fallout was
   explained.
 - Durable lessons were routed through `$calcite-knowledge-capture` when the

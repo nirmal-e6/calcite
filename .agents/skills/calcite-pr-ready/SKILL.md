@@ -7,7 +7,7 @@ description: >-
   lessons. Provide the diff, intended invariant or root cause, validation
   commands and results, and any compatibility concerns. Success is a concise
   patch summary, exact validation evidence, touched-surface reviewer-risk
-  findings, and explicit follow-ups.
+  findings, repo-hygiene status for final handoff, and explicit follow-ups.
 ---
 
 # Calcite PR Ready
@@ -29,6 +29,8 @@ something ready.
   line-by-line inventory.
 - Use repo-owned style signals first: `./gradlew style`, Checkstyle, and the
   surrounding Calcite code. IntelliJ formatting is advisory only.
+- Report leftover temporary worktrees or side branches that still block a clean
+  single-branch handoff, but do not mutate git topology yourself.
 
 ## Required inputs
 
@@ -51,6 +53,9 @@ something ready.
   that merely narrate the code.
 - Review of changed `iq`, XML golden, `failFilter`, runtime-output, and other
   expectation-style tests touched by the patch or its direct fallout.
+- Repo-hygiene report for final handoff: intended surviving branch, leftover
+  temporary worktrees or side branches, and whether `$calcite-branch finalize`
+  is still required before the patch is truly handoff-ready.
 - Reviewer-risk note and explicit follow-ups.
 - For larger patches, a surface-bucket review where each bucket states the
   intended invariant, key evidence, suspicious or under-explained deltas, and

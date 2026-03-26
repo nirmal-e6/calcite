@@ -18,6 +18,8 @@ optimizations or rules, and research tasks.
 - Keep milestones current.
 - Record the routing choice when it is non-obvious: which workflow or skill
   owns the task, and which nearby alternatives were rejected.
+- For split campaigns, record each selected bucket explicitly and do not mark
+  the parent task `done` until every selected bucket is terminal.
 - Record the exact validation commands you actually ran.
 - Log meaningful decisions when tradeoffs are resolved.
 - Separate confirmed discoveries from open questions.
@@ -31,6 +33,9 @@ optimizations or rules, and research tasks.
 
 Last Updated: YYYY-MM-DD
 Status: planned | in_progress | blocked | done
+
+For split campaigns, keep the overall status at `in_progress` until every
+selected bucket reaches a terminal state.
 
 ## Goal
 
@@ -54,6 +59,17 @@ Status: planned | in_progress | blocked | done
   Target evidence: <what proves it is complete>
 - [ ] M3: <milestone name>
   Target evidence: <what proves it is complete>
+
+## Bucket Tracking (Optional)
+
+- B1: <bucket name>
+  Branch: <branch name>
+  Status: planned | in_progress | pr_ready | deferred | infeasible | handed_off
+  Next: <next skill or action>
+- B2: <bucket name>
+  Branch: <branch name>
+  Status: planned | in_progress | pr_ready | deferred | infeasible | handed_off
+  Next: <next skill or action>
 
 ## Validation Commands
 
