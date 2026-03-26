@@ -91,7 +91,7 @@ Examples:
 | Skill | Use for | Default |
 | --- | --- | --- |
 | `$calcite-workflow-help` | concise help for the current workflow layer | analysis-first |
-| `$calcite-workflow-cleanup` | low-risk workflow doc and skill cleanup | direct low-risk edits |
+| `$calcite-workflow-cleanup` | low-risk workflow hygiene: concision, de-cluttering, stale quick references, and light repo-truth checks | direct low-risk edits |
 | `$calcite-workflow-sync` | sync workflow docs after workflow changes | direct low-risk sync |
 | `$calcite-workflow-routing-audit` | skill-boundary and prompt-quality audit | audit-then-tighten |
 | `$calcite-workflow-retrospective` | repeated workflow-friction root cause | report-first |
@@ -144,6 +144,8 @@ Examples:
 - Use `$calcite-workflow-routing-audit` when the primary deliverable is prompt
   coverage, a routing matrix, or boundary tightening.
 - Use `$calcite-workflow-cleanup` when the primary deliverable is low-risk
-  workflow-layer alignment after the cleanup target is already clear.
+  workflow hygiene: trimming verbosity, de-cluttering, refreshing stale quick
+  references, and lightly verifying touched operational claims after the
+  cleanup target is already clear.
 - Use `$calcite-workflow-retrospective` when the same workflow mistake or
   correction has happened more than once.

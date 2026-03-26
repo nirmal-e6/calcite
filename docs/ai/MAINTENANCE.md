@@ -32,8 +32,10 @@
   and likely routing misfires.
 - `$calcite-workflow-retrospective`: root-cause repeated workflow friction and
   choose the smallest durable fix.
-- `$calcite-workflow-cleanup`: clean up and align the workflow layer once the
-  cleanup target is already clear.
+- `$calcite-workflow-cleanup`: do a low-risk workflow hygiene pass once the
+  cleanup target is already clear: trim verbosity, de-clutter repeated
+  guidance, refresh stale quick references, and lightly verify touched
+  operational claims against the current repo.
 
 ## Standard Flow
 
@@ -47,6 +49,9 @@
   normal work back to one clean surviving branch.
 - Use `$calcite-commit` only when you want an explicit local snapshot; do not
   turn it into an automatic final step.
+- During ordinary cleanup, verify short operational claims in touched workflow
+  files when that check is cheap and local, but do not re-audit deep-dive
+  knowledge docs by default.
 
 ## Mandatory Triggers
 
