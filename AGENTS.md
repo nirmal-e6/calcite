@@ -16,7 +16,8 @@ Keep this file short and operational. Keep reusable procedure details in
 - Search for nearby tests first and follow existing Calcite test idioms,
   fixtures, and golden files.
 - For large, ambiguous, or multi-step work, keep an ExecPlan current in
-  `.agents/PLANS.md`.
+  `.agents/PLANS.md` while the work is active, then retire it after durable
+  outcomes are routed or discarded.
 - For non-trivial upstream work, start from a JIRA issue and use the
   `[CALCITE-####]/p` commit prefix.
 

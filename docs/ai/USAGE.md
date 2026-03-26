@@ -81,6 +81,9 @@ Examples:
   surface buckets instead of line-by-line inventory.
 - New or edited comments should follow nearby Calcite style and explain
   invariants, rationale, or non-obvious behavior instead of restating code.
+- Use `.agents/PLANS.md` only for active or recently handed-off multi-step
+  work; after durable outcomes are promoted to `knowledge/`, quarantined in
+  `candidates/`, or discarded, retire the finished ExecPlan.
 - Before calling a non-trivial upstream patch ready for handoff, end with
   `./gradlew clean build` unless the user explicitly scoped validation
   differently.

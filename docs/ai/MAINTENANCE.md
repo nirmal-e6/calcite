@@ -12,6 +12,8 @@
 - Inspect current repo files before summarizing or editing anything.
 - Do not touch Calcite production code or tests from maintenance work.
 - Keep the workflow layer concise and operational.
+- `.agents/PLANS.md` is for active or recently handed-off multi-step work, not
+  retained session history.
 - `docs/ai/knowledge/` contains only reviewed, generalized knowledge.
 - `docs/ai/candidates/` is a quarantine area for unreviewed or
   session-derived notes.
@@ -47,6 +49,8 @@
 - After repeated friction: run `$calcite-workflow-retrospective`.
 - Every 3-5 substantial sessions or before a new burst of work: run
   `$calcite-workflow-cleanup`.
+- During workflow cleanup, trim completed ExecPlans whose outcomes are already
+  captured elsewhere.
 - After substantial normal work: run `$calcite-knowledge-capture`.
 
 ## Cadence

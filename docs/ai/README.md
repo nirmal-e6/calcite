@@ -20,8 +20,11 @@ trivia or session history.
 - Put only reviewed and generalized lessons in `knowledge/`.
 - Put anything unreviewed, issue-specific, or session-derived in `candidates/`
   until it is either promoted, rewritten, or deleted.
+- After durable outcomes are promoted, quarantined, or discarded, retire the
+  corresponding ExecPlan from `.agents/PLANS.md`.
 
 ## Long-Running Work
 
-For multi-step work, use the living ExecPlan template in
-[`../../.agents/PLANS.md`](../../.agents/PLANS.md).
+For active or recently handed-off multi-step work, use the living ExecPlan
+template in [`../../.agents/PLANS.md`](../../.agents/PLANS.md). Do not use it
+as a long-term session archive.
