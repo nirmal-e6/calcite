@@ -23,8 +23,9 @@
 
 ## Maintenance Skills
 
-- `$calcite-workflow-help`: summarize the current workflow setup, common
-  explicit invocations, and common multi-skill flows.
+- `$calcite-workflow-help`: summarize the current workflow setup, common repo
+  controls, explicit invocations, implicit branch-start behavior, and common
+  multi-skill flows.
 - `$calcite-workflow-sync`: sync the workflow layer after workflow-level
   changes so skills, help, and maintenance docs match current repo state.
 - `$calcite-workflow-routing-audit`: audit skill boundaries, trigger quality,
