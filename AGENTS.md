@@ -9,6 +9,8 @@ Keep this file short and operational. Keep reusable procedure details in
   memory.
 - Prefer the smallest robust upstreamable fix. Do not ship symptom patches or
   query-shape-specific hacks when the invariant belongs elsewhere.
+- Follow nearby Calcite comment style. Add comments for invariants, rationale,
+  and non-obvious behavior; do not add comments that merely narrate the code.
 - Any workflow-layer change must leave the workflow layer internally
   consistent.
 - Search for nearby tests first and follow existing Calcite test idioms,
@@ -24,7 +26,8 @@ Keep this file short and operational. Keep reusable procedure details in
   `SKILL.md` as canonical skill behavior, `docs/ai/USAGE.md` as the concise
   human quick-reference, and `docs/ai/MAINTENANCE.md` as maintenance policy.
 - If the task is bug diagnosis or a regression, use `$calcite-bug-root-cause`
-  before editing and identify the owning layer first.
+  before editing, identify the owning layer first, and inventory adjacent
+  affected surfaces.
 - If the task is a support, syntax, or SQL-pattern check, use
   `$calcite-query-support-check`.
 - If the task adds or changes an external function, operator, callable surface,
@@ -34,7 +37,8 @@ Keep this file short and operational. Keep reusable procedure details in
   work, use `$calcite-optimization-or-rule-work` before editing.
 - If the primary deliverable is understanding, invariants, or tradeoffs, use
   `$calcite-research-deep-dive`.
-- Before upstream PR handoff, run `$calcite-pr-ready`.
+- Before upstream PR handoff, run `$calcite-pr-ready` for a reviewer-risk pass
+  scoped to touched surfaces and direct fallout.
 - After substantial normal work, run `$calcite-knowledge-capture`.
 - If repeated friction or repeated correction occurs, run
   `$calcite-workflow-retrospective`.
@@ -70,6 +74,10 @@ Keep this file short and operational. Keep reusable procedure details in
 - Start with the smallest relevant validation for the change.
 - Add or update targeted tests first in the nearest existing test class or
   fixture.
+- Use `./gradlew style` as Calcite's repo-owned formatter and style entry
+  point; IntelliJ code style is only partial help and is not authoritative.
+- Before calling a non-trivial upstream patch PR-ready, `./gradlew clean build`
+  should be green unless the user explicitly scoped validation differently.
 - Explain unexpected failures before changing expectations, goldens, or test
   outputs.
 - Common commands: `./gradlew build`, `./gradlew test`, `./gradlew check`,
@@ -82,7 +90,8 @@ Keep this file short and operational. Keep reusable procedure details in
 - The chosen skill matched the job, and any handoff to another skill was
   explicit.
 - The owning layer is identified and the fix lives there.
-- The patch is reviewable, upstreamable, and free of unrelated churn.
+- The patch is reviewable, upstreamable, free of unrelated churn, and any
+  changed expectations, goldens, or test outputs are explained.
 - Targeted validation ran at the right scope and unexpected fallout was
   explained.
 - Durable lessons were routed through `$calcite-knowledge-capture` when the

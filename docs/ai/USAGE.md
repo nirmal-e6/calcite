@@ -12,14 +12,15 @@
 ## Most common flows
 
 - Does this SQL work today? Use `$calcite-query-support-check`.
-- Something is wrong or regressed. Use `$calcite-bug-root-cause`.
+- Something is wrong or regressed. Use `$calcite-bug-root-cause` and inventory
+  adjacent affected surfaces before editing.
 - Add or change a function, operator, or callable SQL surface. Use
   `$calcite-function-or-operator-work`.
 - Add or change a planner rule or optimization. Use
   `$calcite-optimization-or-rule-work`.
 - Need an end-to-end map before deciding. Use `$calcite-research-deep-dive`.
-- Patch is understood and needs upstream review hardening. Use
-  `$calcite-pr-ready`.
+- Patch is understood and needs upstream review hardening on touched surfaces
+  and direct fallout. Use `$calcite-pr-ready`.
 - Session produced reusable lessons. Use `$calcite-knowledge-capture`.
 - Add or materially change a repo skill. Use
   `$skill-creator -> $calcite-workflow-sync`, then
@@ -32,12 +33,16 @@
 - Give the exact SQL, repro, diff, or research question.
 - Add the context that changes behavior: dialect, conformance, Babel, planner
   settings, runtime path, or target tests.
+- For `$calcite-pr-ready`, mention touched behavior surfaces and changed
+  expectations or goldens when known.
+- For style or formatting questions, prefer `./gradlew style`; IntelliJ code
+  style is only partial help.
 
 Examples:
 
 - `$calcite-query-support-check does this SQL work under Babel? ...`
 - `$calcite-bug-root-cause diagnose this validator regression; repro: ...`
-- `$calcite-pr-ready audit this patch and validation set ...`
+- `$calcite-pr-ready audit this patch, touched surfaces, and validation set ...`
 - `$skill-creator create or update the repo skill calcite-foo under .agents/skills/calcite-foo/, then $calcite-workflow-sync to refresh help and maintenance docs; if boundaries changed materially, recommend $calcite-workflow-routing-audit`
 
 ## When to use Plan mode
@@ -51,11 +56,11 @@ Examples:
 | Skill | Use for | Bring | Default |
 | --- | --- | --- | --- |
 | `$calcite-query-support-check` | support verdict and first failing stage | exact SQL and context | analysis-first |
-| `$calcite-bug-root-cause` | wrong behavior or regression diagnosis | repro plus expected vs actual | analysis-first |
+| `$calcite-bug-root-cause` | wrong behavior or regression diagnosis plus adjacent-surface inventory | repro plus expected vs actual | analysis-first |
 | `$calcite-function-or-operator-work` | function, operator, or callable feature work | target SQL and semantics | implementation-when-clear |
 | `$calcite-optimization-or-rule-work` | planner transform or rule placement | current vs desired plan behavior | implementation-when-clear |
 | `$calcite-research-deep-dive` | end-to-end understanding and invariants | research question and scope | analysis-first |
-| `$calcite-pr-ready` | upstream review hardening | diff plus validation evidence | analysis-first |
+| `$calcite-pr-ready` | upstream review hardening on touched surfaces | diff plus validation evidence and changed expectations | analysis-first |
 | `$calcite-knowledge-capture` | route lessons into docs/ai | findings plus evidence | analysis-first |
 
 ## Maintenance quick reference
@@ -70,8 +75,15 @@ Examples:
 
 ## After-the-work flow
 
-- Usual chain: `bug-root-cause -> optional pr-ready -> knowledge-capture`
+- Usual chain: `bug-root-cause -> pr-ready -> knowledge-capture`
 - Use `pr-ready` only when the patch is already understood or implemented.
+- For larger patches, `pr-ready` should review touched behavior surfaces in
+  surface buckets instead of line-by-line inventory.
+- New or edited comments should follow nearby Calcite style and explain
+  invariants, rationale, or non-obvious behavior instead of restating code.
+- Before calling a non-trivial upstream patch ready for handoff, end with
+  `./gradlew clean build` unless the user explicitly scoped validation
+  differently.
 - Use `knowledge-capture` only for lessons worth keeping beyond the immediate
   patch.
 

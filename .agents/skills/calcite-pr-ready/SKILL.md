@@ -6,8 +6,8 @@ description: >-
   decide support status, design a new feature or rule, or archive session
   lessons. Provide the diff, intended invariant or root cause, validation
   commands and results, and any compatibility concerns. Success is a concise
-  patch summary, exact validation evidence, reviewer-risk findings, and
-  explicit follow-ups.
+  patch summary, exact validation evidence, touched-surface reviewer-risk
+  findings, and explicit follow-ups.
 ---
 
 # Calcite PR Ready
@@ -23,6 +23,12 @@ something ready.
   already run.
 - Default: analysis-first. This skill audits and tightens; it does not replace
   diagnosis or design.
+- Scope the audit to the patch's touched files, touched behavior surfaces, and
+  direct fallout. Do not turn `pr-ready` into unrelated cleanup of nearby code.
+- For larger patches, report by touched behavior surface buckets rather than a
+  line-by-line inventory.
+- Use repo-owned style signals first: `./gradlew style`, Checkstyle, and the
+  surrounding Calcite code. IntelliJ formatting is advisory only.
 
 ## Required inputs
 
@@ -35,8 +41,20 @@ something ready.
 
 - Concise patch summary.
 - Exact validation evidence.
-- Missing-test or hygiene findings.
+- Touched-surface review findings for dead code, fake hooks, unnecessary
+  fallback paths, and symptom patches introduced by the patch.
+- Touched-surface hygiene findings for no-op churn, verbose names or comments,
+  redundant tests, and IDE/static-analysis issues introduced or exposed by the
+  patch.
+- Review of new or edited comments touched by the patch: keep comments that
+  explain invariants, rationale, or non-obvious behavior, and remove comments
+  that merely narrate the code.
+- Review of changed `iq`, XML golden, `failFilter`, runtime-output, and other
+  expectation-style tests touched by the patch or its direct fallout.
 - Reviewer-risk note and explicit follow-ups.
+- For larger patches, a surface-bucket review where each bucket states the
+  intended invariant, key evidence, suspicious or under-explained deltas, and
+  any deferred follow-up.
 
 ## Typical explicit invocation
 
