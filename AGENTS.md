@@ -53,6 +53,8 @@ Keep this file short and operational. Keep reusable procedure details in
 - Before upstream PR handoff, run `$calcite-pr-ready` for a reviewer-risk pass
   scoped to touched surfaces and direct fallout.
 - After substantial normal work, run `$calcite-knowledge-capture`.
+- Use `$calcite-workflow-help` when you want a concise summary of the current
+  workflow layer or common skill flows.
 - If repeated friction or repeated correction occurs, run
   `$calcite-workflow-retrospective`.
 - To create or materially change a repo skill, use `$skill-creator` and then

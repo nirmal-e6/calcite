@@ -13,8 +13,8 @@
 - Do not touch Calcite production code or tests from maintenance work.
 - Keep the workflow layer concise and operational.
 - Workflow-layer maintenance stays on `config/codex`.
-- `calcite-branch` and `calcite-commit` are explicit repo controls, not
-  maintenance skills.
+- `calcite-branch` and `calcite-commit` are repo controls, not maintenance
+  skills.
 - `.agents/PLANS.md` is for active or recently handed-off multi-step work, not
   retained session history.
 - `docs/ai/knowledge/` contains only reviewed, generalized knowledge.
@@ -70,5 +70,5 @@
 
 ## Cadence
 
-- Once manual maintenance is stable, optional automation may run cleanup on a
-  schedule.
+- If automation is added later, keep it aligned with the mandatory triggers
+  above and low-risk by default.

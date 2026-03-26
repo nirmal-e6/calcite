@@ -26,6 +26,8 @@
 - Need an end-to-end map before deciding. Use `$calcite-research-deep-dive`.
 - Patch is understood and needs upstream review hardening on touched surfaces
   and direct fallout. Use `$calcite-pr-ready`.
+- Need a quick summary of the current workflow layer or common skill flows. Use
+  `$calcite-workflow-help`.
 - Want a local commit without pushing or upstream rewrite. Use
   `$calcite-commit`.
 - Session produced reusable lessons. Use `$calcite-knowledge-capture`.
@@ -106,11 +108,11 @@ Examples:
   explicit `$calcite-branch finalize` before the final explicit
   `$calcite-commit`, plus any user-managed push or upstream rewrite.
 - Usual chain for normal Calcite work:
-  `bug-root-cause -> implicit branch start if needed -> implementation -> pr-ready -> explicit branch finalize -> explicit commit -> knowledge-capture`
-- Use `pr-ready` only when the patch is already understood or implemented.
-- `pr-ready` may report that the patch is not fully handoff-ready yet if extra
+  `$calcite-bug-root-cause -> implicit branch start if needed -> implementation -> $calcite-pr-ready -> explicit branch finalize -> explicit commit -> $calcite-knowledge-capture`
+- Use `$calcite-pr-ready` only when the patch is already understood or implemented.
+- `$calcite-pr-ready` may report that the patch is not fully handoff-ready yet if extra
   temporary worktrees or side branches still need finalization.
-- For larger patches, `pr-ready` should review touched behavior surfaces in
+- For larger patches, `$calcite-pr-ready` should review touched behavior surfaces in
   surface buckets instead of line-by-line inventory.
 - New or edited comments should follow nearby Calcite style and explain
   invariants, rationale, or non-obvious behavior instead of restating code.
@@ -127,25 +129,21 @@ Examples:
   begin from `config/codex`, not during pure analysis or workflow maintenance.
 - `calcite-commit` is local-only. Final upstream push and any later rewrite to
   `[CALCITE-####] <summary>` stay user-controlled.
-- Use `knowledge-capture` only for lessons worth keeping beyond the immediate
+- Use `$calcite-knowledge-capture` only for lessons worth keeping beyond the immediate
   patch.
 
 ## Maintenance
 
 - `docs/ai/MAINTENANCE.md` owns maintenance policy and cadence.
 - `docs/ai/USAGE.md` stays the concise quick-reference and common-flow layer.
-- Maintenance skills are explicit-only meta skills. Inspect current repo files
-  first and do not touch Calcite production code or tests.
 - Use `$calcite-workflow-help` for a short summary of the current setup.
 - Standard skill-authoring flow:
-  `$skill-creator -> $calcite-workflow-sync -> optional calcite-workflow-routing-audit`.
+  `$skill-creator -> $calcite-workflow-sync -> optional $calcite-workflow-routing-audit`.
 - Use `$calcite-workflow-sync` after adding, removing, renaming, or
   materially changing a skill or workflow-level doc.
 - Use `$calcite-workflow-routing-audit` when the primary deliverable is prompt
   coverage, a routing matrix, or boundary tightening.
 - Use `$calcite-workflow-cleanup` when the primary deliverable is low-risk
-  workflow hygiene: trimming verbosity, de-cluttering, refreshing stale quick
-  references, and lightly verifying touched operational claims after the
-  cleanup target is already clear.
+  workflow hygiene once the cleanup target is already clear.
 - Use `$calcite-workflow-retrospective` when the same workflow mistake or
   correction has happened more than once.
