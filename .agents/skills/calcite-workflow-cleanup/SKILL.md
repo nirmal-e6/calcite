@@ -15,7 +15,7 @@ description: >-
 # Calcite Workflow Cleanup
 
 Inspect the live workflow layer before editing anything, and keep changes
-scoped to docs, skills, and skill metadata.
+scoped to docs and skills.
 
 ## Operating style
 
@@ -23,8 +23,7 @@ scoped to docs, skills, and skill metadata.
   refresh, verbosity reduction, clutter trimming, big-picture restoration, and
   doc/skill alignment.
 - Scope: `AGENTS.md`, `.agents/PLANS.md` if present, `.agents/skills/**/SKILL.md`,
-  `.agents/skills/**/agents/openai.yaml`, `docs/ai/USAGE.md`,
-  `docs/ai/MAINTENANCE.md`, `docs/ai/knowledge/**`, and
+  `docs/ai/USAGE.md`, `docs/ai/MAINTENANCE.md`, `docs/ai/knowledge/**`, and
   `docs/ai/candidates/**`.
 - Default: explicit-only cleanup pass. Apply low-risk workflow-layer edits
   directly; list higher-risk changes separately for approval. Verify short,
@@ -45,6 +44,8 @@ scoped to docs, skills, and skill metadata.
 ## Cleanup priorities
 
 - Keep durable policy and stable workflow invariants.
+- Prefer one durable skill contract per repo skill and remove obsolete
+  agent-specific sidecars when repo policy says they are non-canonical.
 - Cut over-verbose wording, repeated caveats, and duplicated guidance unless
   they prevent a real mistake.
 - Remove issue-shaped, session-shaped, or over-fitted examples unless they are

@@ -1,7 +1,0 @@
-interface:
-  display_name: "Calcite Workflow Cleanup"
-  short_description: "Do a low-risk workflow hygiene pass"
-  default_prompt: "Use $calcite-workflow-cleanup to trim verbosity, stale examples, repeated guidance, and other workflow-layer clutter, and to lightly verify touched operational claims against the current repo without touching Calcite code or tests."
-
-policy:
-  allow_implicit_invocation: false

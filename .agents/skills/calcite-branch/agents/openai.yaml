@@ -1,7 +1,0 @@
-interface:
-  display_name: "Calcite Branch"
-  short_description: "auto-start, create, switch, or finalize local fix, research, or stress branches"
-  default_prompt: "Use $calcite-branch to auto-start or explicitly create a local fix, research, or stress branch from main when non-workflow implementation begins from config/codex, or explicitly finalize exploratory work back to one clean surviving branch."
-
-policy:
-  allow_implicit_invocation: true

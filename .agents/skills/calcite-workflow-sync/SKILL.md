@@ -14,16 +14,15 @@ description: >-
 
 # Calcite Workflow Sync
 
-Inspect current workflow docs, skill contracts, and skill metadata before
-editing anything.
+Inspect current workflow docs and skill contracts before editing anything.
 
 ## Operating style
 
 - Owns: post-change workflow sync so skills, help, maintenance docs, and small
   routing hints stay consistent with the current repo state.
 - Scope: `AGENTS.md`, `docs/ai/USAGE.md`, `docs/ai/MAINTENANCE.md`,
-  `.agents/skills/**/SKILL.md`, and `.agents/skills/**/agents/openai.yaml`;
-  never touch Calcite production code or tests.
+  and `.agents/skills/**/SKILL.md`; never touch Calcite production code or
+  tests.
 - Default: explicit-only sync pass. Apply low-risk workflow-layer edits
   directly, print a concise changelog-style summary, and recommend
   `$calcite-workflow-routing-audit` if routing boundaries changed materially.
@@ -43,6 +42,8 @@ editing anything.
 - `AGENTS.md` gets only a small routing-hint update if one is actually needed.
 - Stale references, dead examples, renamed skills, contradictions, and
   duplicated workflow guidance are fixed or explicitly flagged.
+- Obsolete agent-specific sidecars are removed or explicitly flagged when repo
+  policy says `SKILL.md` is the only durable skill contract.
 - A concise changelog-style summary of updates is printed.
 - A recommendation to run `$calcite-workflow-routing-audit` is made when
   routing boundaries changed materially.

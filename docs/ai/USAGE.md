@@ -6,6 +6,9 @@
 - Keep `AGENTS.md` for repo-wide rules and `SKILL.md` as the canonical task
   contract.
 - Use `docs/ai/USAGE.md` as the concise human quick-reference.
+- Keep personal cross-branch workflow state outside the repo, for example
+  personal skills under `~/.agents/skills/` and durable issue or PR briefs
+  under `~/.codex/memories/`.
 - Inspect current code, tests, and docs in this repo before assuming Calcite
   behavior.
 
@@ -32,7 +35,8 @@
   `$calcite-commit`.
 - Session produced reusable lessons. Use `$calcite-knowledge-capture`.
 - Add or materially change a repo skill. Use
-  `$skill-creator -> $calcite-workflow-sync`, then
+  `$skill-creator -> remove any generated agent-specific sidecars ->
+  $calcite-workflow-sync`, then
   `$calcite-workflow-routing-audit` if boundaries or descriptions changed
   materially.
 
@@ -102,48 +106,14 @@ Examples:
 
 - Normal local Calcite flow:
   `config/codex -> task skill -> implicit $calcite-branch start if edits begin -> implementation -> $calcite-pr-ready -> explicit $calcite-branch finalize -> explicit $calcite-commit`
+- Usual chain for normal Calcite work:
+  `$calcite-bug-root-cause -> implicit branch start if needed -> implementation -> $calcite-pr-ready -> explicit branch finalize -> explicit commit -> $calcite-knowledge-capture`
 - Workflow-layer maintenance stays on `config/codex`; use
   `$calcite-commit` when you want a local workflow snapshot.
 - Research and stress work usually branches from `main`, then uses
   explicit `$calcite-branch finalize` before the final explicit
   `$calcite-commit`, plus any user-managed push or upstream rewrite.
-- Usual chain for normal Calcite work:
-  `$calcite-bug-root-cause -> implicit branch start if needed -> implementation -> $calcite-pr-ready -> explicit branch finalize -> explicit commit -> $calcite-knowledge-capture`
-- Use `$calcite-pr-ready` only when the patch is already understood or implemented.
-- `$calcite-pr-ready` may report that the patch is not fully handoff-ready yet if extra
-  temporary worktrees or side branches still need finalization.
-- For larger patches, `$calcite-pr-ready` should review touched behavior surfaces in
-  surface buckets instead of line-by-line inventory.
-- New or edited comments should follow nearby Calcite style and explain
-  invariants, rationale, or non-obvious behavior instead of restating code.
 - Use `.agents/PLANS.md` only for active or recently handed-off multi-step
-  work; after durable outcomes are promoted to `knowledge/`, quarantined in
-  `candidates/`, or discarded, retire the finished ExecPlan.
-- Before calling a non-trivial upstream patch ready for handoff, end with
-  `./gradlew clean build` unless the user explicitly scoped validation
-  differently.
-- Before local handoff on normal Calcite work, aim for `git status` clean on
-  one surviving branch, with temporary exploratory worktrees or side branches
-  removed unless intentionally preserved.
-- Auto-branch start should happen only when implementation is actually about to
-  begin from `config/codex`, not during pure analysis or workflow maintenance.
-- `calcite-commit` is local-only. Final upstream push and any later rewrite to
-  `[CALCITE-####] <summary>` stay user-controlled.
-- Use `$calcite-knowledge-capture` only for lessons worth keeping beyond the immediate
-  patch.
-
-## Maintenance
-
-- `docs/ai/MAINTENANCE.md` owns maintenance policy and cadence.
-- `docs/ai/USAGE.md` stays the concise quick-reference and common-flow layer.
-- Use `$calcite-workflow-help` for a short summary of the current setup.
-- Standard skill-authoring flow:
-  `$skill-creator -> $calcite-workflow-sync -> optional $calcite-workflow-routing-audit`.
-- Use `$calcite-workflow-sync` after adding, removing, renaming, or
-  materially changing a skill or workflow-level doc.
-- Use `$calcite-workflow-routing-audit` when the primary deliverable is prompt
-  coverage, a routing matrix, or boundary tightening.
-- Use `$calcite-workflow-cleanup` when the primary deliverable is low-risk
-  workflow hygiene once the cleanup target is already clear.
-- Use `$calcite-workflow-retrospective` when the same workflow mistake or
-  correction has happened more than once.
+  work.
+- For maintenance policy, cleanup triggers, and sync rules, see
+  `docs/ai/MAINTENANCE.md`.

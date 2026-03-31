@@ -5,8 +5,16 @@
 - Any workflow-layer change must leave the workflow layer internally
   consistent.
 - `SKILL.md` is canonical for skill behavior.
+- Repo-local skills keep `SKILL.md` as the only checked-in skill contract.
+- Do not keep agent-specific sidecars such as `agents/openai.yaml` in this
+  repo unless the repo explicitly decides to restore them.
+- Keep cross-branch or uncommittable personal harness state outside the repo,
+  for example personal skills under `~/.agents/skills/` and durable issue or
+  PR briefs under `~/.codex/memories/`.
 - `docs/ai/USAGE.md` is the concise human quick-reference.
 - `docs/ai/MAINTENANCE.md` is the maintenance policy.
+- Keep durable routing, guardrails, and implicit-use rules in `SKILL.md`, not
+  in agent-specific UI metadata.
 - These maintenance skills are explicit-only meta skills. Invoke them by name
   when maintaining the workflow layer.
 - Inspect current repo files before summarizing or editing anything.
@@ -41,6 +49,9 @@
 
 - To add or materially change a repo skill, use
   `$skill-creator -> $calcite-workflow-sync`.
+- If scaffolding tools generate an agent-specific sidecar, delete it and keep
+  the durable skill contract in `SKILL.md` before running
+  `$calcite-workflow-sync`.
 - If the skill change also changed boundaries or descriptions materially, then
   run `$calcite-workflow-routing-audit`.
 - For workflow-layer changes, stay on `config/codex`.

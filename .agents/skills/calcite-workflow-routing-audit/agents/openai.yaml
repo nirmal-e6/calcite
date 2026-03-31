@@ -1,7 +1,0 @@
-interface:
-  display_name: "Calcite Workflow Routing Audit"
-  short_description: "Audit Calcite skill routing quality"
-  default_prompt: "Use $calcite-workflow-routing-audit to audit this repo's skill boundaries, routing prompts, and quick-reference docs."
-
-policy:
-  allow_implicit_invocation: false

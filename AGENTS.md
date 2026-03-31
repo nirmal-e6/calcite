@@ -32,6 +32,14 @@ Keep this file short and operational. Keep reusable procedure details in
 - Prefer explicit user invocation with `$skill-name`. Use
   `SKILL.md` as canonical skill behavior, `docs/ai/USAGE.md` as the concise
   human quick-reference, and `docs/ai/MAINTENANCE.md` as maintenance policy.
+- Repo-local skills keep `SKILL.md` as the only checked-in skill contract. Put
+  durable routing, guardrails, and implicit-use rules there; do not keep
+  agent-specific sidecars such as `agents/openai.yaml` unless this repo
+  explicitly chooses to restore them.
+- Keep cross-branch or uncommittable personal workflow state outside this repo,
+  for example personal skills under `~/.agents/skills/` and durable issue or
+  PR briefs under `~/.codex/memories/`. Normal fix branches should not depend
+  on branch-local workflow files that cannot be carried upstream.
 - Codex may use `$calcite-branch` implicitly to start non-workflow local work
   branches from `main` when implementation begins from `config/codex`. Keep
   workflow-layer edits on `config/codex`. Finalize back to one clean surviving

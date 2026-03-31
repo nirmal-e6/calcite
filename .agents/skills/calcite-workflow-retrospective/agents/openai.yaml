@@ -1,7 +1,0 @@
-interface:
-  display_name: "Calcite Workflow Retrospective"
-  short_description: "Retrospect workflow friction and fixes"
-  default_prompt: "Use $calcite-workflow-retrospective to analyze repeated workflow friction, find the smallest durable fix, and report targeted workflow updates."
-
-policy:
-  allow_implicit_invocation: false

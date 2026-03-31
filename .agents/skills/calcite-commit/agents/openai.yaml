@@ -1,7 +1,0 @@
-interface:
-  display_name: "Calcite Commit"
-  short_description: "stage and create local commits under repo workflow rules"
-  default_prompt: "Use $calcite-commit to stage and create a local commit on the current branch with the right local subject style; do not push or rewrite the final upstream commit for me."
-
-policy:
-  allow_implicit_invocation: false
