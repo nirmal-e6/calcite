@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.test;
 
+import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.config.CalciteConnectionConfigImpl;
 import org.apache.calcite.config.CalciteConnectionProperty;
 import org.apache.calcite.config.NullCollation;
@@ -5966,6 +5967,31 @@ class SqlToRelConverterTest extends SqlToRelTestBase {
     sql(sql)
         .withConformance(SqlConformanceEnum.LENIENT)
         .ok();
+  }
+
+  @Test void testCaseAliasInGroupByWithTypeCoercion() {
+    final String sql = "WITH parameters as ("
+        + "select 'monthly' as time_period),"
+        + "temptabeel as (SELECT DISTINCT "
+        + "CASE WHEN (SELECT time_period from parameters) = 'weekly' then "
+        + "concat('WEEK', '_', e.ename)"
+        + " WHEN (SELECT time_period from parameters) = 'yearly' then "
+        + "e.sal "
+        + "end as group_by_timeperiod "
+        + "from emp e "
+        + "group by group_by_timeperiod) "
+        + "Select * from temptabeel";
+    final RelNode rel = sql(sql)
+        .withConformance(SqlConformanceEnum.LENIENT)
+        .withFactory(f ->
+            f.withParserConfig(c -> c
+                .withQuotedCasing(Casing.UNCHANGED)
+                .withUnquotedCasing(Casing.UNCHANGED)
+                .withCaseSensitive(false))
+                .withOperatorTable(t ->
+                    SqlValidatorTest.operatorTableFor(SqlLibrary.BIG_QUERY)))
+        .toRel();
+    assertThat(rel, notNullValue());
   }
 
   /**

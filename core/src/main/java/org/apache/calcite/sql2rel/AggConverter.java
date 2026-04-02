@@ -600,7 +600,7 @@ class AggConverter implements SqlVisitor<Void> {
    * -1.
    */
   int lookupGroupExpr(SqlNode expr) {
-    return SqlUtil.indexOfDeep(groupExprs, expr, Litmus.IGNORE);
+    return SqlValidatorUtil.lookupGroupExpr(bb.getValidator(), groupExprs, expr);
   }
 
   boolean isMeasureExpr(SqlNode expr) {

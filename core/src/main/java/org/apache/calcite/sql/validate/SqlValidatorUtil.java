@@ -1048,6 +1048,38 @@ public class SqlValidatorUtil {
     return groupAnalyzer.groupExprs.size() - 1;
   }
 
+  /** Returns whether two expressions should be treated as the same grouped
+   * expression, considering existing validator rewrite provenance. */
+  public static boolean sameGroupExpr(SqlValidator validator, SqlNode left,
+      SqlNode right) {
+    if (left.equalsDeep(right, Litmus.IGNORE)) {
+      return true;
+    }
+    if (!(validator instanceof SqlValidatorImpl)) {
+      return false;
+    }
+    final SqlValidatorImpl validatorImpl = (SqlValidatorImpl) validator;
+    final SqlNode leftOriginal = validatorImpl.getOriginal(left);
+    if (leftOriginal.equalsDeep(right, Litmus.IGNORE)) {
+      return true;
+    }
+    final SqlNode rightOriginal = validatorImpl.getOriginal(right);
+    return left.equalsDeep(rightOriginal, Litmus.IGNORE)
+        || leftOriginal.equalsDeep(rightOriginal, Litmus.IGNORE);
+  }
+
+  /** Returns the index of an expression within a grouped-expression list,
+   * considering existing validator rewrite provenance. */
+  public static int lookupGroupExpr(SqlValidator validator,
+      List<? extends SqlNode> groupExprs, SqlNode expr) {
+    for (Ord<? extends SqlNode> groupExpr : Ord.zip(groupExprs)) {
+      if (sameGroupExpr(validator, groupExpr.e, expr)) {
+        return groupExpr.i;
+      }
+    }
+    return -1;
+  }
+
   /** Computes the rollup of bit sets.
    *
    * <p>For example, <code>rollup({0}, {1})</code>

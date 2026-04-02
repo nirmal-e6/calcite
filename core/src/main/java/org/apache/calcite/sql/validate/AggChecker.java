@@ -84,7 +84,7 @@ class AggChecker extends SqlBasicVisitor<Void> {
 
   boolean isGroupExpr(SqlNode e) {
     for (SqlNode expr : Iterables.concat(extraExprs, measureExprs, groupExprs)) {
-      if (expr.equalsDeep(e, Litmus.IGNORE)) {
+      if (SqlValidatorUtil.sameGroupExpr(validator, expr, e)) {
         return true;
       }
     }

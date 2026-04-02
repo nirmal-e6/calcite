@@ -6983,6 +6983,39 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         .withConformance(lenient).ok();
   }
 
+  @Test void testAliasInGroupByWithCaseTypeCoercion() {
+    final String sql = "select case when deptno = 10 then ename "
+        + "when deptno = 20 then sal end as x "
+        + "from emp group by x";
+    fixture()
+        .withConformance(SqlConformanceEnum.LENIENT)
+        .withOperatorTable(operatorTableFor(SqlLibrary.BIG_QUERY))
+        .withSql(sql)
+        .ok();
+  }
+
+  @Test void testAliasInGroupByWithCaseTypeCoercionAndSubqueries() {
+    final String sql = "WITH parameters as ("
+        + "select 'monthly' as time_period),"
+        + "temptabeel as (SELECT DISTINCT "
+        + "CASE WHEN (SELECT time_period from parameters) = 'weekly' then "
+        + "concat('WEEK', '_', e.ename)"
+        + " WHEN (SELECT time_period from parameters) = 'yearly' then "
+        + "e.sal "
+        + "end as group_by_timeperiod "
+        + "from emp e "
+        + "group by group_by_timeperiod) "
+        + "Select * from temptabeel";
+    fixture()
+        .withConformance(SqlConformanceEnum.LENIENT)
+        .withQuotedCasing(Casing.UNCHANGED)
+        .withUnquotedCasing(Casing.UNCHANGED)
+        .withCaseSensitive(false)
+        .withOperatorTable(operatorTableFor(SqlLibrary.BIG_QUERY))
+        .withSql(sql)
+        .ok();
+  }
+
   /**
    * Tests validation of alias in function within GROUP BY.
    *
