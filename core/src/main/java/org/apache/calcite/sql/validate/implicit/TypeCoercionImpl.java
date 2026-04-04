@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.sql.validate.implicit;
 
+import org.apache.calcite.linq4j.Ord;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeField;
@@ -39,8 +40,10 @@ import org.apache.calcite.sql.type.SqlOperandMetadata;
 import org.apache.calcite.sql.type.SqlTypeFamily;
 import org.apache.calcite.sql.type.SqlTypeMappingRule;
 import org.apache.calcite.sql.type.SqlTypeUtil;
+import org.apache.calcite.sql.validate.SelectScope;
 import org.apache.calcite.sql.validate.SqlValidator;
 import org.apache.calcite.sql.validate.SqlValidatorScope;
+import org.apache.calcite.sql.validate.SqlValidatorUtil;
 import org.apache.calcite.util.Util;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -60,6 +63,14 @@ import static java.util.Objects.requireNonNull;
  * Default implementation of Calcite implicit type cast.
  */
 public class TypeCoercionImpl extends AbstractTypeCoercion {
+
+  /** Controls how a rewritten query updates its enclosing validated row type. */
+  private enum ParentTypeUpdatePolicy {
+    /** Update the parent query from the requested coercion target. */
+    TARGET_TYPE,
+    /** Update the parent query from the rewritten query result type. */
+    QUERY_RESULT_TYPE
+  }
 
   public TypeCoercionImpl(RelDataTypeFactory typeFactory, SqlValidator validator) {
     super(typeFactory, validator);
@@ -92,6 +103,16 @@ public class TypeCoercionImpl extends AbstractTypeCoercion {
       SqlNode query,
       int columnIndex,
       RelDataType targetType) {
+    return rowTypeCoercion(
+        scope, query, columnIndex, targetType, ParentTypeUpdatePolicy.TARGET_TYPE);
+  }
+
+  private boolean rowTypeCoercion(
+      @Nullable SqlValidatorScope scope,
+      SqlNode query,
+      int columnIndex,
+      RelDataType targetType,
+      ParentTypeUpdatePolicy parentTypeUpdatePolicy) {
     final SqlKind kind = query.getKind();
     switch (kind) {
     case SELECT:
@@ -100,7 +121,8 @@ public class TypeCoercionImpl extends AbstractTypeCoercion {
       if (!coerceColumnType(scope1, getSelectList(selectNode), columnIndex, targetType)) {
         return false;
       }
-      updateInferredColumnType(scope1, query, columnIndex, targetType);
+      updateParentQueryType(
+          scope1, query, columnIndex, targetType, parentTypeUpdatePolicy);
       return true;
     case VALUES:
       boolean coerceValues = false;
@@ -110,13 +132,28 @@ public class TypeCoercionImpl extends AbstractTypeCoercion {
         }
       }
       if (coerceValues) {
-        updateInferredColumnType(
-            requireNonNull(scope, "scope"), query, columnIndex, targetType);
+        updateParentQueryType(
+            requireNonNull(scope, "scope"),
+            query,
+            columnIndex,
+            targetType,
+            parentTypeUpdatePolicy);
       }
       return coerceValues;
     case WITH:
       SqlNode body = ((SqlWith) query).body;
-      return rowTypeCoercion(validator.getOverScope(query), body, columnIndex, targetType);
+      final boolean coercedWith =
+          rowTypeCoercion(
+              validator.getOverScope(query),
+              body,
+              columnIndex,
+              targetType,
+              parentTypeUpdatePolicy);
+      if (coercedWith
+          && parentTypeUpdatePolicy == ParentTypeUpdatePolicy.QUERY_RESULT_TYPE) {
+        updateInferredType(query, validator.getValidatedNodeType(body));
+      }
+      return coercedWith;
     case UNION:
     case INTERSECT:
     case EXCEPT:
@@ -128,17 +165,107 @@ public class TypeCoercionImpl extends AbstractTypeCoercion {
       // INSERT INTO t -- only one column is c(int).
       // SELECT 1 UNION   -- operand0 not need to be coerced.
       // SELECT 1.0  -- operand1 should be coerced.
-      boolean coerced = rowTypeCoercion(scope, operand0, columnIndex, targetType);
-      coerced = rowTypeCoercion(scope, operand1, columnIndex, targetType) || coerced;
+      boolean coerced =
+          rowTypeCoercion(
+              scope, operand0, columnIndex, targetType, parentTypeUpdatePolicy);
+      coerced =
+          rowTypeCoercion(scope, operand1, columnIndex, targetType, parentTypeUpdatePolicy)
+              || coerced;
       // Update the nested SET operator node type.
       if (coerced) {
-        updateInferredColumnType(
-            requireNonNull(scope, "scope"), query, columnIndex, targetType);
+        updateParentQueryType(
+            requireNonNull(scope, "scope"),
+            query,
+            columnIndex,
+            targetType,
+            parentTypeUpdatePolicy);
       }
       return coerced;
     default:
       return false;
     }
+  }
+
+  private void updateParentQueryType(
+      SqlValidatorScope scope,
+      SqlNode query,
+      int columnIndex,
+      RelDataType targetType,
+      ParentTypeUpdatePolicy parentTypeUpdatePolicy) {
+    switch (parentTypeUpdatePolicy) {
+    case TARGET_TYPE:
+      updateInferredColumnType(scope, query, columnIndex, targetType);
+      return;
+    case QUERY_RESULT_TYPE:
+      updateQueryResultType(scope, query, columnIndex, targetType);
+      return;
+    default:
+      throw Util.unexpected(parentTypeUpdatePolicy);
+    }
+  }
+
+  private void updateQueryResultType(
+      SqlValidatorScope scope,
+      SqlNode query,
+      int columnIndex,
+      RelDataType targetType) {
+    switch (query.getKind()) {
+    case SELECT:
+      final SqlSelect select = (SqlSelect) query;
+      final SqlValidatorScope selectScope = validator.getSelectScope(select);
+      final SelectScope rawSelectScope =
+          requireNonNull(validator.getRawSelectScope(select),
+              () -> "rawSelectScope for " + select);
+      final List<SqlNode> expandedSelectItems =
+          requireNonNull(rawSelectScope.getExpandedSelectList(),
+              () -> "expandedSelectList for " + rawSelectScope);
+      final RelDataType actualType =
+          syncAttributes(
+              validator.deriveType(selectScope, expandedSelectItems.get(columnIndex)),
+              targetType);
+      updateInferredColumnType(selectScope, query, columnIndex, actualType);
+      return;
+    case VALUES:
+      updateInferredType(query, deriveCurrentValuesRowType(scope, (SqlCall) query));
+      return;
+    case UNION:
+    case INTERSECT:
+    case EXCEPT:
+      updateInferredType(query, deriveCurrentSetOpRowType((SqlCall) query));
+      return;
+    default:
+      throw Util.unexpected(query.getKind());
+    }
+  }
+
+  private RelDataType deriveCurrentValuesRowType(
+      SqlValidatorScope scope,
+      SqlCall values) {
+    final List<RelDataType> rowTypes = new ArrayList<>();
+    for (SqlNode row : values.getOperandList()) {
+      final SqlCall rowConstructor = (SqlCall) row;
+      final List<String> aliases = new ArrayList<>();
+      final List<RelDataType> types = new ArrayList<>();
+      for (Ord<SqlNode> column : Ord.zip(rowConstructor.getOperandList())) {
+        aliases.add(SqlValidatorUtil.alias(column.e, column.i));
+        types.add(validator.deriveType(scope, column.e));
+      }
+      rowTypes.add(factory.createStructType(types, aliases));
+    }
+    if (rowTypes.size() == 1) {
+      return rowTypes.get(0);
+    }
+    return requireNonNull(factory.leastRestrictive(rowTypes),
+        () -> "leastRestrictive(values) for " + values);
+  }
+
+  private RelDataType deriveCurrentSetOpRowType(SqlCall query) {
+    final List<RelDataType> operandTypes = new ArrayList<>();
+    for (SqlNode operand : query.getOperandList()) {
+      operandTypes.add(validator.getValidatedNodeType(operand));
+    }
+    return requireNonNull(factory.leastRestrictive(operandTypes),
+        () -> "leastRestrictive(setop) for " + query);
   }
 
   /**
@@ -791,7 +918,12 @@ public class TypeCoercionImpl extends AbstractTypeCoercion {
           columnIndex,
           targetType);
     default:
-      return rowTypeCoercion(sourceScope, query, columnIndex, targetType);
+      return rowTypeCoercion(
+          sourceScope,
+          query,
+          columnIndex,
+          targetType,
+          ParentTypeUpdatePolicy.QUERY_RESULT_TYPE);
     }
   }
 }
