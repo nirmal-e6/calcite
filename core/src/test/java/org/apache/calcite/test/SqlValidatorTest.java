@@ -7102,6 +7102,61 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         .withConformance(lenient).ok();
   }
 
+  /** Tests GROUP BY alias with CASE expression containing mixed types,
+   * scalar subqueries, and case-insensitive identifier resolution.
+   *
+   * <p>When a NULL literal's derived type is contaminated by type derivation
+   * of a shared CASE expression (via GROUP BY alias expansion), the CASE
+   * else branch was incorrectly left uncoerced, causing a false
+   * "not being grouped" validation error. */
+  @Test void testGroupByAliasWithScalarSubqueryInCase() {
+    final SqlConformanceEnum lenient = SqlConformanceEnum.LENIENT;
+
+    // Mixed types (VARCHAR from concat, INTEGER from sal) in CASE with
+    // GROUP BY alias, CTE scalar subquery, and case-preserving identifiers.
+    sql("WITH params as (select 'a' as x), "
+        + "t2 as (select CASE "
+        + "WHEN (SELECT x from params) = 'a' then "
+        + "concat('WEEK', '_', e.ename) "
+        + "WHEN (SELECT x from params) = 'b' then e.sal "
+        + "end as grp "
+        + "from emp e group by grp) "
+        + "select * from t2")
+        .withConformance(lenient)
+        .withFactory(t -> t
+            .withParserConfig(c -> c
+                .withUnquotedCasing(Casing.UNCHANGED)
+                .withCaseSensitive(false))
+            .withOperatorTable(opTab ->
+                SqlLibraryOperatorTableFactory.INSTANCE.getOperatorTable(
+                    SqlLibrary.STANDARD, SqlLibrary.BIG_QUERY)))
+        .ok();
+
+    // Same pattern with the original user-reported query structure.
+    final String sql = "WITH parameters as ("
+        + "select 'monthly' as time_period),"
+        + "temptabeel as (SELECT DISTINCT "
+        + "CASE WHEN (SELECT time_period from parameters) = 'weekly' then "
+        + "concat('WEEK', '_', e.ename)"
+        + " WHEN (SELECT time_period from parameters) = 'yearly' then "
+        + "e.sal "
+        + "end as group_by_timeperiod "
+        + "from emp e "
+        + "group by group_by_timeperiod) "
+        + "Select * from temptabeel";
+    sql(sql)
+        .withConformance(lenient)
+        .withFactory(t -> t
+            .withParserConfig(c -> c
+                .withUnquotedCasing(Casing.UNCHANGED)
+                .withQuotedCasing(Casing.UNCHANGED)
+                .withCaseSensitive(false))
+            .withOperatorTable(opTab ->
+                SqlLibraryOperatorTableFactory.INSTANCE.getOperatorTable(
+                    SqlLibrary.STANDARD, SqlLibrary.BIG_QUERY)))
+        .ok();
+  }
+
   /**
    * Tests validation of alias in function within GROUP BY.
    *

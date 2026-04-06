@@ -30,6 +30,7 @@ import org.apache.calcite.sql.SqlCollation;
 import org.apache.calcite.sql.SqlDynamicParam;
 import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.SqlLiteral;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlNodeList;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
@@ -270,6 +271,17 @@ public abstract class AbstractTypeCoercion implements TypeCoercion {
     // We do not have inferred type for some node, i.e. LOCALTIME.
     if (fromType == null) {
       return false;
+    }
+
+    // A NULL literal's derived type may have been set to a non-NULL type
+    // by type derivation of a different CASE expression that shares the
+    // same literal node (e.g. when GROUP BY alias expansion copies a CASE
+    // from the SELECT list). Use the literal's intrinsic NULL type to
+    // avoid incorrectly skipping coercion.
+    if (node instanceof SqlLiteral
+        && ((SqlLiteral) node).getTypeName() == SqlTypeName.NULL
+        && fromType.getSqlTypeName() != SqlTypeName.NULL) {
+      fromType = factory.createSqlType(SqlTypeName.NULL);
     }
 
     // This prevents that we cast a JavaType to normal RelDataType.
