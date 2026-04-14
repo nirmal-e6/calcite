@@ -6990,17 +6990,19 @@ static class ExtendedAliasExpander extends Expander
     return newExpr;
   }
 
-  /** Expands an expression in a GROUP BY, HAVING or QUALIFY clause. */
-  private SqlNode extendedExpand(SqlNode expr,
-      SqlValidatorScope scope, SqlSelect select, Clause clause) {
-    final Expander expander =
-        new ExtendedExpander(this, scope, select, expr, clause);
-    SqlNode newExpr = expander.go(expr);
-    if (expr != newExpr) {
-      setOriginal(newExpr, expr);
-    }
-    return newExpr;
+/**
+ * Expands an expression in a GROUP BY, HAVING or QUALIFY clause.
+ */
+private SqlNode extendedExpand(SqlNode expr, SqlValidatorScope scope, SqlSelect select, Clause clause)
+{
+  final Expander expander = new ExtendedExpander(this, scope, select, expr, clause, aggFinder);
+  SqlNode newExpr = expander.go(expr);
+  if (expr != newExpr)
+  {
+    setOriginal(newExpr, expr);
   }
+  return newExpr;
+}
 
   public SqlNode extendedExpandGroupBy(SqlNode expr,
       SqlValidatorScope scope, SqlSelect select) {
@@ -7604,110 +7606,157 @@ static class SelectExpander extends ExtendedAliasExpander
 
 }
 
-  /**
-   * Shuttle which walks over an expression in the GROUP BY/HAVING clause, replacing
-   * usages of aliases or ordinals with the underlying expression.
-   */
-  static class ExtendedExpander extends Expander {
-    final SqlSelect select;
-    final SqlNode root;
-    final Clause clause;
-    // Retain only expandable aliases or ordinals to prevent their expansion in a SQL call expr.
-    final Set<SqlNode> aliasOrdinalExpandSet = Sets.newIdentityHashSet();
+/**
+ * Shuttle which walks over an expression in the GROUP BY/HAVING clause, replacing usages of aliases or ordinals with
+ * the underlying expression.
+ */
+static class ExtendedExpander extends Expander
+{
 
-    ExtendedExpander(SqlValidatorImpl validator, SqlValidatorScope scope,
-        SqlSelect select, SqlNode root, Clause clause) {
-      super(validator, scope);
-      this.select = select;
-      this.root = root;
-      this.clause = clause;
-      if (clause == Clause.GROUP_BY) {
-        addExpandableExpressions();
+  final SqlSelect select;
+  final SqlNode root;
+  final Clause clause;
+  final AggFinder aggFinder;
+  // Retain only expandable aliases or ordinals to prevent their expansion in a SQL call expr.
+  final Set<SqlNode> aliasOrdinalExpandSet = Sets.newIdentityHashSet();
+
+  ExtendedExpander(SqlValidatorImpl validator, SqlValidatorScope scope, SqlSelect select, SqlNode root, Clause clause,
+      AggFinder aggFinder)
+  {
+    super(validator, scope);
+    this.select = select;
+    this.root = root;
+    this.clause = clause;
+    this.aggFinder = aggFinder;
+    if (clause == Clause.GROUP_BY)
+    {
+      addExpandableExpressions();
+    }
+  }
+
+  @Override
+  public @Nullable SqlNode visit(SqlIdentifier id)
+  {
+    if (!id.isSimple())
+    {
+      return super.visit(id);
+    }
+
+    final boolean replaceAliases = clause.shouldReplaceAliases(validator.config);
+    if (!replaceAliases || (clause == Clause.GROUP_BY && !aliasOrdinalExpandSet.contains(id)))
+    {
+      final SelectScope scope = validator.getRawSelectScopeNonNull(select);
+      SqlNode node = expandCommonColumn(select, id, scope, validator);
+      if (node != id)
+      {
+        return node;
+      }
+      return super.visit(id);
+    }
+
+    String name = id.getSimple();
+    SqlNode expr = null;
+    final SqlNameMatcher nameMatcher = validator.catalogReader.nameMatcher();
+    int n = 0;
+    for (SqlNode s : SqlNonNullableAccessors.getSelectList(select))
+    {
+      final @Nullable String alias = SqlValidatorUtil.alias(s);
+      if (alias != null && nameMatcher.matches(alias, name))
+      {
+        if (clause != Clause.HAVING)
+        {
+          SqlCall agg = aggFinder.findAgg(s);
+          if (agg != null)
+          {
+            continue;
+          }
+        }
+        expr = s;
+        n++;
       }
     }
 
-    @Override public @Nullable SqlNode visit(SqlIdentifier id) {
-      if (!id.isSimple()) {
+    if (n == 0)
+    {
+      return super.visit(id);
+    }
+    else if (n > 1)
+    {
+      // More than one column has this alias.
+      throw validator.newValidationError(id, RESOURCE.columnAmbiguous(name));
+    }
+    Iterable<SqlCall> allAggList = validator.aggFinder.findAll(ImmutableList.of(root));
+    for (SqlCall agg : allAggList)
+    {
+      if (clause == Clause.HAVING && containsIdentifier(agg, id))
+      {
         return super.visit(id);
       }
+    }
 
-      final boolean replaceAliases = clause.shouldReplaceAliases(validator.config);
-      if (!replaceAliases || (clause == Clause.GROUP_BY && !aliasOrdinalExpandSet.contains(id))) {
-        final SelectScope scope = validator.getRawSelectScopeNonNull(select);
-        SqlNode node = expandCommonColumn(select, id, scope, validator);
-        if (node != id) {
-          return node;
-        }
-        return super.visit(id);
+    expr = stripAs(expr);
+    if (expr instanceof SqlIdentifier)
+    {
+      SqlIdentifier sid = (SqlIdentifier) expr;
+
+      // E6data change
+      // call makeNullaryCall and add function if necessary
+      // this fixes issue in group by column expansion of CURRENT_DATE and similar functions
+      // check TestZpt#testGroupByExpansionFix
+      SqlNode sqlNode = null;
+      if (sid.isSimple())
+      {
+        sqlNode = super.visit(sid);
       }
 
-      String name = id.getSimple();
-      SqlNode expr = null;
-      final SqlNameMatcher nameMatcher =
-          validator.catalogReader.nameMatcher();
-      int n = 0;
-      for (SqlNode s : SqlNonNullableAccessors.getSelectList(select)) {
-        final @Nullable String alias = SqlValidatorUtil.alias(s);
-        if (alias != null && nameMatcher.matches(alias, name)) {
-          expr = s;
-          n++;
-        }
-      }
-
-      if (n == 0) {
-        return super.visit(id);
-      } else if (n > 1) {
-        // More than one column has this alias.
-        throw validator.newValidationError(id,
-            RESOURCE.columnAmbiguous(name));
-      }
-      Iterable<SqlCall> allAggList = validator.aggFinder.findAll(ImmutableList.of(root));
-      for (SqlCall agg : allAggList) {
-        if (clause == Clause.HAVING && containsIdentifier(agg, id)) {
-          return super.visit(id);
-        }
-      }
-
-      expr = stripAs(expr);
-      if (expr instanceof SqlIdentifier) {
-        SqlIdentifier sid = (SqlIdentifier) expr;
+      if (sqlNode == null || sqlNode.equalsDeep(sid, Litmus.IGNORE))
+      {
         final SqlIdentifier fqId = getScope().fullyQualify(sid).identifier;
         expr = expandDynamicStar(sid, fqId);
       }
-
-      return expr;
+      else
+      {
+        expr = sqlNode;
+      }
     }
 
-    @Override public @Nullable SqlNode visit(SqlLiteral literal) {
-      if (clause != Clause.GROUP_BY
-          || !validator.config().conformance().isGroupByOrdinal()) {
-        return super.visit(literal);
-      }
-      boolean isOrdinalLiteral = aliasOrdinalExpandSet.contains(literal);
-      if (isOrdinalLiteral) {
-        switch (literal.getTypeName()) {
-        case DECIMAL:
-        case DOUBLE:
-          final int intValue = literal.intValue(false);
-          if (intValue >= 0) {
-            if (intValue < 1 || intValue > SqlNonNullableAccessors.getSelectList(select).size()) {
-              throw validator.newValidationError(literal,
-                  RESOURCE.orderByOrdinalOutOfRange());
-            }
+    return expr;
+  }
 
-            // SQL ordinals are 1-based, but Sort's are 0-based
-            int ordinal = intValue - 1;
-            return stripAs(SqlNonNullableAccessors.getSelectList(select)
-                .get(ordinal));
-          }
-          break;
-        default:
-          break;
-        }
-      }
-
+  @Override
+  public @Nullable SqlNode visit(SqlLiteral literal)
+  {
+    if (clause != Clause.GROUP_BY || !validator.config().conformance().isGroupByOrdinal())
+    {
       return super.visit(literal);
     }
+    boolean isOrdinalLiteral = aliasOrdinalExpandSet.contains(literal);
+    if (isOrdinalLiteral)
+    {
+      switch (literal.getTypeName())
+      {
+      case DECIMAL:
+      case DOUBLE:
+        final int intValue = literal.intValue(false);
+        if (intValue >= 0)
+        {
+          if (intValue < 1 || intValue > SqlNonNullableAccessors.getSelectList(select).size())
+          {
+            throw validator.newValidationError(literal, RESOURCE.orderByOrdinalOutOfRange());
+          }
+
+          // SQL ordinals are 1-based, but Sort's are 0-based
+          int ordinal = intValue - 1;
+          return stripAs(SqlNonNullableAccessors.getSelectList(select).get(ordinal));
+        }
+        break;
+      default:
+        break;
+      }
+    }
+
+    return super.visit(literal);
+  }
 
     /**
      * Add all possible expandable 'group by' expression to set, which is
