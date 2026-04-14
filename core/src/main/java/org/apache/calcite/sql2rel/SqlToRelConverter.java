@@ -1984,45 +1984,46 @@ public class SqlToRelConverter {
     return convertLiteral((SqlLiteral) sqlNode, bb, type);
   }
 
-  private RexLiteral convertLiteral(SqlLiteral sqlLiteral,
-      Blackboard bb, RelDataType type) {
-    RexNode literalExpr = exprConverter.convertLiteral(bb, sqlLiteral);
+private RexLiteral convertLiteral(SqlLiteral sqlLiteral,
+    Blackboard bb, RelDataType type) {
+  RexNode literalExpr = exprConverter.convertLiteral(bb, sqlLiteral);
 
-    if (!(literalExpr instanceof RexLiteral)) {
-      assert literalExpr.isA(SqlKind.CAST);
-      RexNode child = ((RexCall) literalExpr).getOperands().get(0);
-      assert RexLiteral.isNullLiteral(child);
+  if (!(literalExpr instanceof RexLiteral)) {
+    assert literalExpr.isA(SqlKind.CAST);
+    RexNode child = ((RexCall) literalExpr).getOperands().get(0);
+    assert RexLiteral.isNullLiteral(child);
 
-      // NOTE jvs 22-Nov-2006:  we preserve type info
-      // in LogicalValues digest, so it's OK to lose it here
-      return (RexLiteral) child;
-    }
-
-    RexLiteral literal = (RexLiteral) literalExpr;
-    Comparable<?> value = literal.getValue();
-
-    if (value != null && isExactNumeric(type) && hasScale(type)) {
-      BigDecimal roundedValue =
-          NumberUtil.rescaleBigDecimal(
-              requireNonNull(literal.getValueAs(BigDecimal.class)),
-              type.getScale());
-      return rexBuilder.makeExactLiteral(
-          roundedValue,
-          type);
-    }
-
-    if ((value instanceof NlsString)
-        && (type.getSqlTypeName() == SqlTypeName.CHAR)) {
-      // pad fixed character type
-      NlsString unpadded = (NlsString) value;
-      return rexBuilder.makeCharLiteral(
-          new NlsString(
-              Spaces.padRight(unpadded.getValue(), type.getPrecision()),
-              unpadded.getCharsetName(),
-              unpadded.getCollation()));
-    }
-    return literal;
+    // NOTE jvs 22-Nov-2006:  we preserve type info
+    // in LogicalValues digest, so it's OK to lose it here
+    return (RexLiteral) child;
   }
+
+  RexLiteral literal = (RexLiteral) literalExpr;
+  Comparable<?> value = literal.getValue();
+
+  if (value != null && isExactNumeric(type) && hasScale(type)) {
+    BigDecimal roundedValue =
+        NumberUtil.rescaleBigDecimal(
+            requireNonNull(literal.getValueAs(BigDecimal.class)),
+            type.getScale());
+    return rexBuilder.makeExactLiteral(
+        roundedValue,
+        type);
+  }
+
+  if ((value instanceof NlsString)
+      && (type.getSqlTypeName() == SqlTypeName.CHAR)) {
+    // E6data change
+    // pad fixed character type
+    NlsString unpadded = (NlsString) value;
+    return rexBuilder.makeCharLiteral(
+        new NlsString(
+            unpadded.getValue(),
+            unpadded.getCharsetName(),
+            unpadded.getCollation()));
+  }
+  return literal;
+}
 
   private static boolean isRowConstructor(SqlNode node) {
     if (!(node.getKind() == SqlKind.ROW)) {
