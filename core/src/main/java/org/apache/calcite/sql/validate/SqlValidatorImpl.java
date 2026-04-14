@@ -3835,10 +3835,19 @@ private void addSqlNodeToGroupByList(SqlNode sqlNode, List<SqlNode> newGroupByLi
       checkArgument(join.getCondition() == null);
       break;
     case ON:
-      final SqlNode condition = expand(getCondition(join), joinScope);
-      join.setOperand(5, condition);
-      validateWhereOrOn(joinScope, condition, "ON");
-      checkRollUp(null, join, condition, joinScope, "ON");
+      final SqlNode condition = getCondition(join);
+      SqlNode expandedCondition;
+      if (scope.getNode() instanceof SqlSelect)
+      {
+        expandedCondition = expandWithAlias(condition, joinScope, (SqlSelect) scope.getNode());
+      }
+      else
+      {
+        expandedCondition = expand(condition, joinScope);
+      }
+      join.setOperand(5, expandedCondition);
+      validateWhereOrOn(joinScope, expandedCondition, "ON");
+      checkRollUp(null, join, expandedCondition, joinScope, "ON");
       break;
     case USING:
       @SuppressWarnings({"rawtypes", "unchecked"}) List<SqlIdentifier> list =
@@ -5138,17 +5147,99 @@ private void addSqlNodeToGroupByList(SqlNode sqlNode, List<SqlNode> newGroupByLi
     }
   }
 
-  protected void validateWhereClause(SqlSelect select) {
-    // validate WHERE clause
-    final SqlNode where = select.getWhere();
-    if (where == null) {
-      return;
-    }
-    final SqlValidatorScope whereScope = getWhereScope(select);
-    final SqlNode expandedWhere = expand(where, whereScope);
-    select.setWhere(expandedWhere);
-    validateWhereOrOn(whereScope, expandedWhere, "WHERE");
+protected void validateWhereClause(SqlSelect select)
+{
+  // validate WHERE clause
+  final SqlNode where = select.getWhere();
+  if (where == null)
+  {
+    return;
   }
+  final SqlValidatorScope whereScope = getWhereScope(select);
+  final SqlNode expandedWhere = expandWithAlias(where, whereScope, select);
+  select.setWhere(expandedWhere);
+  validateWhereOrOn(whereScope, expandedWhere, "WHERE");
+}
+
+public SqlNode expandWithAlias(SqlNode expr, SqlValidatorScope scope, SqlSelect select)
+{
+  final Expander expander = new ExtendedAliasExpander(this, scope, select);
+  SqlNode newExpr = expr.accept(expander);
+  assert newExpr != null;
+  if (!expr.equalsDeep(newExpr, Litmus.IGNORE))
+  {
+    setOriginal(newExpr, expr);
+  }
+  return newExpr;
+}
+
+/**
+ * Added by E6data Shuttle which walks over an expression replacing usage of alias with underlying expression.
+ */
+static class ExtendedAliasExpander extends Expander
+{
+
+  SqlSelect select;
+
+  ExtendedAliasExpander(SqlValidatorImpl validator, SqlValidatorScope scope, SqlSelect select)
+  {
+    super(validator, scope);
+    this.select = select;
+  }
+
+  @Override
+  public SqlNode visit(SqlIdentifier id)
+  {
+    if (id.isSimple())
+    {
+      try
+      {
+        SqlNode sqlNode = super.visit(id);
+        return sqlNode;
+      }
+      catch (Exception e)
+      {
+        String name = id.getSimple();
+        SqlNode expr = null;
+        final SqlNameMatcher nameMatcher = validator.catalogReader.nameMatcher();
+        int n = 0;
+        for (SqlNode s : select.getSelectList())
+        {
+          final String alias = SqlValidatorUtil.alias(s);
+          if (alias != null && nameMatcher.matches(alias, name))
+          {
+            expr = s;
+            n++;
+          }
+        }
+        if (n == 0)
+        {
+          return super.visit(id);
+        }
+        else if (n > 1)
+        {
+          // More than one column has this alias.
+          throw validator.newValidationError(id, RESOURCE.columnAmbiguous(name));
+        }
+        expr = stripAs(expr);
+        if (expr instanceof SqlIdentifier)
+        {
+          if (((SqlIdentifier) expr).names.equals(id.names))
+          {
+            // Not an alias , don't want to update parser position
+            return super.visit(id);
+          }
+          expr = getScope().fullyQualify((SqlIdentifier) expr).identifier;
+        }
+        //                validator.setOriginal(expr, id);
+        final Expander expander = new ExtendedAliasExpander(validator, getScope(), select);
+        return expr.accept(expander);
+      }
+    }
+    return super.visit(id);
+  }
+
+}
 
   protected void validateWhereOrOn(
       SqlValidatorScope scope,
@@ -7482,30 +7573,36 @@ private void addSqlNodeToGroupByList(SqlNode sqlNode, List<SqlNode> newGroupByLi
     }
   }
 
-  /**
-   * Converts an expression into canonical form by fully-qualifying any
-   * identifiers. For common columns in USING, it will be converted to
-   * COALESCE(A.col, B.col) AS col.
-   */
-  static class SelectExpander extends Expander {
-    final SqlSelect select;
+/**
+ * Converts an expression into canonical form by fully-qualifying any identifiers. For common columns in USING, it will
+ * be converted to COALESCE(A.col, B.col) AS col.
+ */
+static class SelectExpander extends ExtendedAliasExpander
+{
 
-    SelectExpander(SqlValidatorImpl validator, SelectScope scope,
-        SqlSelect select) {
-      super(validator, scope);
-      this.select = select;
+  final SqlSelect select;
+
+  SelectExpander(SqlValidatorImpl validator, SelectScope scope, SqlSelect select)
+  {
+    super(validator, scope, select);
+    this.select = select;
+  }
+
+  @Override
+  public @Nullable SqlNode visit(SqlIdentifier id)
+  {
+    final SqlNode node = expandCommonColumn(select, id, (SelectScope) getScope(), validator);
+    if (node != id)
+    {
+      return node;
     }
-
-    @Override public @Nullable SqlNode visit(SqlIdentifier id) {
-      final SqlNode node =
-          expandCommonColumn(select, id, (SelectScope) getScope(), validator);
-      if (node != id) {
-        return node;
-      } else {
-        return super.visit(id);
-      }
+    else
+    {
+      return super.visit(id);
     }
   }
+
+}
 
   /**
    * Shuttle which walks over an expression in the GROUP BY/HAVING clause, replacing
