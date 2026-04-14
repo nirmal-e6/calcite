@@ -2896,45 +2896,29 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     switch (node.getKind()) {
     case SELECT:
       final SqlSelect select = (SqlSelect) node;
-      final SelectNamespace selectNs =
-          createSelectNamespace(select, enclosingNode);
+      final SelectNamespace selectNs = createSelectNamespace(select, enclosingNode);
       registerNamespace(usingScope, alias, selectNs, forceNullable);
-      final SqlValidatorScope windowParentScope =
-          first(usingScope, parentScope);
-      SelectScope selectScope =
-          new SelectScope(parentScope, windowParentScope, select);
+      final SqlValidatorScope windowParentScope = first(usingScope, parentScope);
+      SelectScope selectScope = new SelectScope(parentScope, windowParentScope, select);
       scopes.put(select, selectScope);
 
       // Start by registering the WHERE clause
       clauseScopes.put(IdPair.of(select, Clause.WHERE), selectScope);
-      registerOperandSubQueries(
-          selectScope,
-          select,
-          SqlSelect.WHERE_OPERAND);
+      registerOperandSubQueries(selectScope, select, SqlSelect.WHERE_OPERAND);
 
       // Register subqueries in the QUALIFY clause
-      registerOperandSubQueries(
-          selectScope,
-          select,
-          SqlSelect.QUALIFY_OPERAND);
+      registerOperandSubQueries(selectScope, select, SqlSelect.QUALIFY_OPERAND);
 
       // Register FROM with the inherited scope 'parentScope', not
       // 'selectScope', otherwise tables in the FROM clause would be
       // able to see each other.
       final SqlNode from = select.getFrom();
-      if (from != null) {
-        final SqlNode newFrom =
-            registerFrom(
-                parentScope,
-                selectScope,
-                true,
-                from,
-                from,
-                null,
-                null,
-                false,
-                false);
-        if (newFrom != from) {
+      if (from != null)
+      {
+        final SqlNode newFrom = registerFrom(parentScope, selectScope, true, from, from, null, null, false,
+            false);
+        if (newFrom != from)
+        {
           select.setFrom(newFrom);
         }
       }
@@ -2942,43 +2926,87 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       // If this is an aggregate query, the SELECT list and HAVING
       // clause use a different scope, where you can only reference
       // columns which are in the GROUP BY clause.
-      final SqlValidatorScope selectScope2 =
-          isAggregate(select)
-              ? new AggregatingSelectScope(selectScope, select, false)
-              : selectScope;
+      final SqlValidatorScope selectScope2 = isAggregate(select) ? new AggregatingSelectScope(selectScope, select,
+          false) : selectScope;
       clauseScopes.put(IdPair.of(select, Clause.SELECT), selectScope2);
-      clauseScopes.put(IdPair.of(select, Clause.MEASURE),
-          new MeasureScope(selectScope, select));
-      if (select.getGroup() != null) {
-        GroupByScope groupByScope =
-            new GroupByScope(selectScope, select.getGroup(), select);
+      clauseScopes.put(IdPair.of(select, Clause.MEASURE), new MeasureScope(selectScope, select));
+      if (select.getGroup() != null)
+      {
+        // changes by E6Data
+        // removes agg call from group by list if any
+        // can be added by GROUP BY ALL clause
+        SqlNodeList groupByList = select.getGroup();
+        final SelectScope fromScope = (SelectScope) requireNonNull(getFromScope(select),
+            () -> "fromScope for " + select);
+        List<@Nullable String> fromScopeChildNames = fromScope.getChildNames();
+
+        List<SqlNode> newGroupByList = new ArrayList<>();
+        for (SqlNode groupByNode : groupByList)
+        {
+          if (groupByNode instanceof SqlIdentifier && ((SqlIdentifier) groupByNode).isStar())
+          {
+            final List<SqlNode> expandedSelectItems = new ArrayList<>();
+            final Set<String> aliases = new HashSet<>();
+            final PairList<String, RelDataType> fieldList = PairList.of();
+            expandStar(expandedSelectItems, aliases, fieldList, false, selectScope, groupByNode);
+
+            for (SqlNode item : expandedSelectItems)
+            {
+              addSqlNodeToGroupByList(item, newGroupByList, fromScope.getChildren(), fromScopeChildNames);
+            }
+          }
+          else
+          {
+            if (groupByNode instanceof SqlCall)
+            {
+              SqlNodeList selectList = select.getSelectList();
+              if (!selectList.contains(groupByNode))
+              {
+                for (SqlNode selectItem : selectList)
+                {
+                  if (selectItem instanceof SqlCall
+                      && ((SqlCall) selectItem).getOperator().getKind() == SqlKind.AS && ((SqlCall) selectItem).operand(0)
+                      .equalsDeep(groupByNode, Litmus.IGNORE))
+                  {
+                    SqlCall itemCall = (SqlCall) selectItem;
+                    groupByNode = selectItem;
+                    break;
+                  }
+                }
+              }
+            }
+
+            addSqlNodeToGroupByList(groupByNode, newGroupByList, fromScope.getChildren(),
+                fromScopeChildNames);
+          }
+        }
+        SqlNodeList sqlNodes = new SqlNodeList(newGroupByList, groupByList.getParserPosition());
+        select.setGroupBy(sqlNodes);
+
+        GroupByScope groupByScope = new GroupByScope(selectScope, select.getGroup(), select);
         clauseScopes.put(IdPair.of(select, Clause.GROUP_BY), groupByScope);
         registerSubQueries(groupByScope, select.getGroup());
       }
-      registerOperandSubQueries(
-          selectScope2,
-          select,
-          SqlSelect.HAVING_OPERAND);
-      registerSubQueries(selectScope2,
-          SqlNonNullableAccessors.getSelectList(select));
+      registerOperandSubQueries(selectScope2, select, SqlSelect.HAVING_OPERAND);
+      registerSubQueries(selectScope2, SqlNonNullableAccessors.getSelectList(select));
       final SqlNodeList orderList = select.getOrderList();
-      if (orderList != null) {
+      if (orderList != null)
+      {
         // If the query is 'SELECT DISTINCT', restrict the columns
         // available to the ORDER BY clause.
-        final SqlValidatorScope selectScope3 =
-            select.isDistinct()
-                ? new AggregatingSelectScope(selectScope, select, true)
-                : selectScope2;
-        OrderByScope orderScope =
-            new OrderByScope(selectScope3, orderList, select);
+        final SqlValidatorScope selectScope3 = select.isDistinct() ? new AggregatingSelectScope(selectScope,
+            select, true) : selectScope2;
+        OrderByScope orderScope = new OrderByScope(selectScope3, orderList, select);
         clauseScopes.put(IdPair.of(select, Clause.ORDER), orderScope);
         registerSubQueries(orderScope, orderList);
 
-        if (!isAggregate(select)) {
+        if (!isAggregate(select))
+        {
           // Since this is not an aggregate query,
           // there cannot be any aggregates in the ORDER BY clause.
           SqlNode agg = aggFinder.findAgg(orderList);
-          if (agg != null) {
+          if (agg != null)
+          {
             throw newValidationError(agg, RESOURCE.aggregateIllegalInOrderBy());
           }
         }
@@ -3219,6 +3247,74 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       throw Util.unexpected(node.getKind());
     }
   }
+
+private void addSqlNodeToGroupByList(SqlNode sqlNode, List<SqlNode> newGroupByList,
+    List<SqlValidatorNamespace> fromNamespaceList, List<String> fromScopeChildNames)
+{
+  if (sqlNode != null && aggOrOverOrGroupFinder.findAgg(sqlNode) == null)
+  {
+    if (sqlNode.getKind().equals(SqlKind.AS))
+    {
+      newGroupByList.add(((SqlCall) sqlNode).operand(1));
+      return;
+    }
+
+    if (sqlNode instanceof SqlIdentifier && ((SqlIdentifier) sqlNode).isSimple()
+        && fromNamespaceList.size() > 1)
+    {
+      SqlIdentifier node = (SqlIdentifier) sqlNode;
+      try
+      {
+        int fromScopeChildIndex = 0;
+        int newGroupByListOriginalSize = newGroupByList.size();
+        for (SqlValidatorNamespace fromNamespace : fromNamespaceList)
+        {
+          // validation of fromNamespace is not complete
+          // abstractNamespace.isRowTypeUnknown() is added by E6Data to check if rowType is null or not
+          if (fromNamespace instanceof AbstractNamespace
+              && ((AbstractNamespace) fromNamespace).isRowTypeUnknown())
+          {
+            AbstractNamespace abstractNamespace = (AbstractNamespace) fromNamespace;
+            continue;
+          }
+
+          AbstractNamespace abstractNamespace = (AbstractNamespace) fromNamespace;
+          List<String> fieldNames = abstractNamespace.getRowType().getFieldNames();
+          if (fieldNames.contains(node.getSimple()) && !newGroupByList.contains(node))
+          {
+            List<String> strings = new ArrayList<>();
+            strings.add(fromScopeChildNames.get(fromScopeChildIndex));
+            strings.add(node.getSimple());
+            newGroupByList.add(
+                new SqlIdentifier(strings,
+                    node.getParserPosition()));
+            break;
+          }
+          else if (!abstractNamespace.isRowTypeUnknown() && !newGroupByList.contains(sqlNode))
+          {
+            newGroupByList.add(sqlNode);
+          }
+          fromScopeChildIndex++;
+        }
+
+        if (newGroupByList.size() == newGroupByListOriginalSize)
+        {
+          newGroupByList.add(sqlNode);
+        }
+      }
+      catch (Throwable throwable)
+      {
+        TRACER.warn("Failed to infer group by node from multiple namespace : {}", throwable.getMessage(), throwable);
+        TRACER.info("using simple alias");
+        newGroupByList.add(sqlNode);
+      }
+    }
+    else
+    {
+      newGroupByList.add(sqlNode);
+    }
+  }
+}
 
   private void registerSetop(
       SqlValidatorScope parentScope,

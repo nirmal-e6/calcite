@@ -236,4 +236,11 @@ abstract class AbstractNamespace implements SqlValidatorNamespace {
         .add(SqlValidatorUtil.alias(requireNonNull(unnest, "unnest"), 0), type)
         .build();
   }
+
+// added by E6Data
+// used at SqlValidator to early check if row type is null or not
+public boolean isRowTypeUnknown()
+{
+  return rowType == null;
+}
 }
