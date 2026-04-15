@@ -2245,114 +2245,125 @@ private RexLiteral convertLiteral(SqlLiteral sqlLiteral,
     return rexBuilder.makeLambdaCall(expr, parameters);
   }
 
-  private RexNode convertOver(Blackboard bb, SqlNode node) {
-    SqlCall call = (SqlCall) node;
-    bb.getValidator().deriveType(bb.scope, call);
-    SqlCall aggCall = call.operand(0);
-    boolean ignoreNulls = false;
-    switch (aggCall.getKind()) {
-    case IGNORE_NULLS:
-      ignoreNulls = true;
-      // fall through
-    case RESPECT_NULLS:
-      aggCall = aggCall.operand(0);
-      break;
-    default:
-      break;
+private RexNode convertOver(Blackboard bb, SqlNode node) {
+  SqlCall call = (SqlCall) node;
+  bb.getValidator().deriveType(bb.scope, call);
+  SqlCall aggCall = call.operand(0);
+  boolean ignoreNulls = false;
+  SqlNodeList withinGroupOrderList = null;
+  switch (aggCall.getKind()) {
+  case IGNORE_NULLS:
+    ignoreNulls = true;
+    // fall through
+  case RESPECT_NULLS:
+    aggCall = aggCall.operand(0);
+    break;
+  // e6data change - handle WITHIN_GROUP
+  case WITHIN_GROUP:
+    withinGroupOrderList = (SqlNodeList) aggCall.operand(1);
+    aggCall = aggCall.operand(0);
+    break;
+  default:
+    break;
+  }
+
+  SqlNode windowOrRef = call.operand(1);
+  final SqlWindow window =
+      validator().resolveWindow(windowOrRef, bb.scope);
+
+  SqlNode sqlLowerBound = window.getLowerBound();
+  SqlNode sqlUpperBound = window.getUpperBound();
+  boolean rows = window.isRows();
+  SqlNodeList orderList = window.getOrderList();
+
+  if (!aggCall.getOperator().allowsFraming()) {
+    // If the operator does not allow framing, bracketing is implicitly
+    // everything up to the current row.
+    sqlLowerBound = SqlWindow.createUnboundedPreceding(SqlParserPos.ZERO);
+    sqlUpperBound = SqlWindow.createCurrentRow(SqlParserPos.ZERO);
+    if (aggCall.getKind() == SqlKind.ROW_NUMBER) {
+      // ROW_NUMBER() expects specific kind of framing.
+      rows = true;
     }
-
-    SqlNode windowOrRef = call.operand(1);
-    final SqlWindow window =
-        validator().resolveWindow(windowOrRef, bb.scope);
-
-    SqlNode sqlLowerBound = window.getLowerBound();
-    SqlNode sqlUpperBound = window.getUpperBound();
-    boolean rows = window.isRows();
-    SqlNodeList orderList = window.getOrderList();
-
-    if (!aggCall.getOperator().allowsFraming()) {
-      // If the operator does not allow framing, bracketing is implicitly
-      // everything up to the current row.
-      sqlLowerBound = SqlWindow.createUnboundedPreceding(SqlParserPos.ZERO);
-      sqlUpperBound = SqlWindow.createCurrentRow(SqlParserPos.ZERO);
-      if (aggCall.getKind() == SqlKind.ROW_NUMBER) {
-        // ROW_NUMBER() expects specific kind of framing.
-        rows = true;
-      }
-    } else if (orderList.isEmpty() && !rows) {
-      // In RANGE without ORDER BY, all rows are equivalent, so bracketing has
-      // no effect.
-      sqlLowerBound = SqlWindow.createUnboundedPreceding(SqlParserPos.ZERO);
-      sqlUpperBound = SqlWindow.createUnboundedFollowing(SqlParserPos.ZERO);
-    } else if (sqlLowerBound == null && sqlUpperBound == null) {
-      sqlLowerBound = SqlWindow.createUnboundedPreceding(SqlParserPos.ZERO);
-      sqlUpperBound = SqlWindow.createCurrentRow(SqlParserPos.ZERO);
-    } else if (sqlUpperBound == null) {
-      sqlUpperBound = SqlWindow.createCurrentRow(SqlParserPos.ZERO);
-    } else if (sqlLowerBound == null) {
-      sqlLowerBound = SqlWindow.createCurrentRow(SqlParserPos.ZERO);
-    }
-    final SqlNodeList partitionList = window.getPartitionList();
-    final ImmutableList.Builder<RexNode> partitionKeys =
-        ImmutableList.builder();
-    for (SqlNode partition : partitionList) {
-      validator().deriveType(bb.scope, partition);
-      partitionKeys.add(bb.convertExpression(partition));
-    }
-    final RexNode lowerBound =
-        bb.convertExpression(requireNonNull(sqlLowerBound, "sqlLowerBound"));
-    final RexNode upperBound =
-        bb.convertExpression(requireNonNull(sqlUpperBound, "sqlUpperBound"));
-    if (orderList.isEmpty() && !rows) {
-      // A logical range requires an ORDER BY clause. Use the implicit
-      // ordering of this relation. There must be one, otherwise it would
-      // have failed validation.
-      orderList = bb.scope.getOrderList();
-      if (orderList == null) {
-        throw new AssertionError(
-            "Relation should have sort key for implicit ORDER BY");
-      }
-    }
-    final RexWindowExclusion exclude = RexWindowExclusion.create(window.getExclude());
-
-    final ImmutableList.Builder<RexNode> orderKeys =
-        ImmutableList.builder();
-    for (SqlNode order : orderList) {
-      orderKeys.add(
-          bb.convertSortExpression(order,
-              RelFieldCollation.Direction.ASCENDING,
-              RelFieldCollation.NullDirection.UNSPECIFIED,
-              bb::sortToRex));
-    }
-
-    try {
-      checkArgument(bb.window == null,
-          "already in window agg mode");
-      bb.window = window;
-      RexNode rexAgg = exprConverter.convertCall(bb, aggCall);
-      rexAgg =
-          rexBuilder.ensureType(call.getParserPosition(),
-              validator().getValidatedNodeType(call), rexAgg, false);
-
-      // Walk over the tree and apply 'over' to all agg functions. This is
-      // necessary because the returned expression is not necessarily a call
-      // to an agg function. For example, AVG(x) becomes SUM(x) / COUNT(x).
-
-      final SqlLiteral q = aggCall.getFunctionQuantifier();
-      final boolean isDistinct = q != null
-          && q.getValue() == SqlSelectKeyword.DISTINCT;
-
-      final RexShuttle visitor =
-          new HistogramShuttle(partitionKeys.build(), orderKeys.build(), rows,
-              RexWindowBounds.create(sqlLowerBound, lowerBound),
-              RexWindowBounds.create(sqlUpperBound, upperBound),
-              exclude,
-              window.isAllowPartial(), isDistinct, ignoreNulls);
-      return rexAgg.accept(visitor);
-    } finally {
-      bb.window = null;
+  } else if (orderList.isEmpty() && !rows) {
+    // In RANGE without ORDER BY, all rows are equivalent, so bracketing has
+    // no effect.
+    sqlLowerBound = SqlWindow.createUnboundedPreceding(SqlParserPos.ZERO);
+    sqlUpperBound = SqlWindow.createUnboundedFollowing(SqlParserPos.ZERO);
+  } else if (sqlLowerBound == null && sqlUpperBound == null) {
+    sqlLowerBound = SqlWindow.createUnboundedPreceding(SqlParserPos.ZERO);
+    sqlUpperBound = SqlWindow.createCurrentRow(SqlParserPos.ZERO);
+  } else if (sqlUpperBound == null) {
+    sqlUpperBound = SqlWindow.createCurrentRow(SqlParserPos.ZERO);
+  } else if (sqlLowerBound == null) {
+    sqlLowerBound = SqlWindow.createCurrentRow(SqlParserPos.ZERO);
+  }
+  final SqlNodeList partitionList = window.getPartitionList();
+  final ImmutableList.Builder<RexNode> partitionKeys =
+      ImmutableList.builder();
+  for (SqlNode partition : partitionList) {
+    validator().deriveType(bb.scope, partition);
+    partitionKeys.add(bb.convertExpression(partition));
+  }
+  final RexNode lowerBound =
+      bb.convertExpression(requireNonNull(sqlLowerBound, "sqlLowerBound"));
+  final RexNode upperBound =
+      bb.convertExpression(requireNonNull(sqlUpperBound, "sqlUpperBound"));
+  if (orderList.isEmpty() && !rows) {
+    // A logical range requires an ORDER BY clause. Use the implicit
+    // ordering of this relation. There must be one, otherwise it would
+    // have failed validation.
+    orderList = bb.scope.getOrderList();
+    if (orderList == null) {
+      throw new AssertionError(
+          "Relation should have sort key for implicit ORDER BY");
     }
   }
+  final RexWindowExclusion exclude = RexWindowExclusion.create(window.getExclude());
+
+  // e6data change - use WITHIN_GROUP order by
+  if (withinGroupOrderList != null && orderList.isEmpty()) {
+    orderList = withinGroupOrderList;
+  }
+
+  final ImmutableList.Builder<RexNode> orderKeys =
+      ImmutableList.builder();
+  for (SqlNode order : orderList) {
+    orderKeys.add(
+        bb.convertSortExpression(order,
+            RelFieldCollation.Direction.ASCENDING,
+            RelFieldCollation.NullDirection.UNSPECIFIED,
+            bb::sortToRex));
+  }
+
+  try {
+    checkArgument(bb.window == null,
+        "already in window agg mode");
+    bb.window = window;
+    RexNode rexAgg = exprConverter.convertCall(bb, aggCall);
+    rexAgg =
+        rexBuilder.ensureType(call.getParserPosition(),
+            validator().getValidatedNodeType(call), rexAgg, false);
+
+    // Walk over the tree and apply 'over' to all agg functions. This is
+    // necessary because the returned expression is not necessarily a call
+    // to an agg function. For example, AVG(x) becomes SUM(x) / COUNT(x).
+
+    final SqlLiteral q = aggCall.getFunctionQuantifier();
+    final boolean isDistinct = q != null
+        && q.getValue() == SqlSelectKeyword.DISTINCT;
+
+    final RexShuttle visitor =
+        new HistogramShuttle(partitionKeys.build(), orderKeys.build(), rows,
+            RexWindowBounds.create(sqlLowerBound, lowerBound),
+            RexWindowBounds.create(sqlUpperBound, upperBound),
+            exclude,
+            window.isAllowPartial(), isDistinct, ignoreNulls);
+    return rexAgg.accept(visitor);
+  } finally {
+    bb.window = null;
+  }
+}
 
   protected void convertFrom(
       Blackboard bb,

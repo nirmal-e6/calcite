@@ -75,6 +75,21 @@ public abstract class SqlOperatorBinding {
     return -1;
   }
 
+/**
+ * If the operator call occurs in an aggregate query, returns whether there are
+ * empty groups in the GROUP BY clause. For example,
+ *
+ * <pre>
+ * SELECT count(*) FROM emp GROUP BY deptno, gender;            returns false
+ * SELECT count(*) FROM emp;                                    returns true
+ * SELECT count(*) FROM emp GROUP BY ROLLUP(deptno, gender);    returns true
+ * </pre>
+ * Returns false if the query is not an aggregate query.
+ */
+public boolean hasEmptyGroup() {
+  return false;
+}
+
   /**
    * Returns whether the operator is an aggregate function with a filter.
    */
