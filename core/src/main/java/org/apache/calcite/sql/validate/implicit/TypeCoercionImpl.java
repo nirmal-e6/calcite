@@ -16,7 +16,6 @@
  */
 package org.apache.calcite.sql.validate.implicit;
 
-import org.apache.calcite.linq4j.Ord;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeField;
@@ -43,7 +42,6 @@ import org.apache.calcite.sql.type.SqlTypeUtil;
 import org.apache.calcite.sql.validate.SelectScope;
 import org.apache.calcite.sql.validate.SqlValidator;
 import org.apache.calcite.sql.validate.SqlValidatorScope;
-import org.apache.calcite.sql.validate.SqlValidatorUtil;
 import org.apache.calcite.util.Util;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -205,7 +203,7 @@ public class TypeCoercionImpl extends AbstractTypeCoercion {
   }
 
   private void updateQueryResultType(
-      SqlValidatorScope scope,
+      @Nullable SqlValidatorScope scope,
       SqlNode query,
       int columnIndex,
       RelDataType targetType) {
@@ -219,6 +217,10 @@ public class TypeCoercionImpl extends AbstractTypeCoercion {
       final List<SqlNode> expandedSelectItems =
           requireNonNull(rawSelectScope.getExpandedSelectList(),
               () -> "expandedSelectList for " + rawSelectScope);
+      // expandedSelectItems retains the pre-coercion node (coerceColumnType
+      // mutated a different list - a defensive copy in select.getSelectList()).
+      // Reconstruct the post-coercion type as syncAttributes(origType, target),
+      // which is what coerceColumnType applied to the CAST.
       final RelDataType actualType =
           syncAttributes(
               validator.deriveType(selectScope, expandedSelectItems.get(columnIndex)),
@@ -226,46 +228,32 @@ public class TypeCoercionImpl extends AbstractTypeCoercion {
       updateInferredColumnType(selectScope, query, columnIndex, actualType);
       return;
     case VALUES:
-      updateInferredType(query, deriveCurrentValuesRowType(scope, (SqlCall) query));
+      final List<RelDataType> rowColumnTypes = new ArrayList<>();
+      for (SqlNode row : ((SqlCall) query).getOperandList()) {
+        rowColumnTypes.add(
+            validator.deriveType(requireNonNull(scope, "scope"),
+                ((SqlCall) row).operand(columnIndex)));
+      }
+      updateInferredColumnType(requireNonNull(scope, "scope"), query, columnIndex,
+          requireNonNull(factory.leastRestrictive(rowColumnTypes),
+              () -> "leastRestrictive(values col) for " + query));
       return;
     case UNION:
     case INTERSECT:
     case EXCEPT:
-      updateInferredType(query, deriveCurrentSetOpRowType((SqlCall) query));
+      final List<RelDataType> branchColumnTypes = new ArrayList<>();
+      for (SqlNode operand : ((SqlCall) query).getOperandList()) {
+        branchColumnTypes.add(
+            validator.getValidatedNodeType(operand)
+                .getFieldList().get(columnIndex).getType());
+      }
+      updateInferredColumnType(requireNonNull(scope, "scope"), query, columnIndex,
+          requireNonNull(factory.leastRestrictive(branchColumnTypes),
+              () -> "leastRestrictive(setop col) for " + query));
       return;
     default:
       throw Util.unexpected(query.getKind());
     }
-  }
-
-  private RelDataType deriveCurrentValuesRowType(
-      SqlValidatorScope scope,
-      SqlCall values) {
-    final List<RelDataType> rowTypes = new ArrayList<>();
-    for (SqlNode row : values.getOperandList()) {
-      final SqlCall rowConstructor = (SqlCall) row;
-      final List<String> aliases = new ArrayList<>();
-      final List<RelDataType> types = new ArrayList<>();
-      for (Ord<SqlNode> column : Ord.zip(rowConstructor.getOperandList())) {
-        aliases.add(SqlValidatorUtil.alias(column.e, column.i));
-        types.add(validator.deriveType(scope, column.e));
-      }
-      rowTypes.add(factory.createStructType(types, aliases));
-    }
-    if (rowTypes.size() == 1) {
-      return rowTypes.get(0);
-    }
-    return requireNonNull(factory.leastRestrictive(rowTypes),
-        () -> "leastRestrictive(values) for " + values);
-  }
-
-  private RelDataType deriveCurrentSetOpRowType(SqlCall query) {
-    final List<RelDataType> operandTypes = new ArrayList<>();
-    for (SqlNode operand : query.getOperandList()) {
-      operandTypes.add(validator.getValidatedNodeType(operand));
-    }
-    return requireNonNull(factory.leastRestrictive(operandTypes),
-        () -> "leastRestrictive(setop) for " + query);
   }
 
   /**
