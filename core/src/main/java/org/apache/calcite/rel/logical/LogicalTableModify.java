@@ -24,6 +24,7 @@ import org.apache.calcite.prepare.Prepare;
 import org.apache.calcite.rel.RelInput;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelShuttle;
+import org.apache.calcite.rel.core.MergeSpec;
 import org.apache.calcite.rel.core.TableModify;
 import org.apache.calcite.rex.RexNode;
 
@@ -49,6 +50,20 @@ public final class LogicalTableModify extends TableModify {
       @Nullable List<RexNode> sourceExpressionList, boolean flattened) {
     super(cluster, traitSet, table, schema, input, operation, updateColumnList,
         sourceExpressionList, flattened);
+  }
+
+  /**
+   * Creates a LogicalTableModify.
+   *
+   * <p>Use {@link #create} unless you know what you're doing.
+   */
+  public LogicalTableModify(RelOptCluster cluster, RelTraitSet traitSet,
+      RelOptTable table, Prepare.CatalogReader schema, RelNode input,
+      Operation operation, @Nullable List<String> updateColumnList,
+      @Nullable List<RexNode> sourceExpressionList, boolean flattened,
+      @Nullable MergeSpec mergeSpec) {
+    super(cluster, traitSet, table, schema, input, operation, updateColumnList,
+        sourceExpressionList, flattened, mergeSpec);
   }
 
   /**
@@ -78,10 +93,21 @@ public final class LogicalTableModify extends TableModify {
       Prepare.CatalogReader schema, RelNode input,
       Operation operation, @Nullable List<String> updateColumnList,
       @Nullable List<RexNode> sourceExpressionList, boolean flattened) {
+    return create(table, schema, input, operation, updateColumnList,
+        sourceExpressionList, flattened, null);
+  }
+
+  /** Creates a LogicalTableModify. */
+  public static LogicalTableModify create(RelOptTable table,
+      Prepare.CatalogReader schema, RelNode input,
+      Operation operation, @Nullable List<String> updateColumnList,
+      @Nullable List<RexNode> sourceExpressionList, boolean flattened,
+      @Nullable MergeSpec mergeSpec) {
     final RelOptCluster cluster = input.getCluster();
     final RelTraitSet traitSet = cluster.traitSetOf(Convention.NONE);
     return new LogicalTableModify(cluster, traitSet, table, schema, input,
-        operation, updateColumnList, sourceExpressionList, flattened);
+        operation, updateColumnList, sourceExpressionList, flattened,
+        mergeSpec);
   }
 
   //~ Methods ----------------------------------------------------------------
@@ -91,7 +117,7 @@ public final class LogicalTableModify extends TableModify {
     assert traitSet.containsIfApplicable(Convention.NONE);
     return new LogicalTableModify(getCluster(), traitSet, table, catalogReader,
         sole(inputs), getOperation(), getUpdateColumnList(),
-        getSourceExpressionList(), isFlattened());
+        getSourceExpressionList(), isFlattened(), getMergeSpec());
   }
 
   @Override public RelNode accept(RelShuttle shuttle) {

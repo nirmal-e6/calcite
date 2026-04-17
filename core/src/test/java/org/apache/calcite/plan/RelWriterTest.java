@@ -30,6 +30,7 @@ import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelShuttleImpl;
 import org.apache.calcite.rel.core.AggregateCall;
 import org.apache.calcite.rel.core.JoinRelType;
+import org.apache.calcite.rel.core.MergeSpec;
 import org.apache.calcite.rel.core.TableModify;
 import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.externalize.RelJson;
@@ -71,6 +72,7 @@ import org.apache.calcite.tools.RelBuilder;
 import org.apache.calcite.util.DateString;
 import org.apache.calcite.util.Holder;
 import org.apache.calcite.util.ImmutableBitSet;
+import org.apache.calcite.util.ImmutableIntList;
 import org.apache.calcite.util.JsonBuilder;
 import org.apache.calcite.util.NlsString;
 import org.apache.calcite.util.TestUtil;
@@ -1882,6 +1884,73 @@ class RelWriterTest {
         + "    LogicalJoin(condition=[=($0, $10)], joinType=[left])\n"
         + "      LogicalTableScan(table=[[scott, DEPT]])\n"
         + "      LogicalTableScan(table=[[scott, EMP]])\n";
+    relFn(relFn)
+        .assertThatPlan(isLinux(expected));
+  }
+
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-5852">[CALCITE-5852]
+   * Preserve MERGE semantics in TableModify</a>.
+   *
+   * <p>Exercises {@code RelJsonWriter} → {@code RelJsonReader} round-trip for
+   * a semantic-form {@link LogicalTableModify} (carrying a {@link MergeSpec}).
+   * {@link org.apache.calcite.test.RelOptFixture#assertThatPlan} serializes to
+   * JSON and deserializes back; if {@link MergeSpec} is not preserved end to
+   * end the constructor's invariants fail or the resulting plan's digest
+   * differs from the input's. */
+  @Test void testTableModifyMergeSpec() {
+    final Holder<RelOptTable> emp = Holder.empty();
+    final Function<RelBuilder, RelNode> relFn = b ->
+        b.scan("DEPT")
+            .let(b2 -> {
+              emp.set(
+                  requireNonNull(
+                  requireNonNull(b2.peek().getTable()).getRelOptSchema()
+                      .getTableForMember(ImmutableList.of("scott", "EMP"))));
+              return b2;
+            })
+            .let(b2 -> {
+              final Prepare.CatalogReader schema =
+                  (Prepare.CatalogReader)
+                      requireNonNull(emp.get().getRelOptSchema());
+              // Virtual row layout: [source (DEPT: DEPTNO, DNAME, LOC),
+              // target (EMP: 9 cols)].
+              final RexBuilder rexBuilder = b2.getRexBuilder();
+              final RelDataType intType =
+                  rexBuilder.getTypeFactory().createSqlType(SqlTypeName.INTEGER);
+              final RexNode onCondition =
+                  rexBuilder.makeCall(SqlStdOperatorTable.EQUALS,
+                      rexBuilder.makeInputRef(intType, 0),   // DEPT.DEPTNO
+                      rexBuilder.makeInputRef(intType, 10)); // EMP.DEPTNO
+              final MergeSpec.MergeClause updateClause =
+                  MergeSpec.MergeClause.create(
+                      MergeSpec.MatchType.MATCHED,
+                      MergeSpec.ActionType.UPDATE,
+                      ImmutableIntList.of(2),
+                      ImmutableList.of(
+                          rexBuilder.makeLiteral("a")));
+              final MergeSpec mergeSpec =
+                  MergeSpec.create(onCondition, 3,
+                      ImmutableList.of(updateClause));
+              final LogicalTableModify modify =
+                  LogicalTableModify.create(emp.get(),
+                      schema,
+                      b2.build(),
+                      TableModify.Operation.MERGE,
+                      null,
+                      null,
+                      false,
+                      mergeSpec);
+              return b2.push(modify);
+            })
+            .build();
+    final String expected = ""
+        + "LogicalTableModify(table=[[scott, EMP]], operation=[MERGE], "
+        + "mergeSpec=[MergeSpec(onCondition=[=($0, $10)], sourceFieldCount=3, "
+        + "clauses=[MergeClause(matchType=MATCHED, actionType=UPDATE, "
+        + "targetColumnOrdinals=[2], sourceExpressionList=['a'])])], "
+        + "flattened=[false])\n"
+        + "  LogicalTableScan(table=[[scott, DEPT]])\n";
     relFn(relFn)
         .assertThatPlan(isLinux(expected));
   }

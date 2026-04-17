@@ -20,6 +20,7 @@ import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.plan.RelTraitSet;
 import org.apache.calcite.rel.core.AggregateCall;
+import org.apache.calcite.rel.core.MergeSpec;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
@@ -61,6 +62,18 @@ public interface RelInput {
   @Nullable List<ImmutableBitSet> getBitSetList(String tag);
 
   List<AggregateCall> getAggregateCalls(String tag);
+
+  /** Returns a {@link MergeSpec} stored under {@code tag}, or {@code null}
+   * if none is present.
+   *
+   * <p>The default implementation throws, because most {@link RelInput}s do
+   * not need to deserialize merge specs. Implementations that do (such as
+   * the one built by
+   * {@link org.apache.calcite.rel.externalize.RelJsonReader}) override this
+   * method. */
+  default @Nullable MergeSpec getMergeSpec(String tag) {
+    throw new UnsupportedOperationException("getMergeSpec");
+  }
 
   @Nullable Object get(String tag);
 

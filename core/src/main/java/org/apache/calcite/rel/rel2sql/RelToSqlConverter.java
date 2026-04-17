@@ -38,6 +38,7 @@ import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.rel.core.Match;
 import org.apache.calcite.rel.core.Minus;
 import org.apache.calcite.rel.core.Project;
+import org.apache.calcite.rel.core.RelFactories;
 import org.apache.calcite.rel.core.Sample;
 import org.apache.calcite.rel.core.Sort;
 import org.apache.calcite.rel.core.TableFunctionScan;
@@ -50,6 +51,8 @@ import org.apache.calcite.rel.core.Window;
 import org.apache.calcite.rel.hint.RelHint;
 import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.logical.LogicalSort;
+import org.apache.calcite.rel.logical.LogicalTableModify;
+import org.apache.calcite.rel.rules.MergeToJoinRule;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rex.RexBuilder;
@@ -1323,6 +1326,22 @@ public class RelToSqlConverter extends SqlImplementor
       return result(sqlDelete, input.clauses, modify, null);
     }
     case MERGE: {
+      // Fallback lowering for callers whose planner program did not
+      // register CoreRules.MERGE_TO_JOIN. The standard programs
+      // (Enumerable, JDBC, Programs.RULE_SET) include it and lower
+      // semantic MERGE before reaching here; this branch keeps bespoke
+      // HepPrograms working.
+      if (modify.getMergeSpec() != null) {
+        if (!(modify instanceof LogicalTableModify)) {
+          throw new AssertionError("cannot lower MERGE for " + modify);
+        }
+        final LogicalTableModify loweredModify =
+            MergeToJoinRule.apply(
+                (LogicalTableModify) modify,
+                RelFactories.LOGICAL_BUILDER.create(
+                    modify.getCluster(), null));
+        return visit(loweredModify);
+      }
       final Result input = visitInput(modify, 0);
       final SqlSelect select = input.asSelect();
       // When querying with both the `WHEN MATCHED THEN UPDATE` and

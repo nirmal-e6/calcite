@@ -49,9 +49,12 @@ import org.apache.calcite.rel.core.Sort;
 import org.apache.calcite.rel.core.TableModify;
 import org.apache.calcite.rel.core.Union;
 import org.apache.calcite.rel.core.Values;
+import org.apache.calcite.rel.logical.LogicalTableModify;
 import org.apache.calcite.rel.metadata.RelMdUtil;
 import org.apache.calcite.rel.metadata.RelMetadataQuery;
 import org.apache.calcite.rel.rel2sql.SqlImplementor;
+import org.apache.calcite.rel.rules.CoreRules;
+import org.apache.calcite.rel.rules.MergeToJoinRule;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexLiteral;
@@ -250,6 +253,7 @@ public class JdbcRules {
     consumer.accept(JdbcUnionRule.create(out));
     consumer.accept(JdbcIntersectRule.create(out));
     consumer.accept(JdbcMinusRule.create(out));
+    consumer.accept(CoreRules.MERGE_TO_JOIN);
     consumer.accept(JdbcTableModificationRule.create(out));
     consumer.accept(JdbcValuesRule.create(out));
   }
@@ -994,12 +998,21 @@ public class JdbcRules {
     }
 
     @Override public @Nullable RelNode convert(RelNode rel) {
-      final TableModify modify =
+      TableModify modify =
           (TableModify) rel;
       final ModifiableTable modifiableTable =
           modify.getTable().unwrap(ModifiableTable.class);
       if (modifiableTable == null) {
         return null;
+      }
+      if (modify.getOperation() == TableModify.Operation.MERGE
+          && modify.getMergeSpec() != null) {
+        if (!(modify instanceof LogicalTableModify)) {
+          return null;
+        }
+        modify =
+            MergeToJoinRule.apply((LogicalTableModify) modify,
+            RelFactories.LOGICAL_BUILDER.create(modify.getCluster(), null));
       }
       final RelTraitSet traitSet =
           modify.getTraitSet().replace(out);

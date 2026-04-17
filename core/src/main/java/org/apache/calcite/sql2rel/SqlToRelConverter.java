@@ -49,9 +49,11 @@ import org.apache.calcite.rel.core.Filter;
 import org.apache.calcite.rel.core.Join;
 import org.apache.calcite.rel.core.JoinInfo;
 import org.apache.calcite.rel.core.JoinRelType;
+import org.apache.calcite.rel.core.MergeSpec;
 import org.apache.calcite.rel.core.Project;
 import org.apache.calcite.rel.core.RelFactories;
 import org.apache.calcite.rel.core.Sort;
+import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.hint.HintStrategyTable;
 import org.apache.calcite.rel.hint.Hintable;
 import org.apache.calcite.rel.hint.RelHint;
@@ -4623,8 +4625,8 @@ public class SqlToRelConverter {
   private RelNode convertMerge(SqlMerge call) {
     RelOptTable targetTable = getTargetTable(call);
 
-    // convert update column list from SqlIdentifier to String
-    final List<String> targetColumnNameList = new ArrayList<>();
+    // Resolve update target columns to target-table ordinals.
+    final List<Integer> targetColumnOrdinalList = new ArrayList<>();
     final RelDataType targetRowType = targetTable.getRowType();
     SqlUpdate updateCall = call.getUpdateCall();
     if (updateCall != null) {
@@ -4636,7 +4638,7 @@ public class SqlToRelConverter {
         if (field == null) {
           throw new AssertionError("column " + id + " not found");
         }
-        targetColumnNameList.add(field.getName());
+        targetColumnOrdinalList.add(field.getIndex());
       }
     }
 
@@ -4682,30 +4684,118 @@ public class SqlToRelConverter {
 
     LogicalJoin join = (LogicalJoin) mergeSourceRel.getInput(0);
     int nSourceFields = join.getLeft().getRowType().getFieldCount();
-    final List<RexNode> projects = new ArrayList<>();
+    final List<RexNode> insertExpressions = new ArrayList<>();
     for (int level1Idx = 0; level1Idx < nLevel1Exprs; level1Idx++) {
       requireNonNull(level1InsertExprs, "level1InsertExprs");
       if ((level2InsertExprs != null)
           && (level1InsertExprs.get(level1Idx) instanceof RexInputRef)) {
         int level2Idx =
             ((RexInputRef) level1InsertExprs.get(level1Idx)).getIndex();
-        projects.add(level2InsertExprs.get(level2Idx));
+        insertExpressions.add(level2InsertExprs.get(level2Idx));
       } else {
-        projects.add(level1InsertExprs.get(level1Idx));
+        insertExpressions.add(level1InsertExprs.get(level1Idx));
       }
     }
+    final List<RexNode> mergeInputMapping =
+        createMergeInputMapping(join, nSourceFields, targetRowType);
+    final RexNode mergeCondition =
+        remapMergeInputRefs(join.getCondition(), mergeInputMapping);
+    insertExpressions.replaceAll(e ->
+        remapMergeInputRefs(e, mergeInputMapping));
+    final List<RexNode> updateExpressions;
     if (updateCall != null) {
       final LogicalProject project = (LogicalProject) mergeSourceRel;
-      projects.addAll(
-          Util.skip(project.getProjects(), nSourceFields));
+      updateExpressions =
+          Util.transform(
+              Util.last(project.getProjects(), targetColumnOrdinalList.size()),
+              e -> remapMergeInputRefs(e, mergeInputMapping));
+    } else {
+      updateExpressions = ImmutableList.of();
     }
+    final List<MergeSpec.MergeClause> mergeClauses = new ArrayList<>();
 
-    relBuilder.push(join)
-        .project(projects);
+    if (updateCall != null) {
+      mergeClauses.add(
+          MergeSpec.MergeClause.create(MergeSpec.MatchType.MATCHED,
+              MergeSpec.ActionType.UPDATE,
+              ImmutableIntList.copyOf(targetColumnOrdinalList),
+              updateExpressions));
+    }
+    if (insertCall != null) {
+      mergeClauses.add(
+          MergeSpec.MergeClause.create(MergeSpec.MatchType.NOT_MATCHED,
+              MergeSpec.ActionType.INSERT,
+              ImmutableIntList.identity(insertExpressions.size()),
+              insertExpressions));
+    }
+    final MergeSpec mergeSpec =
+        MergeSpec.create(mergeCondition, nSourceFields, mergeClauses);
 
     return LogicalTableModify.create(targetTable, catalogReader,
-        relBuilder.build(), LogicalTableModify.Operation.MERGE,
-        targetColumnNameList, null, false);
+        join.getLeft(), LogicalTableModify.Operation.MERGE,
+        null, null, false, mergeSpec);
+  }
+
+  /** Builds a mapping from the legacy join row layout
+   * {@code [source fields, physical target fields]} to the semantic
+   * {@code [source fields, virtual target fields]} layout used by
+   * {@link MergeSpec}.
+   *
+   * <p>The join's right input is either:
+   * <ul>
+   *   <li>a {@link LogicalProject} applying type coercion to the target
+   *       table (the common case) — expressions are inlined so the
+   *       resulting mergeSpec can be lowered against a raw target
+   *       {@link TableScan};</li>
+   *   <li>a {@link TableScan} on the target table directly — identity
+   *       mapping per field. Adapter-specific subclasses of
+   *       {@link TableScan} (e.g. {@code JdbcTableScan}) are also accepted
+   *       because they preserve the target row type 1:1.</li>
+   * </ul>
+   * Any other shape indicates an unsupported validator output. */
+  private List<RexNode> createMergeInputMapping(LogicalJoin join,
+      int sourceFieldCount, RelDataType targetRowType) {
+    final List<RexNode> mapping = new ArrayList<>();
+    for (RelDataTypeField field : join.getLeft().getRowType().getFieldList()) {
+      mapping.add(rexBuilder.makeInputRef(field.getType(), mapping.size()));
+    }
+    final RelNode targetInput = join.getRight();
+    if (targetInput instanceof LogicalProject) {
+      final LogicalProject targetProject = (LogicalProject) targetInput;
+      targetProject.getProjects().forEach(e ->
+          mapping.add(remapTargetInputRefs(e, sourceFieldCount)));
+    } else if (targetInput instanceof TableScan) {
+      for (RelDataTypeField field : targetRowType.getFieldList()) {
+        mapping.add(
+            rexBuilder.makeInputRef(field.getType(),
+            sourceFieldCount + field.getIndex()));
+      }
+    } else {
+      throw new AssertionError("unsupported MERGE target input shape: "
+          + targetInput.getClass().getName() + " (" + targetInput + ")");
+    }
+    return mapping;
+  }
+
+  private RexNode remapTargetInputRefs(RexNode rex, int sourceFieldCount) {
+    return rex.accept(new RexShuttle() {
+      @Override public RexNode visitInputRef(RexInputRef ref) {
+        return new RexInputRef(sourceFieldCount + ref.getIndex(),
+            ref.getType());
+      }
+    });
+  }
+
+  private static RexNode remapMergeInputRefs(RexNode rex,
+      List<RexNode> inputMapping) {
+    return rex.accept(new RexShuttle() {
+      @Override public RexNode visitInputRef(RexInputRef ref) {
+        if (ref.getIndex() < inputMapping.size()) {
+          return inputMapping.get(ref.getIndex());
+        }
+        return ref;
+      }
+    });
   }
 
   /**

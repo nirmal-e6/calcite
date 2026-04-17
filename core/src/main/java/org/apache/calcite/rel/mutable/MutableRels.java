@@ -277,7 +277,7 @@ public abstract class MutableRels {
       final MutableTableModify modify = (MutableTableModify) node;
       return LogicalTableModify.create(modify.table, modify.catalogReader,
           fromMutable(modify.getInput(), relBuilder), modify.operation, modify.updateColumnList,
-          modify.sourceExpressionList, modify.flattened);
+          modify.sourceExpressionList, modify.flattened, modify.mergeSpec);
     case SAMPLE:
       final MutableSample sample = (MutableSample) node;
       return new Sample(sample.cluster, fromMutable(sample.getInput(), relBuilder), sample.params);
@@ -400,7 +400,7 @@ public abstract class MutableRels {
       final MutableRel input = toMutable(modify.getInput());
       return MutableTableModify.of(modify.getRowType(), input, modify.getTable(),
           modify.getCatalogReader(), modify.getOperation(), modify.getUpdateColumnList(),
-          modify.getSourceExpressionList(), modify.isFlattened());
+          modify.getSourceExpressionList(), modify.isFlattened(), modify.getMergeSpec());
     }
     if (rel instanceof Sample) {
       final Sample sample = (Sample) rel;

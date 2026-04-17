@@ -237,6 +237,12 @@ public class CoreRules {
   public static final CoerceInputsRule COERCE_INPUTS =
       CoerceInputsRule.Config.DEFAULT.toRule();
 
+  /** Rule that lowers a semantic {@code MERGE} into a {@code Join}-based
+   * {@link org.apache.calcite.rel.core.TableModify} tree that executors can
+   * consume. */
+  public static final MergeToJoinRule MERGE_TO_JOIN =
+      MergeToJoinRule.Config.DEFAULT.toRule();
+
   /** Rule that removes constants inside a {@link LogicalExchange}. */
   public static final ExchangeRemoveConstantKeysRule EXCHANGE_REMOVE_CONSTANT_KEYS =
       ExchangeRemoveConstantKeysRule.Config.DEFAULT.toRule();

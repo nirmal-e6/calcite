@@ -18,6 +18,7 @@ package org.apache.calcite.rel.mutable;
 
 import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.prepare.Prepare;
+import org.apache.calcite.rel.core.MergeSpec;
 import org.apache.calcite.rel.core.TableModify.Operation;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rex.RexNode;
@@ -34,12 +35,14 @@ public class MutableTableModify extends MutableSingleRel {
   public final Operation operation;
   public final @Nullable List<String> updateColumnList;
   public final @Nullable List<RexNode> sourceExpressionList;
+  public final @Nullable MergeSpec mergeSpec;
   public final boolean flattened;
 
   private MutableTableModify(RelDataType rowType, MutableRel input,
       RelOptTable table, Prepare.CatalogReader catalogReader,
       Operation operation, @Nullable List<String> updateColumnList,
-      @Nullable List<RexNode> sourceExpressionList, boolean flattened) {
+      @Nullable List<RexNode> sourceExpressionList, boolean flattened,
+      @Nullable MergeSpec mergeSpec) {
     super(MutableRelType.TABLE_MODIFY, rowType, input);
     this.table = table;
     this.catalogReader = catalogReader;
@@ -47,6 +50,7 @@ public class MutableTableModify extends MutableSingleRel {
     this.updateColumnList = updateColumnList;
     this.sourceExpressionList = sourceExpressionList;
     this.flattened = flattened;
+    this.mergeSpec = mergeSpec;
   }
 
   /**
@@ -56,7 +60,7 @@ public class MutableTableModify extends MutableSingleRel {
    * @param input                 Input relational expression
    * @param table                 Target table to modify
    * @param catalogReader         Accessor to the table metadata
-   * @param operation             Modify operation (INSERT, UPDATE, DELETE)
+   * @param operation             Modify operation (INSERT, UPDATE, DELETE, MERGE)
    * @param updateColumnList      List of column identifiers to be updated
    *                              (e.g. ident1, ident2); null if not UPDATE
    * @param sourceExpressionList  List of value expressions to be set
@@ -68,8 +72,34 @@ public class MutableTableModify extends MutableSingleRel {
       Prepare.CatalogReader catalogReader,
       Operation operation, @Nullable List<String> updateColumnList,
       @Nullable List<RexNode> sourceExpressionList, boolean flattened) {
+    return of(rowType, input, table, catalogReader, operation,
+        updateColumnList, sourceExpressionList, flattened, null);
+  }
+
+  /**
+   * Creates a MutableTableModify.
+   *
+   * @param rowType               Row type
+   * @param input                 Input relational expression
+   * @param table                 Target table to modify
+   * @param catalogReader         Accessor to the table metadata
+   * @param operation             Modify operation (INSERT, UPDATE, DELETE, MERGE)
+   * @param updateColumnList      List of column identifiers to be updated
+   *                              (e.g. ident1, ident2); null if not UPDATE
+   * @param sourceExpressionList  List of value expressions to be set
+   *                              (e.g. exp1, exp2); null if not UPDATE
+   * @param flattened             Whether set flattens the input row type
+   * @param mergeSpec             Semantic description of a MERGE operation
+   */
+  public static MutableTableModify of(RelDataType rowType,
+      MutableRel input, RelOptTable table,
+      Prepare.CatalogReader catalogReader,
+      Operation operation, @Nullable List<String> updateColumnList,
+      @Nullable List<RexNode> sourceExpressionList, boolean flattened,
+      @Nullable MergeSpec mergeSpec) {
     return new MutableTableModify(rowType, input, table, catalogReader,
-        operation, updateColumnList, sourceExpressionList, flattened);
+        operation, updateColumnList, sourceExpressionList, flattened,
+        mergeSpec);
   }
 
   @Override public boolean equals(@Nullable Object obj) {
@@ -82,6 +112,11 @@ public class MutableTableModify extends MutableSingleRel {
             ((MutableTableModify) obj).updateColumnList)
         && MutableRel.PAIRWISE_STRING_EQUIVALENCE.equivalent(
             sourceExpressionList, ((MutableTableModify) obj).sourceExpressionList)
+        // Compare via toString() to match the string-equivalence used for
+        // sourceExpressionList above; MergeSpec carries RexNodes too and
+        // should be compared with the same equivalence.
+        && Objects.equals(Objects.toString(mergeSpec, null),
+            Objects.toString(((MutableTableModify) obj).mergeSpec, null))
         && flattened == ((MutableTableModify) obj).flattened
         && input.equals(((MutableTableModify) obj).input);
   }
@@ -90,7 +125,7 @@ public class MutableTableModify extends MutableSingleRel {
     return Objects.hash(input, table.getQualifiedName(),
         operation, updateColumnList,
         MutableRel.PAIRWISE_STRING_EQUIVALENCE.hash(sourceExpressionList),
-        flattened);
+        Objects.toString(mergeSpec, null), flattened);
   }
 
   @Override public StringBuilder digest(StringBuilder buf) {
@@ -102,12 +137,16 @@ public class MutableTableModify extends MutableSingleRel {
     if (sourceExpressionList != null) {
       buf.append(", sourceExpressionList: ").append(sourceExpressionList);
     }
+    if (mergeSpec != null) {
+      buf.append(", mergeSpec: ").append(mergeSpec);
+    }
     return buf.append(", flattened: ").append(flattened).append(")");
   }
 
   @Override public MutableRel clone() {
     return MutableTableModify.of(rowType, input.clone(), table, catalogReader,
-        operation, updateColumnList, sourceExpressionList, flattened);
+        operation, updateColumnList, sourceExpressionList, flattened,
+        mergeSpec);
   }
 
 }

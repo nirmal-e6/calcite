@@ -49,6 +49,9 @@ public class EnumerableTableModifyRule extends ConverterRule {
     if (modifiableTable == null) {
       return null;
     }
+    if (modify.getOperation() == TableModify.Operation.MERGE) {
+      return null;
+    }
     final RelTraitSet traitSet =
         modify.getTraitSet().replace(EnumerableConvention.INSTANCE);
     return new EnumerableTableModify(

@@ -32,6 +32,7 @@ import org.apache.calcite.rel.RelHomogeneousShuttle;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.RelShuttleImpl;
+import org.apache.calcite.rel.core.MergeSpec;
 import org.apache.calcite.rel.core.RepeatUnion;
 import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.core.TableSpool;
@@ -56,6 +57,7 @@ import org.apache.calcite.sql.validate.SqlValidatorUtil;
 import org.apache.calcite.sql.validate.implicit.TypeCoercionImpl;
 import org.apache.calcite.test.catalog.MockCatalogReaderExtended;
 import org.apache.calcite.util.Bug;
+import org.apache.calcite.util.ImmutableIntList;
 import org.apache.calcite.util.TestUtil;
 import org.apache.calcite.util.Util;
 
@@ -80,6 +82,7 @@ import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.hasToString;
 
 /**
  * Unit test for {@link org.apache.calcite.sql2rel.SqlToRelConverter}.
@@ -3557,6 +3560,56 @@ class SqlToRelConverterTest extends SqlToRelTestBase {
         + "when not matched then insert (empno, ename, deptno, sal)\n"
         + "values(t.empno, t.ename, 10, t.sal * .15)";
     sql(sql).ok();
+  }
+
+  @Test void testMergeSpecUpdateOnly() {
+    final String sql = "merge into empnullables e\n"
+        + "using (select empno, ename from emp) t\n"
+        + "on e.empno = t.empno\n"
+        + "when matched then update set ename = t.ename";
+    final RelNode rel = sql(sql).toRel();
+    final LogicalTableModify modify = (LogicalTableModify) rel;
+    final MergeSpec mergeSpec = modify.getMergeSpec();
+
+    assertThat(modify.getInput().getRowType().getFieldCount(), is(2));
+    assertThat(modify.getUpdateColumnList(), nullValue());
+    assertThat(mergeSpec, notNullValue());
+    assertThat(mergeSpec.getSourceFieldCount(), is(2));
+    assertThat(mergeSpec.getOnCondition(), hasToString("=($2, $0)"));
+    assertThat(mergeSpec.getClauses(), hasSize(1));
+
+    final MergeSpec.MergeClause clause = mergeSpec.getClauses().get(0);
+    assertThat(clause.getMatchType(), is(MergeSpec.MatchType.MATCHED));
+    assertThat(clause.getActionType(), is(MergeSpec.ActionType.UPDATE));
+    assertThat(clause.getTargetColumnOrdinals(), is(ImmutableIntList.of(1)));
+    assertThat(clause.getSourceExpressionList(), hasSize(1));
+    assertThat(clause.getSourceExpressionList().get(0), hasToString("$1"));
+  }
+
+  @Test void testMergeSpecInsertOnly() {
+    final String sql = "merge into empnullables e\n"
+        + "using (select empno, ename from emp) t\n"
+        + "on e.empno = t.empno\n"
+        + "when not matched then insert (empno, ename)\n"
+        + "values(t.empno, t.ename)";
+    final RelNode rel = sql(sql).toRel();
+    final LogicalTableModify modify = (LogicalTableModify) rel;
+    final MergeSpec mergeSpec = modify.getMergeSpec();
+
+    assertThat(modify.getInput().getRowType().getFieldCount(), is(2));
+    assertThat(modify.getUpdateColumnList(), nullValue());
+    assertThat(mergeSpec, notNullValue());
+    assertThat(mergeSpec.getSourceFieldCount(), is(2));
+    assertThat(mergeSpec.getClauses(), hasSize(1));
+
+    final MergeSpec.MergeClause clause = mergeSpec.getClauses().get(0);
+    assertThat(clause.getMatchType(), is(MergeSpec.MatchType.NOT_MATCHED));
+    assertThat(clause.getActionType(), is(MergeSpec.ActionType.INSERT));
+    assertThat(clause.getTargetColumnOrdinals(),
+        is(ImmutableIntList.identity(9)));
+    assertThat(clause.getSourceExpressionList(), hasSize(9));
+    assertThat(clause.getSourceExpressionList().get(0), hasToString("$0"));
+    assertThat(clause.getSourceExpressionList().get(1), hasToString("$1"));
   }
 
   @Test void testSelectView() {

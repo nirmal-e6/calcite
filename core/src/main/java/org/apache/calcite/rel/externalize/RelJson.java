@@ -34,6 +34,8 @@ import org.apache.calcite.rel.RelInput;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.AggregateCall;
 import org.apache.calcite.rel.core.CorrelationId;
+import org.apache.calcite.rel.core.MergeSpec;
+import org.apache.calcite.rel.logical.LogicalValues;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeField;
@@ -98,6 +100,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -458,6 +461,103 @@ public class RelJson {
     return map;
   }
 
+  /** Serializes a {@link MergeSpec}.
+   *
+   * <p>Nested {@link RexNode}s are pre-converted via {@link #toJson(RexNode)}
+   * so the returned map is self-contained. {@link MergeSpec.MatchType} and
+   * {@link MergeSpec.ActionType} are written as their {@link Enum#name()}
+   * without going through {@link RelEnumTypes}, because
+   * {@code MergeSpec.ActionType}'s names collide with
+   * {@link org.apache.calcite.rel.core.TableModify.Operation}. The reader
+   * knows the target class at parse time, so the registry is not needed. */
+  public Object toJson(MergeSpec spec) {
+    final Map<String, @Nullable Object> map = jsonBuilder().map();
+    map.put("onCondition", toJson(spec.getOnCondition()));
+    map.put("sourceFieldCount", spec.getSourceFieldCount());
+    final List<@Nullable Object> clauseList = jsonBuilder().list();
+    for (MergeSpec.MergeClause clause : spec.getClauses()) {
+      final Map<String, @Nullable Object> clauseMap = jsonBuilder().map();
+      clauseMap.put("matchType", clause.getMatchType().name());
+      clauseMap.put("actionType", clause.getActionType().name());
+      clauseMap.put("targetColumnOrdinals",
+          ImmutableList.copyOf(clause.getTargetColumnOrdinals()));
+      final List<@Nullable Object> exprList = jsonBuilder().list();
+      for (RexNode expr : clause.getSourceExpressionList()) {
+        exprList.add(toJson(expr));
+      }
+      clauseMap.put("sourceExpressionList", exprList);
+      clauseList.add(clauseMap);
+    }
+    map.put("clauses", clauseList);
+    return map;
+  }
+
+  /** Deserializes a {@link MergeSpec} that was written by
+   * {@link #toJson(MergeSpec)}. Returns {@code null} if {@code o} is null.
+   *
+   * <p>{@code MergeSpec} expressions reference a virtual
+   * {@code [source, target]} row that is wider than the owning
+   * {@code TableModify}'s input. The caller must supply
+   * {@code virtualRowType} (typically
+   * {@code createJoinType(sourceRowType, targetRowType)}) so that input refs
+   * can be resolved to their correct types. */
+  public @Nullable MergeSpec toMergeSpec(RelOptCluster cluster,
+      @Nullable Object o, RelDataType virtualRowType) {
+    if (o == null) {
+      return null;
+    }
+    final RelInput virtualInput =
+        new VirtualRowRelInput(cluster, virtualRowType);
+    @SuppressWarnings("unchecked")
+    final Map<String, Object> map = (Map<String, Object>) o;
+    final RexNode onCondition =
+        toRex(virtualInput,
+            requireNonNull(map.get("onCondition"), "onCondition"));
+    final int sourceFieldCount =
+        (
+            (Number) requireNonNull(map.get("sourceFieldCount"),
+            "sourceFieldCount")).intValue();
+    @SuppressWarnings("unchecked")
+    final List<Map<String, Object>> clauseJsons =
+        (List<Map<String, Object>>) requireNonNull(map.get("clauses"),
+            "clauses");
+    final List<MergeSpec.MergeClause> clauses = new ArrayList<>();
+    for (Map<String, Object> clauseJson : clauseJsons) {
+      final MergeSpec.MatchType matchType =
+          Util.enumVal(MergeSpec.MatchType.class,
+              (
+                  (String) requireNonNull(clauseJson.get("matchType"),
+                  "matchType")).toUpperCase(Locale.ROOT));
+      final MergeSpec.ActionType actionType =
+          Util.enumVal(MergeSpec.ActionType.class,
+              (
+                  (String) requireNonNull(clauseJson.get("actionType"),
+                  "actionType")).toUpperCase(Locale.ROOT));
+      @SuppressWarnings("unchecked")
+      final List<Number> ordinalNumbers =
+          (List<Number>) requireNonNull(
+              clauseJson.get("targetColumnOrdinals"),
+              "targetColumnOrdinals");
+      final int[] ordinals = new int[ordinalNumbers.size()];
+      for (int i = 0; i < ordinals.length; i++) {
+        ordinals[i] = ordinalNumbers.get(i).intValue();
+      }
+      @SuppressWarnings("unchecked")
+      final List<Object> exprJsons =
+          (List<Object>) requireNonNull(
+              clauseJson.get("sourceExpressionList"),
+              "sourceExpressionList");
+      final List<RexNode> exprs = new ArrayList<>();
+      for (Object exprJson : exprJsons) {
+        exprs.add(toRex(virtualInput, exprJson));
+      }
+      clauses.add(
+          MergeSpec.MergeClause.create(matchType, actionType,
+              ImmutableIntList.of(ordinals), exprs));
+    }
+    return MergeSpec.create(onCondition, sourceFieldCount, clauses);
+  }
+
   public @Nullable Object toJson(@Nullable Object value) {
     if (value == null
         || value instanceof Number
@@ -490,6 +590,8 @@ public class RelJson {
       return list;
     } else if (value instanceof AggregateCall) {
       return toJson((AggregateCall) value);
+    } else if (value instanceof MergeSpec) {
+      return toJson((MergeSpec) value);
     } else if (value instanceof RelCollationImpl) {
       return toJson((RelCollationImpl) value);
     } else if (value instanceof RelDataType) {
@@ -1331,6 +1433,26 @@ public class RelJson {
 
     @Override public boolean getBoolean(String tag, boolean default_) {
       throw new UnsupportedOperationException();
+    }
+  }
+
+  /**
+   * {@link RelInput} that exposes a single virtual input with a supplied row
+   * type. Used by {@link #toMergeSpec} to resolve input refs that point into a
+   * virtual {@code [source, target]} layout wider than any real physical
+   * input.
+   */
+  private static class VirtualRowRelInput extends RelInputForCluster {
+    private final ImmutableList<RelNode> inputs;
+
+    VirtualRowRelInput(RelOptCluster cluster, RelDataType virtualRowType) {
+      super(cluster);
+      this.inputs =
+          ImmutableList.of(LogicalValues.createEmpty(cluster, virtualRowType));
+    }
+
+    @Override public List<RelNode> getInputs() {
+      return inputs;
     }
   }
 

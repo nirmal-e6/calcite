@@ -9796,11 +9796,11 @@ class RelToSqlConverterTest {
         + "when not matched then\n"
         + "insert (DEPTNO, DNAME, LOC)\n"
         + "values (\"s\".\"a\" + 1, lower(\"s\".\"b\"), upper(\"s\".\"c\"))";
-    final String expected7 = "MERGE INTO \"SCOTT\".\"DEPT\" AS \"t1\"\n"
+    final String expected7 = "MERGE INTO \"SCOTT\".\"DEPT\"\n"
         + "USING (SELECT *\n"
         + "FROM (VALUES (1, 'name', 'loc')) "
         + "AS \"t\" (\"EXPR$0\", \"EXPR$1\", \"EXPR$2\")) AS \"t0\"\n"
-        + "ON \"t0\".\"EXPR$0\" = \"t1\".\"DEPTNO0\"\n"
+        + "ON CAST(\"DEPT\".\"DEPTNO\" AS INTEGER) = \"t0\".\"EXPR$0\"\n"
         + "WHEN MATCHED THEN UPDATE SET \"DNAME\" = 'abc'\n"
         + "WHEN NOT MATCHED THEN INSERT (\"DEPTNO\", \"DNAME\", \"LOC\") "
         + "VALUES CAST(\"t0\".\"EXPR$0\" + 1 AS TINYINT),\n"

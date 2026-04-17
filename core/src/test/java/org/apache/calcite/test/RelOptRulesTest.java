@@ -12308,4 +12308,57 @@ class RelOptRulesTest extends RelOptTestBase {
         .withRule(CoreRules.PROJECT_FILTER_VALUES_MERGE)
         .checkUnchanged();
   }
+
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-5852">[CALCITE-5852]
+   * Preserve MERGE semantics in TableModify</a>.
+   *
+   * <p>Full MERGE with both {@code WHEN MATCHED} and {@code WHEN NOT MATCHED}
+   * clauses lowers into a {@code LEFT}-join legacy form so unmatched source
+   * rows drive the INSERT. */
+  @Test void testMergeToJoinRule() {
+    final String sql = "merge into empnullables e\n"
+        + "using (select * from emp where deptno is null) t\n"
+        + "on e.empno = t.empno\n"
+        + "when matched then update\n"
+        + "set ename = t.ename, deptno = t.deptno, sal = t.sal * .1\n"
+        + "when not matched then insert (empno, ename, deptno, sal)\n"
+        + "values(t.empno, t.ename, 10, t.sal * .15)";
+    sql(sql)
+        .withRule(CoreRules.MERGE_TO_JOIN)
+        .check();
+  }
+
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-5852">[CALCITE-5852]
+   * Preserve MERGE semantics in TableModify</a>.
+   *
+   * <p>MERGE with only {@code WHEN MATCHED THEN UPDATE} lowers into an
+   * {@code INNER}-join legacy form (unmatched source rows are discarded). */
+  @Test void testMergeToJoinRuleUpdateOnly() {
+    final String sql = "merge into empnullables e\n"
+        + "using (select empno, ename from emp) t\n"
+        + "on e.empno = t.empno\n"
+        + "when matched then update set ename = t.ename";
+    sql(sql)
+        .withRule(CoreRules.MERGE_TO_JOIN)
+        .check();
+  }
+
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-5852">[CALCITE-5852]
+   * Preserve MERGE semantics in TableModify</a>.
+   *
+   * <p>MERGE with only {@code WHEN NOT MATCHED THEN INSERT} lowers into a
+   * {@code LEFT}-join legacy form. */
+  @Test void testMergeToJoinRuleInsertOnly() {
+    final String sql = "merge into empnullables e\n"
+        + "using (select empno, ename from emp) t\n"
+        + "on e.empno = t.empno\n"
+        + "when not matched then insert (empno, ename)\n"
+        + "values(t.empno, t.ename)";
+    sql(sql)
+        .withRule(CoreRules.MERGE_TO_JOIN)
+        .check();
+  }
 }

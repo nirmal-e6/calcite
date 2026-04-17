@@ -56,15 +56,34 @@ import static java.util.Objects.requireNonNull;
  * <li>For {@code INSERT}, those rows are the new values;
  * <li>for {@code DELETE}, the old values;
  * <li>for {@code UPDATE}, all old values plus updated new values;
- * <li>for {@code MERGE}, the rows may contain fields for both {@code INSERT} and {@code UPDATE}
- *     operations, depending on the clauses specified:
+ * <li>for {@code MERGE} there are two representations. Callers pick one by
+ *     supplying either a {@link MergeSpec} or the legacy
+ *     {@code updateColumnList}; for a MERGE, exactly one of the two is
+ *     non-null (enforced by the constructor):
  *     <ul>
- *       <li>If only `WHEN MATCHED THEN UPDATE` is specified, the row contains all old values plus
- *       updated new values (like {@code UPDATE}).</li>
- *       <li>If only `WHEN NOT MATCHED THEN INSERT` is specified, the row contains new values to be
- *       inserted (like {@code INSERT}).</li>
- *       <li>If both `WHEN MATCHED THEN UPDATE` and `WHEN NOT MATCHED THEN INSERT` are specified,
- *       the row contains: new values to be inserted, all old values, updated new values.
+ *       <li><b>Semantic form</b> ({@code mergeSpec} non-null,
+ *       {@code updateColumnList} null). The child is the {@code USING} source
+ *       only; the ON condition, match categories, target ordinals and
+ *       per-action expressions live in {@link MergeSpec}. New code should
+ *       prefer this form; it preserves MERGE semantics for downstream
+ *       tooling. The semantic form must be lowered to the legacy form by
+ *       {@link org.apache.calcite.rel.rules.MergeToJoinRule}
+ *       before an executor consumes it.</li>
+ *       <li><b>Legacy form</b> ({@code mergeSpec} null,
+ *       {@code updateColumnList} non-null). The child produces packed rows
+ *       depending on the clauses:
+ *       <ul>
+ *         <li>If only {@code WHEN MATCHED THEN UPDATE} is specified, the row
+ *         contains all old values plus updated new values (like
+ *         {@code UPDATE}).</li>
+ *         <li>If only {@code WHEN NOT MATCHED THEN INSERT} is specified, the
+ *         row contains new values to be inserted (like {@code INSERT}).</li>
+ *         <li>If both {@code WHEN MATCHED THEN UPDATE} and
+ *         {@code WHEN NOT MATCHED THEN INSERT} are specified, the row
+ *         contains: new values to be inserted, all old values, updated new
+ *         values.</li>
+ *       </ul>
+ *       </li>
  *     </ul>
  *   </li>
  * </ul>
@@ -93,6 +112,7 @@ public abstract class TableModify extends SingleRel {
   private final Operation operation;
   private final @Nullable List<String> updateColumnList;
   private final @Nullable List<RexNode> sourceExpressionList;
+  private final @Nullable MergeSpec mergeSpec;
   private @MonotonicNonNull RelDataType inputRowType;
   private final boolean flattened;
 
@@ -113,7 +133,8 @@ public abstract class TableModify extends SingleRel {
    * @param input      Sub-query or filter condition
    * @param operation  Modify operation (INSERT, UPDATE, DELETE)
    * @param updateColumnList List of column identifiers to be updated
-   *           (e.g. ident1, ident2); null if not UPDATE
+   *           (e.g. ident1, ident2); null unless operation is UPDATE
+   *           or legacy MERGE
    * @param sourceExpressionList List of value expressions to be set
    *           (e.g. exp1, exp2); null if not UPDATE
    * @param flattened Whether set flattens the input row type
@@ -128,21 +149,61 @@ public abstract class TableModify extends SingleRel {
       @Nullable List<String> updateColumnList,
       @Nullable List<RexNode> sourceExpressionList,
       boolean flattened) {
+    this(cluster, traitSet, table, catalogReader, input, operation,
+        updateColumnList, sourceExpressionList, flattened, null);
+  }
+
+  /**
+   * Creates a {@code TableModify}.
+   *
+   * @param cluster    Cluster this relational expression belongs to
+   * @param traitSet   Traits of this relational expression
+   * @param table      Target table to modify
+   * @param catalogReader accessor to the table metadata.
+   * @param input      Sub-query or filter condition
+   * @param operation  Modify operation (INSERT, UPDATE, DELETE, MERGE)
+   * @param updateColumnList List of column identifiers to be updated
+   *           (e.g. ident1, ident2); null unless operation is UPDATE
+   *           or legacy MERGE
+   * @param sourceExpressionList List of value expressions to be set
+   *           (e.g. exp1, exp2); null if not UPDATE
+   * @param flattened Whether set flattens the input row type
+   * @param mergeSpec Semantic description of a MERGE operation; null for
+   *           non-MERGE operations and legacy MERGE row-layout consumers
+   */
+  protected TableModify(
+      RelOptCluster cluster,
+      RelTraitSet traitSet,
+      RelOptTable table,
+      Prepare.CatalogReader catalogReader,
+      RelNode input,
+      Operation operation,
+      @Nullable List<String> updateColumnList,
+      @Nullable List<RexNode> sourceExpressionList,
+      boolean flattened,
+      @Nullable MergeSpec mergeSpec) {
     super(cluster, traitSet, input);
     this.table = table;
     this.catalogReader = catalogReader;
     this.operation = operation;
     this.updateColumnList = updateColumnList;
     this.sourceExpressionList = sourceExpressionList;
+    this.mergeSpec = mergeSpec;
     if (operation == Operation.UPDATE) {
       requireNonNull(updateColumnList, "updateColumnList");
       requireNonNull(sourceExpressionList, "sourceExpressionList");
       checkArgument(sourceExpressionList.size() == updateColumnList.size());
+      checkArgument(mergeSpec == null);
     } else {
       if (operation == Operation.MERGE) {
-        requireNonNull(updateColumnList, "updateColumnList");
+        if (mergeSpec == null) {
+          requireNonNull(updateColumnList, "updateColumnList");
+        } else {
+          checkArgument(updateColumnList == null);
+        }
       } else {
         checkArgument(updateColumnList == null);
+        checkArgument(mergeSpec == null);
       }
       checkArgument(sourceExpressionList == null);
     }
@@ -167,7 +228,8 @@ public abstract class TableModify extends SingleRel {
         requireNonNull(input.getEnum("operation", Operation.class), "operation"),
         input.getStringList("updateColumnList"),
         input.getExpressionList("sourceExpressionList"),
-        input.getBoolean("flattened", false));
+        input.getBoolean("flattened", false),
+        input.getMergeSpec("mergeSpec"));
   }
 
   //~ Methods ----------------------------------------------------------------
@@ -180,12 +242,27 @@ public abstract class TableModify extends SingleRel {
     return table;
   }
 
+  /** Returns the list of target column names for {@code UPDATE} or legacy
+   * {@code MERGE}.
+   *
+   * <p>For {@code MERGE}, this is non-null only in the legacy packed-row
+   * form (i.e. after
+   * {@link org.apache.calcite.rel.rules.MergeToJoinRule} has
+   * lowered the semantic form). New code that inspects a {@code MERGE}
+   * should prefer {@link #getMergeSpec()}. */
   public @Nullable List<String> getUpdateColumnList() {
     return updateColumnList;
   }
 
   public @Nullable List<RexNode> getSourceExpressionList() {
     return sourceExpressionList;
+  }
+
+  /** Returns the semantic description of a {@code MERGE} operation, or
+   * {@code null} for non-MERGE operations and for MERGE operations that have
+   * already been lowered to the legacy packed-row form. */
+  public @Nullable MergeSpec getMergeSpec() {
+    return mergeSpec;
   }
 
   public boolean isFlattened() {
@@ -238,15 +315,19 @@ public abstract class TableModify extends SingleRel {
                   updateColumnList));
       break;
     case MERGE:
-      if (updateColumnList == null) {
-        throw new AssertionError("updateColumnList must not be null for "
-            + operation);
+      if (mergeSpec != null) {
+        inputRowType = getInput().getRowType();
+      } else {
+        if (updateColumnList == null) {
+          throw new AssertionError("updateColumnList must not be null for "
+              + operation);
+        }
+        inputRowType =
+            typeFactory.createJoinType(
+                typeFactory.createJoinType(rowType, rowType),
+                getCatalogReader().createTypeFromProjection(rowType,
+                    updateColumnList));
       }
-      inputRowType =
-          typeFactory.createJoinType(
-              typeFactory.createJoinType(rowType, rowType),
-              getCatalogReader().createTypeFromProjection(rowType,
-                  updateColumnList));
       break;
     default:
       inputRowType = rowType;
@@ -271,6 +352,7 @@ public abstract class TableModify extends SingleRel {
         .itemIf("updateColumnList", updateColumnList, updateColumnList != null)
         .itemIf("sourceExpressionList", sourceExpressionList,
             sourceExpressionList != null)
+        .itemIf("mergeSpec", mergeSpec, mergeSpec != null)
         .item("flattened", flattened);
   }
 

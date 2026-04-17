@@ -27,6 +27,7 @@ import org.apache.calcite.rel.RelDistribution;
 import org.apache.calcite.rel.RelInput;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.AggregateCall;
+import org.apache.calcite.rel.core.MergeSpec;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rex.RexLiteral;
@@ -211,6 +212,22 @@ public class RelJsonReader {
           inputs.add(toAggCall(jsonAggCall));
         }
         return inputs;
+      }
+
+      @Override public @Nullable MergeSpec getMergeSpec(String tag) {
+        final Object raw = jsonRel.get(tag);
+        if (raw == null) {
+          return null;
+        }
+        // The MergeSpec's expressions reference a virtual
+        // [source, target] row. The source is this TableModify's single
+        // input; the target is the modified table.
+        final RelDataType sourceRowType = getInput().getRowType();
+        final RelDataType targetRowType = getTable("table").getRowType();
+        final RelDataType virtualRowType =
+            cluster.getTypeFactory().createJoinType(
+                sourceRowType, targetRowType);
+        return relJson.toMergeSpec(cluster, raw, virtualRowType);
       }
 
       @Override public @Nullable Object get(String tag) {
