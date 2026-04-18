@@ -3559,6 +3559,25 @@ class SqlToRelConverterTest extends SqlToRelTestBase {
     sql(sql).ok();
   }
 
+  @Test void testMergeReorderedUsingProjection() {
+    final String sql = "merge into empnullables e\n"
+        + "using (select ename, empno from emp) t\n"
+        + "on e.empno = t.empno\n"
+        + "when not matched then insert (empno, ename)\n"
+        + "values (t.empno, t.ename)";
+    sql(sql).ok();
+  }
+
+  @Test void testMergeReorderedUsingProjectionWithUpdate() {
+    final String sql = "merge into empnullables e\n"
+        + "using (select ename, empno from emp where deptno is null) t\n"
+        + "on e.empno = t.empno\n"
+        + "when matched then update set ename = t.ename\n"
+        + "when not matched then insert (empno, ename)\n"
+        + "values (t.empno, t.ename)";
+    sql(sql).ok();
+  }
+
   @Test void testSelectView() {
     // translated condition: deptno = 20 and sal > 1000 and empno > 100
     final String sql = "select * from emp_20 where empno > 100";

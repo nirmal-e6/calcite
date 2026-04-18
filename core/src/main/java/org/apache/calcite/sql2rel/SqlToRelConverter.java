@@ -87,6 +87,7 @@ import org.apache.calcite.rex.RexLambdaRef;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexPatternFieldRef;
+import org.apache.calcite.rex.RexPermuteInputsShuttle;
 import org.apache.calcite.rex.RexRangeRef;
 import org.apache.calcite.rex.RexShuttle;
 import org.apache.calcite.rex.RexSimplify;
@@ -187,6 +188,8 @@ import org.apache.calcite.util.NlsString;
 import org.apache.calcite.util.NumberUtil;
 import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.Util;
+import org.apache.calcite.util.mapping.MappingType;
+import org.apache.calcite.util.mapping.Mappings;
 import org.apache.calcite.util.trace.CalciteTrace;
 
 import com.google.common.collect.ImmutableList;
@@ -4660,6 +4663,7 @@ public class SqlToRelConverter {
     int nLevel1Exprs = 0;
     List<RexNode> level1InsertExprs = null;
     List<RexNode> level2InsertExprs = null;
+    RelNode level1Input = null;
     if (insertCall != null) {
       RelNode insertRel = convertInsert(insertCall);
 
@@ -4672,16 +4676,49 @@ public class SqlToRelConverter {
       // table
       level1InsertExprs =
           ((LogicalProject) insertRel.getInput(0)).getProjects();
-      if (insertRel.getInput(0).getInput(0) instanceof LogicalProject) {
+      level1Input = insertRel.getInput(0).getInput(0);
+      if (level1Input instanceof LogicalProject) {
         level2InsertExprs =
-            ((LogicalProject) insertRel.getInput(0).getInput(0))
-                .getProjects();
+            ((LogicalProject) level1Input).getProjects();
       }
       nLevel1Exprs = level1InsertExprs.size();
     }
 
     LogicalJoin join = (LogicalJoin) mergeSourceRel.getInput(0);
     int nSourceFields = join.getLeft().getRowType().getFieldCount();
+
+    // RelBuilder may collapse the rewritten INSERT source's VALUES Project
+    // into the USING Project when USING reorders or subsets its base; rebase
+    // level1 refs onto join.getLeft() so they resolve against the JOIN.
+    if (level1Input != null && level2InsertExprs == null
+        && level1Input != join.getLeft()
+        && join.getLeft() instanceof Project) {
+      final Project joinLeftProject = (Project) join.getLeft();
+      if (joinLeftProject.isMapping()
+          && joinLeftProject.getInput().getRowType()
+              .equals(level1Input.getRowType())) {
+        final List<RexNode> joinLeftProjects = joinLeftProject.getProjects();
+        final Mappings.TargetMapping mapping =
+            Mappings.create(MappingType.PARTIAL_FUNCTION,
+                level1Input.getRowType().getFieldCount(),
+                joinLeftProjects.size());
+        for (int j = 0; j < joinLeftProjects.size(); j++) {
+          int source = ((RexInputRef) joinLeftProjects.get(j)).getIndex();
+          if (mapping.getTargetOpt(source) == -1) {
+            mapping.set(source, j);
+          }
+        }
+        final RexShuttle shuttle =
+            new RexPermuteInputsShuttle(mapping, true, joinLeftProject);
+        final List<RexNode> remapped =
+            new ArrayList<>(level1InsertExprs.size());
+        for (RexNode e : level1InsertExprs) {
+          remapped.add(e.accept(shuttle));
+        }
+        level1InsertExprs = remapped;
+      }
+    }
+
     final List<RexNode> projects = new ArrayList<>();
     for (int level1Idx = 0; level1Idx < nLevel1Exprs; level1Idx++) {
       requireNonNull(level1InsertExprs, "level1InsertExprs");
