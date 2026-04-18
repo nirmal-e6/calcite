@@ -10964,6 +10964,22 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         .fails("Column 'JOB' has no default value and does not allow NULLs");
   }
 
+  @Test void testMergeReorderedUsingProjection() {
+    sql("merge into empnullables e "
+        + "using (select ename, empno from emp) t "
+        + "on e.empno = t.empno "
+        + "when not matched then insert (empno, ename) "
+        + "values (t.empno, t.ename)")
+        .ok();
+    sql("merge into empnullables e "
+        + "using (select ename, empno from emp where deptno is null) t "
+        + "on e.empno = t.empno "
+        + "when matched then update set ename = t.ename "
+        + "when not matched then insert (empno, ename) "
+        + "values (t.empno, t.ename)")
+        .ok();
+  }
+
   @Test void testMergeFailCaseSensitivity() {
     final SqlValidatorFixture s = fixture()
         .withExtendedCatalog();

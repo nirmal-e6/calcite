@@ -5281,6 +5281,46 @@ LogicalTableModify(table=[[CATALOG, SALES, EMPNULLABLES]], operation=[MERGE], up
 ]]>
     </Resource>
   </TestCase>
+  <TestCase name="testMergeReorderedUsingProjection">
+    <Resource name="sql">
+      <![CDATA[merge into empnullables e
+using (select ename, empno from emp) t
+on e.empno = t.empno
+when not matched then insert (empno, ename)
+values (t.empno, t.ename)]]>
+    </Resource>
+    <Resource name="plan">
+      <![CDATA[
+LogicalTableModify(table=[[CATALOG, SALES, EMPNULLABLES]], operation=[MERGE], updateColumnList=[[]], flattened=[true])
+  LogicalProject(EMPNO=[$1], ENAME=[$0], $f2=[null:VARCHAR(10)], $f3=[null:INTEGER], $f4=[null:TIMESTAMP(0)], $f5=[null:INTEGER], $f6=[null:INTEGER], $f7=[null:INTEGER], $f8=[null:BOOLEAN])
+    LogicalJoin(condition=[=($2, $1)], joinType=[left])
+      LogicalProject(ENAME=[$1], EMPNO=[$0])
+        LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+      LogicalTableScan(table=[[CATALOG, SALES, EMPNULLABLES]])
+]]>
+    </Resource>
+  </TestCase>
+  <TestCase name="testMergeReorderedUsingProjectionWithUpdate">
+    <Resource name="sql">
+      <![CDATA[merge into empnullables e
+using (select ename, empno from emp where deptno is null) t
+on e.empno = t.empno
+when matched then update set ename = t.ename
+when not matched then insert (empno, ename)
+values (t.empno, t.ename)]]>
+    </Resource>
+    <Resource name="plan">
+      <![CDATA[
+LogicalTableModify(table=[[CATALOG, SALES, EMPNULLABLES]], operation=[MERGE], updateColumnList=[[ENAME]], flattened=[true])
+  LogicalProject(EMPNO=[$1], ENAME=[$0], $f2=[null:VARCHAR(10)], $f3=[null:INTEGER], $f4=[null:TIMESTAMP(0)], $f5=[null:INTEGER], $f6=[null:INTEGER], $f7=[null:INTEGER], $f8=[null:BOOLEAN], EMPNO0=[$2], ENAME0=[$3], JOB=[$4], MGR=[$5], HIREDATE=[$6], SAL=[$7], COMM=[$8], DEPTNO=[$9], SLACKER=[$10], ENAME1=[$0])
+    LogicalJoin(condition=[=($2, $1)], joinType=[left])
+      LogicalProject(ENAME=[$1], EMPNO=[$0])
+        LogicalFilter(condition=[IS NULL($7)])
+          LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+      LogicalTableScan(table=[[CATALOG, SALES, EMPNULLABLES]])
+]]>
+    </Resource>
+  </TestCase>
   <TestCase name="testModeFunction">
     <Resource name="sql">
       <![CDATA[select mode(deptno)
