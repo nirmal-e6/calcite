@@ -134,6 +134,8 @@ tasks.validateBeforeBuildingReleaseArtifacts {
 val String.v: String get() = rootProject.extra["$this.version"] as String
 
 val buildVersion = "calcite".v + releaseParams.snapshotSuffix
+val publishGroupOverride: String? = findProperty("calcite.publish.groupId") as String?
+val publishVersionOverride: String? = findProperty("calcite.publish.version") as String?
 
 println("Building Apache Calcite $buildVersion")
 
@@ -343,8 +345,8 @@ sonarqube {
 }
 
 allprojects {
-    group = "org.apache.calcite"
-    version = buildVersion
+    group = publishGroupOverride ?: "org.apache.calcite"
+    version = publishVersionOverride ?: buildVersion
 
     apply(plugin = "com.github.vlsi.gradle-extensions")
 
