@@ -1917,17 +1917,31 @@ SqlUpdate WhenMatchedClause(SqlNode table, SqlIdentifier alias) :
 }
 {
     <WHEN> { s = span(); } <MATCHED> <THEN>
-    <UPDATE> <SET> id = CompoundIdentifier() {
-        updateColumnList.add(id);
-    }
-    <EQ> AddExpression(updateExprList, ExprContext.ACCEPT_SUB_QUERY)
+    <UPDATE> <SET>
     (
-        <COMMA>
+        LOOKAHEAD(2)
+        <STAR> {
+            if (!this.conformance.allowMergeActionStar()) {
+                throw SqlUtil.newContextException(getPos(),
+                    RESOURCE.mergeActionStarNotAllowed());
+            }
+            id = SqlIdentifier.star(getPos());
+            updateColumnList.add(id);
+            updateExprList.add(id);
+        }
+    |
         id = CompoundIdentifier() {
             updateColumnList.add(id);
         }
         <EQ> AddExpression(updateExprList, ExprContext.ACCEPT_SUB_QUERY)
-    )*
+        (
+            <COMMA>
+            id = CompoundIdentifier() {
+                updateColumnList.add(id);
+            }
+            <EQ> AddExpression(updateExprList, ExprContext.ACCEPT_SUB_QUERY)
+        )*
+    )
     {
         return new SqlUpdate(s.addAll(updateExprList).pos(), table,
             updateColumnList, updateExprList, null, null, alias);
@@ -1952,25 +1966,43 @@ SqlInsert WhenNotMatchedClause(SqlNode table) :
     }
     (
         LOOKAHEAD(2)
-        insertColumnList = ParenthesizedSimpleIdentifierList()
-    |   { insertColumnList = null; }
-    )
-    (
-        <LPAREN>
-        <VALUES> { valuesSpan = span(); } rowConstructor = RowConstructor()
-        <RPAREN>
+        <STAR> {
+            if (!this.conformance.allowMergeActionStar()) {
+                throw SqlUtil.newContextException(getPos(),
+                    RESOURCE.mergeActionStarNotAllowed());
+            }
+            insertColumnList = new SqlNodeList(SqlParserPos.ZERO);
+            insertColumnList.add(SqlIdentifier.star(getPos()));
+            rowConstructor = SqlStdOperatorTable.ROW.createCall(getPos(),
+                SqlIdentifier.star(getPos()));
+            insertValues = SqlStdOperatorTable.VALUES.createCall(
+                insertSpan.end(this), rowConstructor);
+            return new SqlInsert(insertSpan.end(this), keywordList, table,
+                insertValues, insertColumnList);
+        }
     |
-        <VALUES> { valuesSpan = span(); } rowConstructor = RowConstructor()
+        (
+            LOOKAHEAD(2)
+            insertColumnList = ParenthesizedSimpleIdentifierList()
+        |   { insertColumnList = null; }
+        )
+        (
+            <LPAREN>
+            <VALUES> { valuesSpan = span(); } rowConstructor = RowConstructor()
+            <RPAREN>
+        |
+            <VALUES> { valuesSpan = span(); } rowConstructor = RowConstructor()
+        )
+        {
+            // TODO zfong 5/26/06: note that extra parentheses are accepted above
+            // around the VALUES clause as a hack for unparse, but this is
+            // actually invalid SQL; should fix unparse
+            insertValues = SqlStdOperatorTable.VALUES.createCall(
+                valuesSpan.end(this), rowConstructor);
+            return new SqlInsert(insertSpan.end(this), keywordList,
+                table, insertValues, insertColumnList);
+        }
     )
-    {
-        // TODO zfong 5/26/06: note that extra parentheses are accepted above
-        // around the VALUES clause as a hack for unparse, but this is
-        // actually invalid SQL; should fix unparse
-        insertValues = SqlStdOperatorTable.VALUES.createCall(
-            valuesSpan.end(this), rowConstructor);
-        return new SqlInsert(insertSpan.end(this), keywordList,
-            table, insertValues, insertColumnList);
-    }
 }
 
 /**

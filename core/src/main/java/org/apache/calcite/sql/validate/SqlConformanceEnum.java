@@ -103,6 +103,16 @@ public enum SqlConformanceEnum implements SqlConformance {
     }
   }
 
+  @Override public boolean allowMergeActionStar() {
+    switch (this) {
+    case BABEL:
+    case LENIENT:
+      return true;
+    default:
+      return false;
+    }
+  }
+
   @Override public boolean isSupportedDualTable() {
     switch (this) {
     case MYSQL_5:

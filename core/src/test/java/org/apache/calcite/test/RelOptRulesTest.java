@@ -12361,4 +12361,19 @@ class RelOptRulesTest extends RelOptTestBase {
         .withRule(CoreRules.MERGE_TO_JOIN)
         .check();
   }
+
+  /** Test case for Spark/Databricks-style MERGE star actions. */
+  @Test void testMergeToJoinRuleStarActions() {
+    final String sql = "merge into empnullables e\n"
+        + "using (select * from empnullables) t\n"
+        + "on e.empno = t.empno\n"
+        + "when matched then update set *\n"
+        + "when not matched then insert *";
+    sql(sql)
+        .withFactory(f -> f
+            .withParserConfig(c -> c.withConformance(SqlConformanceEnum.BABEL))
+            .withValidatorConfig(c -> c.withConformance(SqlConformanceEnum.BABEL)))
+        .withRule(CoreRules.MERGE_TO_JOIN)
+        .check();
+  }
 }

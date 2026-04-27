@@ -51,6 +51,9 @@ public interface CalciteResource {
   @BaseMessage("VALUE is not allowed under the current SQL conformance level")
   ExInst<CalciteException> valueNotAllowed();
 
+  @BaseMessage("MERGE action star is not allowed under the current SQL conformance level")
+  ExInst<CalciteException> mergeActionStarNotAllowed();
+
   @BaseMessage("Illegal {0} literal ''{1}'': {2}")
   ExInst<CalciteException> illegalLiteral(String a0, String a1, String a2);
 

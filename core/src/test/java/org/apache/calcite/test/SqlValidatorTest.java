@@ -10962,6 +10962,35 @@ public class SqlValidatorTest extends SqlValidatorTestCase {
         + "when not matched then insert (empno, ename, deptno, sal) "
         + "values(t.empno, t.ename, 10, t.sal * .15)")
         .fails("Column 'JOB' has no default value and does not allow NULLs");
+
+    sql("merge into empnullables e "
+        + "using (select * from empnullables) t "
+        + "on e.empno = t.empno "
+        + "when matched then update set * "
+        + "when not matched then insert *")
+        .withConformance(SqlConformanceEnum.BABEL)
+        .ok();
+
+    sql("merge into empnullables e "
+        + "using (select * from empnullables) t "
+        + "on e.empno = t.empno "
+        + "when matched then update set ^*^")
+        .withParserConfig(c -> c.withConformance(SqlConformanceEnum.BABEL))
+        .fails("MERGE action star is not allowed under the current SQL conformance level");
+
+    sql("merge into empnullables e "
+        + "using (select empno, ename from empnullables) t "
+        + "on e.empno = t.empno "
+        + "when matched then update set *")
+        .withConformance(SqlConformanceEnum.BABEL)
+        .fails("Column 'JOB' not found in table 'T'");
+
+    sql("merge into empnullables e "
+        + "using (select empno, ename from empnullables) t "
+        + "on e.empno = t.empno "
+        + "when not matched then insert *")
+        .withConformance(SqlConformanceEnum.BABEL)
+        .fails("Column 'JOB' not found in table 'T'");
   }
 
   @Test void testMergeFailCaseSensitivity() {

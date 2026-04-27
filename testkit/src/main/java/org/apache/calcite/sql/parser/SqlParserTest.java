@@ -5311,6 +5311,35 @@ public class SqlParserTest {
     sql(sql).ok(expected);
   }
 
+  @Test void testMergeStarActions() {
+    final String sql = "merge into emps e "
+        + "using tempemps as t "
+        + "on e.empno = t.empno "
+        + "when matched then update set * "
+        + "when not matched then insert *";
+    final String sqlDefault = "merge into emps e "
+        + "using tempemps as t "
+        + "on e.empno = t.empno "
+        + "when matched then update set ^*^ "
+        + "when not matched then insert *";
+    final String sqlDefaultInsert = "merge into emps e "
+        + "using tempemps as t "
+        + "on e.empno = t.empno "
+        + "when not matched then insert ^*^";
+    final String expected = "MERGE INTO `EMPS` AS `E`\n"
+        + "USING `TEMPEMPS` AS `T`\n"
+        + "ON (`E`.`EMPNO` = `T`.`EMPNO`)\n"
+        + "WHEN MATCHED THEN UPDATE SET *\n"
+        + "WHEN NOT MATCHED THEN INSERT *";
+    sql(sqlDefault)
+        .fails("MERGE action star is not allowed under the current SQL conformance level")
+        .sql(sqlDefaultInsert)
+        .fails("MERGE action star is not allowed under the current SQL conformance level")
+        .sql(sql)
+        .withConformance(SqlConformanceEnum.BABEL)
+        .ok(expected);
+  }
+
   @Test void testMergeMismatchedParentheses() {
     // Invalid; more '(' than ')'
     final String sql1 = "merge into emps as e\n"

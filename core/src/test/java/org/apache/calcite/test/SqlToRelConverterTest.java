@@ -3586,6 +3586,32 @@ class SqlToRelConverterTest extends SqlToRelTestBase {
     assertThat(clause.getSourceExpressionList().get(0), hasToString("$1"));
   }
 
+  @Test void testMergeSpecUpdateStar() {
+    final String sql = "merge into empnullables e\n"
+        + "using (select * from empnullables) t\n"
+        + "on e.empno = t.empno\n"
+        + "when matched then update set *";
+    final RelNode rel = sql(sql).withConformance(SqlConformanceEnum.BABEL).toRel();
+    final LogicalTableModify modify = (LogicalTableModify) rel;
+    final MergeSpec mergeSpec = modify.getMergeSpec();
+
+    assertThat(modify.getInput().getRowType().getFieldCount(), is(9));
+    assertThat(modify.getUpdateColumnList(), nullValue());
+    assertThat(mergeSpec, notNullValue());
+    assertThat(mergeSpec.getSourceFieldCount(), is(9));
+    assertThat(mergeSpec.getOnCondition(), hasToString("=($9, $0)"));
+    assertThat(mergeSpec.getClauses(), hasSize(1));
+
+    final MergeSpec.MergeClause clause = mergeSpec.getClauses().get(0);
+    assertThat(clause.getMatchType(), is(MergeSpec.MatchType.MATCHED));
+    assertThat(clause.getActionType(), is(MergeSpec.ActionType.UPDATE));
+    assertThat(clause.getTargetColumnOrdinals(),
+        is(ImmutableIntList.identity(9)));
+    assertThat(clause.getSourceExpressionList(), hasSize(9));
+    assertThat(clause.getSourceExpressionList().get(0), hasToString("$0"));
+    assertThat(clause.getSourceExpressionList().get(8), hasToString("$8"));
+  }
+
   @Test void testMergeSpecInsertOnly() {
     final String sql = "merge into empnullables e\n"
         + "using (select empno, ename from emp) t\n"
@@ -3610,6 +3636,31 @@ class SqlToRelConverterTest extends SqlToRelTestBase {
     assertThat(clause.getSourceExpressionList(), hasSize(9));
     assertThat(clause.getSourceExpressionList().get(0), hasToString("$0"));
     assertThat(clause.getSourceExpressionList().get(1), hasToString("$1"));
+  }
+
+  @Test void testMergeSpecInsertStar() {
+    final String sql = "merge into empnullables e\n"
+        + "using (select * from empnullables) t\n"
+        + "on e.empno = t.empno\n"
+        + "when not matched then insert *";
+    final RelNode rel = sql(sql).withConformance(SqlConformanceEnum.BABEL).toRel();
+    final LogicalTableModify modify = (LogicalTableModify) rel;
+    final MergeSpec mergeSpec = modify.getMergeSpec();
+
+    assertThat(modify.getInput().getRowType().getFieldCount(), is(9));
+    assertThat(modify.getUpdateColumnList(), nullValue());
+    assertThat(mergeSpec, notNullValue());
+    assertThat(mergeSpec.getSourceFieldCount(), is(9));
+    assertThat(mergeSpec.getClauses(), hasSize(1));
+
+    final MergeSpec.MergeClause clause = mergeSpec.getClauses().get(0);
+    assertThat(clause.getMatchType(), is(MergeSpec.MatchType.NOT_MATCHED));
+    assertThat(clause.getActionType(), is(MergeSpec.ActionType.INSERT));
+    assertThat(clause.getTargetColumnOrdinals(),
+        is(ImmutableIntList.identity(9)));
+    assertThat(clause.getSourceExpressionList(), hasSize(9));
+    assertThat(clause.getSourceExpressionList().get(0), hasToString("$0"));
+    assertThat(clause.getSourceExpressionList().get(8), hasToString("$8"));
   }
 
   @Test void testSelectView() {

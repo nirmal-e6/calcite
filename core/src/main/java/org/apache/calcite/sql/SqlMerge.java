@@ -151,6 +151,43 @@ public class SqlMerge extends SqlCall {
     return insertCall;
   }
 
+  /** Returns whether an UPDATE sub-statement is the
+   * {@code UPDATE SET *} shorthand. */
+  public static boolean isUpdateStar(SqlUpdate updateCall) {
+    return isSingleStar(updateCall.getTargetColumnList())
+        && isSingleStar(updateCall.getSourceExpressionList());
+  }
+
+  /** Returns whether an INSERT sub-statement is the
+   * {@code INSERT *} shorthand. */
+  public static boolean isInsertStar(SqlInsert insertCall) {
+    return isSingleStar(insertCall.getTargetColumnList())
+        && isValuesStar(insertCall.getSource());
+  }
+
+  private static boolean isSingleStar(@Nullable SqlNodeList list) {
+    return list != null
+        && list.size() == 1
+        && list.get(0) instanceof SqlIdentifier
+        && ((SqlIdentifier) list.get(0)).isStar();
+  }
+
+  private static boolean isValuesStar(SqlNode source) {
+    if (!(source instanceof SqlCall)) {
+      return false;
+    }
+    SqlCall valuesCall = (SqlCall) source;
+    if (valuesCall.getKind() != SqlKind.VALUES
+        || valuesCall.operandCount() != 1
+        || !(valuesCall.operand(0) instanceof SqlCall)) {
+      return false;
+    }
+    SqlCall rowCall = valuesCall.operand(0);
+    return rowCall.operandCount() == 1
+        && rowCall.operand(0) instanceof SqlIdentifier
+        && ((SqlIdentifier) rowCall.operand(0)).isStar();
+  }
+
   /** Returns the condition expression to determine whether to UPDATE or
    * INSERT. */
   public SqlNode getCondition() {
@@ -205,33 +242,41 @@ public class SqlMerge extends SqlCall {
     if (updateCall != null) {
       writer.newlineAndIndent();
       writer.keyword("WHEN MATCHED THEN UPDATE");
-      final SqlWriter.Frame setFrame =
-          writer.startList(
-              SqlWriter.FrameTypeEnum.UPDATE_SET_LIST,
-              "SET",
-              "");
+      if (isUpdateStar(updateCall)) {
+        writer.keyword("SET *");
+      } else {
+        final SqlWriter.Frame setFrame =
+            writer.startList(
+                SqlWriter.FrameTypeEnum.UPDATE_SET_LIST,
+                "SET",
+                "");
 
-      for (Pair<SqlNode, SqlNode> pair : Pair.zip(
-          updateCall.targetColumnList, updateCall.sourceExpressionList)) {
-        writer.sep(",");
-        SqlIdentifier id = (SqlIdentifier) pair.left;
-        id.unparse(writer, opLeft, opRight);
-        writer.keyword("=");
-        SqlNode sourceExp = pair.right;
-        sourceExp.unparse(writer, opLeft, opRight);
+        for (Pair<SqlNode, SqlNode> pair : Pair.zip(
+            updateCall.targetColumnList, updateCall.sourceExpressionList)) {
+          writer.sep(",");
+          SqlIdentifier id = (SqlIdentifier) pair.left;
+          id.unparse(writer, opLeft, opRight);
+          writer.keyword("=");
+          SqlNode sourceExp = pair.right;
+          sourceExp.unparse(writer, opLeft, opRight);
+        }
+        writer.endList(setFrame);
       }
-      writer.endList(setFrame);
     }
 
     SqlInsert insertCall = this.insertCall;
     if (insertCall != null) {
       writer.newlineAndIndent();
       writer.keyword("WHEN NOT MATCHED THEN INSERT");
-      SqlNodeList targetColumnList = insertCall.getTargetColumnList();
-      if (targetColumnList != null) {
-        targetColumnList.unparse(writer, opLeft, opRight);
+      if (isInsertStar(insertCall)) {
+        writer.keyword("*");
+      } else {
+        SqlNodeList targetColumnList = insertCall.getTargetColumnList();
+        if (targetColumnList != null) {
+          targetColumnList.unparse(writer, opLeft, opRight);
+        }
+        insertCall.getSource().unparse(writer, 0, 0);
       }
-      insertCall.getSource().unparse(writer, 0, 0);
 
       writer.endList(frame);
     }

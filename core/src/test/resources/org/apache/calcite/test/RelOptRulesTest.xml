@@ -10205,6 +10205,32 @@ LogicalTableModify(table=[[CATALOG, SALES, EMPNULLABLES]], operation=[MERGE], up
 ]]>
     </Resource>
   </TestCase>
+  <TestCase name="testMergeToJoinRuleStarActions">
+    <Resource name="sql">
+      <![CDATA[merge into empnullables e
+using (select * from empnullables) t
+on e.empno = t.empno
+when matched then update set *
+when not matched then insert *]]>
+    </Resource>
+    <Resource name="planBefore">
+      <![CDATA[
+LogicalTableModify(table=[[CATALOG, SALES, EMPNULLABLES]], operation=[MERGE], mergeSpec=[MergeSpec(onCondition=[=($9, $0)], sourceFieldCount=9, clauses=[MergeClause(matchType=MATCHED, actionType=UPDATE, targetColumnOrdinals=[0, 1, 2, 3, 4, 5, 6, 7, 8], sourceExpressionList=[$0, $1, $2, $3, $4, $5, $6, $7, $8]), MergeClause(matchType=NOT_MATCHED, actionType=INSERT, targetColumnOrdinals=[0, 1, 2, 3, 4, 5, 6, 7, 8], sourceExpressionList=[$0, $1, $2, $3, $4, $5, $6, $7, $8])])], flattened=[false])
+  LogicalProject(EMPNO=[$0], ENAME=[$1], JOB=[$2], MGR=[$3], HIREDATE=[$4], SAL=[$5], COMM=[$6], DEPTNO=[$7], SLACKER=[$8])
+    LogicalTableScan(table=[[CATALOG, SALES, EMPNULLABLES]])
+]]>
+    </Resource>
+    <Resource name="planAfter">
+      <![CDATA[
+LogicalTableModify(table=[[CATALOG, SALES, EMPNULLABLES]], operation=[MERGE], updateColumnList=[[EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO, SLACKER]], flattened=[false])
+  LogicalProject(EMPNO=[$0], ENAME=[$1], JOB=[$2], MGR=[$3], HIREDATE=[$4], SAL=[$5], COMM=[$6], DEPTNO=[$7], SLACKER=[$8], EMPNO0=[$9], ENAME0=[$10], JOB0=[$11], MGR0=[$12], HIREDATE0=[$13], SAL0=[$14], COMM0=[$15], DEPTNO0=[$16], SLACKER0=[$17], EMPNO1=[$0], ENAME1=[$1], JOB1=[$2], MGR1=[$3], HIREDATE1=[$4], SAL1=[$5], COMM1=[$6], DEPTNO1=[$7], SLACKER1=[$8])
+    LogicalJoin(condition=[=($9, $0)], joinType=[left])
+      LogicalProject(EMPNO=[$0], ENAME=[$1], JOB=[$2], MGR=[$3], HIREDATE=[$4], SAL=[$5], COMM=[$6], DEPTNO=[$7], SLACKER=[$8])
+        LogicalTableScan(table=[[CATALOG, SALES, EMPNULLABLES]])
+      LogicalTableScan(table=[[CATALOG, SALES, EMPNULLABLES]])
+]]>
+    </Resource>
+  </TestCase>
   <TestCase name="testMergeToJoinRuleUpdateOnly">
     <Resource name="sql">
       <![CDATA[merge into empnullables e

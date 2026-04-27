@@ -90,6 +90,12 @@ public interface SqlConformance {
   boolean allowCharLiteralAlias();
 
   /**
+   * Whether {@code MERGE} allows Spark/Databricks-style
+   * {@code UPDATE SET *} and {@code INSERT *} actions.
+   */
+  boolean allowMergeActionStar();
+
+  /**
    * Whether to allow aliases from the {@code SELECT} clause to be used as
    * column names in the {@code GROUP BY} clause.
    *

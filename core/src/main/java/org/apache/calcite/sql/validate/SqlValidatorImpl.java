@@ -1743,6 +1743,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
 
     case MERGE: {
       SqlMerge call = (SqlMerge) node;
+      expandMergeActionStars(call);
       rewriteMerge(call);
       break;
     }
@@ -1829,6 +1830,100 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
               null, null, null, null, null, null, null, null);
       insertCall.setSource(select);
     }
+  }
+
+  private void expandMergeActionStars(SqlMerge call) {
+    SqlUpdate updateCall = call.getUpdateCall();
+    SqlInsert insertCall = call.getInsertCall();
+    final boolean updateStar =
+        updateCall != null && SqlMerge.isUpdateStar(updateCall);
+    final boolean insertStar =
+        insertCall != null && SqlMerge.isInsertStar(insertCall);
+    if (!updateStar && !insertStar) {
+      return;
+    }
+    if (!config.conformance().allowMergeActionStar()) {
+      final SqlNode star;
+      if (updateStar) {
+        star = requireNonNull(updateCall, "updateCall").getTargetColumnList().get(0);
+      } else {
+        star = requireNonNull(requireNonNull(insertCall, "insertCall").getTargetColumnList())
+            .get(0);
+      }
+      throw SqlUtil.newContextException(star.getParserPosition(),
+          RESOURCE.mergeActionStarNotAllowed());
+    }
+
+    final SqlValidatorTable table =
+        requireNonNull(getMergeTargetTable(call),
+            () -> "target table for " + call);
+    final SqlNodeList targetColumnList =
+        createMergeStarTargetColumnList(table.getRowType());
+    final SqlNodeList sourceExpressionList =
+        createMergeStarSourceExpressionList(call, table.getRowType());
+
+    if (updateStar) {
+      final SqlUpdate update = requireNonNull(updateCall, "updateCall");
+      update.setOperand(1, SqlNode.clone(targetColumnList));
+      update.setOperand(2, SqlNode.clone(sourceExpressionList));
+      update.setSourceSelect(createSourceSelectForUpdate(update));
+    }
+
+    if (insertStar) {
+      final SqlInsert insert = requireNonNull(insertCall, "insertCall");
+      insert.setOperand(3, SqlNode.clone(targetColumnList));
+      final SqlNode row =
+          SqlStdOperatorTable.ROW.createCall(sourceExpressionList.getParserPosition(),
+          sourceExpressionList.toArray(new SqlNode[0]));
+      insert.setOperand(
+          2, SqlStdOperatorTable.VALUES.createCall(
+          sourceExpressionList.getParserPosition(), row));
+    }
+  }
+
+  private @Nullable SqlValidatorTable getMergeTargetTable(SqlMerge call) {
+    final @Nullable SqlIdentifier id =
+        getMergeTargetTableIdentifier(call.getTargetTable());
+    return id == null ? null : catalogReader.getTable(id.names);
+  }
+
+  private static @Nullable SqlIdentifier getMergeTargetTableIdentifier(
+      SqlNode targetTable) {
+    if (targetTable instanceof SqlIdentifier) {
+      return (SqlIdentifier) targetTable;
+    }
+    if (targetTable instanceof SqlCall) {
+      final SqlCall call = (SqlCall) targetTable;
+      if (call.operandCount() > 0) {
+        return getMergeTargetTableIdentifier(call.operand(0));
+      }
+    }
+    return null;
+  }
+
+  private static SqlNodeList createMergeStarTargetColumnList(
+      RelDataType targetRowType) {
+    final SqlNodeList targetColumnList = new SqlNodeList(SqlParserPos.ZERO);
+    for (RelDataTypeField field : targetRowType.getFieldList()) {
+      targetColumnList.add(
+          new SqlIdentifier(field.getName(), SqlParserPos.ZERO));
+    }
+    return targetColumnList;
+  }
+
+  private static SqlNodeList createMergeStarSourceExpressionList(SqlMerge call,
+      RelDataType targetRowType) {
+    final SqlNodeList sourceExpressionList =
+        new SqlNodeList(SqlParserPos.ZERO);
+    final @Nullable String sourceAlias =
+        SqlValidatorUtil.alias(call.getSourceTableRef());
+    for (RelDataTypeField field : targetRowType.getFieldList()) {
+      sourceExpressionList.add(sourceAlias == null
+          ? new SqlIdentifier(field.getName(), SqlParserPos.ZERO)
+          : new SqlIdentifier(ImmutableList.of(sourceAlias, field.getName()),
+              SqlParserPos.ZERO));
+    }
+    return sourceExpressionList;
   }
 
   private SqlNode rewriteUpdateToMerge(
