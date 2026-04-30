@@ -269,8 +269,8 @@ abstract class HepInstruction {
       this.subProgram = requireNonNull(subProgram, "subProgram");
     }
 
-    @Override HepProgram.State prepare(PrepareContext px) {
-      return subProgram.prepare(px);
+    @Override State prepare(PrepareContext px) {
+      return new State(px);
     }
 
     /** State for a {@link SubProgram} instruction. */

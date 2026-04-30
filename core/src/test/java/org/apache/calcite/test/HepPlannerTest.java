@@ -19,6 +19,8 @@ package org.apache.calcite.test;
 import org.apache.calcite.config.CalciteSystemProperty;
 import org.apache.calcite.plan.RelOptListener;
 import org.apache.calcite.plan.RelOptMaterialization;
+import org.apache.calcite.plan.RelOptRule;
+import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.plan.hep.HepMatchOrder;
 import org.apache.calcite.plan.hep.HepPlanner;
@@ -27,11 +29,16 @@ import org.apache.calcite.plan.hep.HepProgramBuilder;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.externalize.RelDotWriter;
 import org.apache.calcite.rel.logical.LogicalIntersect;
+import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.logical.LogicalUnion;
 import org.apache.calcite.rel.logical.LogicalValues;
 import org.apache.calcite.rel.rules.CoerceInputsRule;
 import org.apache.calcite.rel.rules.CoreRules;
+import org.apache.calcite.rex.RexCall;
+import org.apache.calcite.rex.RexInputRef;
+import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.sql.SqlExplainLevel;
+import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.tools.RelBuilder;
 
@@ -46,6 +53,7 @@ import java.io.StringWriter;
 
 import static org.apache.calcite.test.Matchers.isLinux;
 
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
@@ -321,6 +329,33 @@ class HepPlannerTest {
     sql(sql).withProgram(programBuilder.build()).check();
   }
 
+  @Test void testSubprogramRerunsWholeProgram() {
+    diffRepos = DiffRepository.lookup(HepPlannerTest.class);
+    HepProgramBuilder subprogramBuilder = HepProgram.builder();
+    subprogramBuilder.addMatchOrder(HepMatchOrder.TOP_DOWN);
+    subprogramBuilder.addRuleInstance(
+        new ProjectExpressionRule(SqlStdOperatorTable.UPPER, SqlStdOperatorTable.LOWER));
+    subprogramBuilder.addRuleInstance(
+        new ProjectExpressionRule(null, SqlStdOperatorTable.UPPER));
+
+    HepProgramBuilder programBuilder = HepProgram.builder();
+    programBuilder.addSubprogram(subprogramBuilder.build());
+
+    final RelBuilder builder = RelBuilderTest.createBuilder();
+    final RelNode root =
+        builder.scan("DEPT")
+            .project(ImmutableList.of(builder.field("DNAME")),
+                ImmutableList.of("START"), true)
+            .build();
+
+    HepPlanner planner = new HepPlanner(programBuilder.build());
+    planner.setRoot(root);
+    RelNode bestRel = planner.findBestExp();
+    String plan = RelOptUtil.toString(bestRel);
+
+    assertThat(plan, containsString("LOWER(UPPER($1))"));
+  }
+
   @Test void testGroup() {
     // Verify simultaneous application of a group of rules.
     // Intentionally add them in the wrong order to make sure
@@ -512,6 +547,47 @@ class HepPlannerTest {
         .push(lower)
         .union(true)
         .build();
+  }
+
+  /** Rule that wraps the expression of a single-field project. */
+  @SuppressWarnings("deprecation")
+  private static class ProjectExpressionRule extends RelOptRule {
+    private final @Nullable SqlOperator sourceOperator;
+    private final SqlOperator targetOperator;
+
+    ProjectExpressionRule(
+        @Nullable SqlOperator sourceOperator, SqlOperator targetOperator) {
+      super(operand(LogicalProject.class, any()),
+          "ProjectExpressionRule:"
+              + (sourceOperator == null ? "InputRef" : sourceOperator.getName())
+              + ":" + targetOperator.getName());
+      this.sourceOperator = sourceOperator;
+      this.targetOperator = targetOperator;
+    }
+
+    @Override public boolean matches(RelOptRuleCall call) {
+      LogicalProject project = call.rel(0);
+      if (project.getProjects().size() != 1) {
+        return false;
+      }
+      RexNode expression = project.getProjects().get(0);
+      if (sourceOperator == null) {
+        return expression instanceof RexInputRef;
+      }
+      return expression instanceof RexCall
+          && ((RexCall) expression).getOperator() == sourceOperator;
+    }
+
+    @Override public void onMatch(RelOptRuleCall call) {
+      LogicalProject project = call.rel(0);
+      RelBuilder builder = call.builder();
+      builder.push(project.getInput())
+          .project(
+              ImmutableList.of(
+                  builder.call(targetOperator, project.getProjects().get(0))),
+              project.getRowType().getFieldNames(), true);
+      call.transformTo(builder.build());
+    }
   }
 
   /** Listener for HepPlannerTest; counts how many times rules fire. */

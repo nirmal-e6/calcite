@@ -448,7 +448,7 @@ public class HepPlanner extends AbstractRelOptPlanner {
     LOGGER.trace("Entering subprogram");
     for (;;) {
       int nTransformationsBefore = nTransformations;
-      state.programState.execute();
+      state.subProgramState.execute();
       if (nTransformations == nTransformationsBefore) {
         // Nothing happened this time around.
         break;
