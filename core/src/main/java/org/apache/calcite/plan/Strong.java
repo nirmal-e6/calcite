@@ -16,16 +16,21 @@
  */
 package org.apache.calcite.plan;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexFieldAccess;
 import org.apache.calcite.rex.RexInputRef;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.rex.RexSubQuery;
+import org.apache.calcite.rex.RexUnknownAs;
 import org.apache.calcite.rex.RexUtil;
 import org.apache.calcite.rex.RexVisitorImpl;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlOperator;
+import org.apache.calcite.sql.fun.SqlQuantifyOperator;
 import org.apache.calcite.util.ImmutableBitSet;
+import org.apache.calcite.util.Sarg;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -33,37 +38,43 @@ import com.google.common.collect.Iterables;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Utilities for strong predicates.
+import static java.util.Objects.requireNonNull;
+
+/**
+ * Utilities for strong predicates.
  *
- * <p>A predicate is strong (or null-rejecting) with regard to selected subset of inputs
- * if it is UNKNOWN if all inputs in selected subset are UNKNOWN.
+ * <p>A predicate is strong (or null-rejecting) with regard to selected subset of inputs if it is
+ * UNKNOWN if all inputs in selected subset are UNKNOWN.
  *
  * <p>By the way, UNKNOWN is just the boolean form of NULL.
  *
  * <p>Examples:
+ *
  * <ul>
  *   <li>{@code UNKNOWN} is strong in [] (definitely null)
- *   <li>{@code c = 1} is strong in [c] (definitely null if and only if c is
+ *   <li>{@code c = 1} is strong in [c] (definitely null if and only if c is null)
+ *   <li>{@code c IS NULL} is not strong (always returns TRUE or FALSE, never null)
+ *   <li>{@code p1 AND p2} is strong in [p1, p2] (definitely null if either p1 is null or p2 is
  *   null)
- *   <li>{@code c IS NULL} is not strong (always returns TRUE or FALSE, never
- *   null)
- *   <li>{@code p1 AND p2} is strong in [p1, p2] (definitely null if either p1
- *   is null or p2 is null)
  *   <li>{@code p1 OR p2} is strong if p1 and p2 are strong
  * </ul>
  */
 public class Strong {
   private static final Map<SqlKind, Policy> MAP = createPolicyMap();
 
+  private static final Map<String, Policy> FUNCTION_MAP = createPolicyMapForFunctions();
+
   public Strong() {
     super();
   }
 
-  /** Returns a checker that consults a bit set to find out whether particular
-   * inputs may be null. */
+  /**
+   * Returns a checker that consults a bit set to find out whether particular inputs may be null.
+   */
   public static Strong of(final ImmutableBitSet nullColumns) {
     return new Strong() {
       @Override public boolean isNull(RexInputRef ref) {
@@ -72,8 +83,7 @@ public class Strong {
     };
   }
 
-  /** Returns a checker that consults a set to find out whether particular
-   * field may be null. */
+  /** Returns a checker that consults a set to find out whether particular field may be null. */
   public static Strong of(final ImmutableSet<RexFieldAccess> nullFields) {
     return new Strong() {
       @Override public boolean isNull(RexFieldAccess ref) {
@@ -82,22 +92,25 @@ public class Strong {
     };
   }
 
-  /** Returns whether the analyzed expression will definitely return null if
-   * all of a given set of input columns are null. */
+  /**
+   * Returns whether the analyzed expression will definitely return null if all of a given set of
+   * input columns are null.
+   */
   public static boolean isNull(RexNode node, ImmutableBitSet nullColumns) {
     return of(nullColumns).isNull(node);
   }
 
-  /** Returns whether the analyzed expression will definitely not return true
-   * (equivalently, will definitely return null or false) if
-   * all of a given set of input columns are null. */
+  /**
+   * Returns whether the analyzed expression will definitely not return true (equivalently, will
+   * definitely return null or false) if all of a given set of input columns are null.
+   */
   public static boolean isNotTrue(RexNode node, ImmutableBitSet nullColumns) {
     return of(nullColumns).isNotTrue(node);
   }
 
   /**
-   * Returns how to deduce whether a particular kind of expression is null,
-   * given whether its arguments are null.
+   * Returns how to deduce whether a particular kind of expression is null, given whether its
+   * arguments are null.
    *
    * @deprecated Use {@link Strong#policy(RexNode)} or {@link Strong#policy(SqlOperator)}
    */
@@ -107,8 +120,8 @@ public class Strong {
   }
 
   /**
-   * Returns how to deduce whether a particular {@link RexNode} expression is null,
-   * given whether its arguments are null.
+   * Returns how to deduce whether a particular {@link RexNode} expression is null, given whether
+   * its arguments are null.
    */
   public static Policy policy(RexNode rexNode) {
     if (rexNode instanceof RexCall) {
@@ -118,13 +131,24 @@ public class Strong {
   }
 
   /**
-   * Returns how to deduce whether a particular {@link SqlOperator} expression is null,
-   * given whether its arguments are null.
+   * Returns how to deduce whether a particular {@link SqlOperator} expression is null, given
+   * whether its arguments are null.
    */
   public static Policy policy(SqlOperator operator) {
     if (operator.getStrongPolicyInference() != null) {
       return operator.getStrongPolicyInference().get();
     }
+
+    // Function's Kind shouldn't matter here because while validating, when we encounter multiple
+    // instances of same function
+    // then we are setting Function from SqlStdOperatorTablePlus
+    // and function kind are different for different functions
+    if (CalciteForkSettings.enableOuterJoinOpt()) {
+      if (FUNCTION_MAP.containsKey(operator.getName().toUpperCase())) {
+        return FUNCTION_MAP.get(operator.getName().toUpperCase());
+      }
+    }
+
     return MAP.getOrDefault(operator.getKind(), Policy.AS_IS);
   }
 
@@ -132,11 +156,10 @@ public class Strong {
    * Returns whether a given expression is strong.
    *
    * <p>Examples:
+   *
    * <ul>
-   *   <li>Returns true for {@code c = 1} since it returns null if and only if
-   *   c is null
-   *   <li>Returns false for {@code c IS NULL} since it always returns TRUE
-   *   or FALSE
+   *   <li>Returns true for {@code c = 1} since it returns null if and only if c is null
+   *   <li>Returns false for {@code c IS NULL} since it always returns TRUE or FALSE
    *</ul>
    *
    * @param e Expression
@@ -159,11 +182,13 @@ public class Strong {
     return operands.stream().allMatch(Strong::isStrong);
   }
 
-  /** Returns whether the analyzed expression will definitely not return true
-   * (equivalently, will definitely return null or false). */
+  /**
+   * Returns whether the analyzed expression will definitely not return true (equivalently, will
+   * definitely return null or false).
+   */
   public boolean isNotTrue(RexNode node) {
     switch (node.getKind()) {
-    // TODO Enrich with more possible cases?
+        // TODO Enrich with more possible cases?
     case IS_NOT_NULL:
       return isNull(((RexCall) node).getOperands().get(0));
     case OR:
@@ -195,11 +220,12 @@ public class Strong {
     return false;
   }
 
-  /** Returns whether an expression is definitely null.
+  /**
+   * Returns whether an expression is definitely null.
    *
-   * <p>The answer is based on calls to {@link #isNull} for its constituent
-   * expressions, and you may override methods to test hypotheses such as
-   * "if {@code x} is null, is {@code x + y} null? */
+   * <p>The answer is based on calls to {@link #isNull} for its constituent expressions, and you may
+   * override methods to test hypotheses such as "if {@code x} is null, is {@code x + y} null?
+   */
   public boolean isNull(RexNode node) {
     final Policy policy = policy(node);
     switch (policy) {
@@ -237,6 +263,28 @@ public class Strong {
         }
       }
       return allNull(caseValues);
+    case SEARCH:
+      final RexCall searchCall = (RexCall) node;
+      boolean isNull = isNull(searchCall.getOperands().get(0));
+      if (isNull) {
+        final Sarg<?> sarg =
+              requireNonNull(((RexLiteral) searchCall.getOperands().get(1)).getValueAs(Sarg.class));
+        return sarg.nullAs == RexUnknownAs.UNKNOWN;
+      }
+      return false;
+    case SOME:
+    case ALL:
+      final RexCall rexCall = (RexCall) node;
+        // For example:
+        // select NULL > all (select comm from emp where 1 = 0) from emp
+        // return FALSE when the sub-query returns 0 row
+      if (rexCall instanceof RexSubQuery) {
+        return false;
+      }
+      if (rexCall.getOperator() instanceof SqlQuantifyOperator) {
+        return anyNull(rexCall.getOperands());
+      }
+      return false;
     default:
       return false;
     }
@@ -270,6 +318,41 @@ public class Strong {
       }
     }
     return false;
+  }
+
+  private static Map<String, Policy> createPolicyMapForFunctions() {
+    HashMap<String, Policy> map = new HashMap<>();
+
+    // Other functions to check: JSON_EXTRACT, SEQUENCE, UNNEST, CAST,
+    // ROW_NUMBER, VARCHAR
+    map.put("TRIM", Policy.ANY);
+    map.put("LOWER", Policy.ANY);
+    map.put("LTRIM", Policy.ANY);
+    map.put("RTRIM", Policy.ANY);
+    map.put("CEIL", Policy.ANY);
+    map.put("FLOOR", Policy.ANY);
+    map.put("EXTRACT", Policy.ANY);
+    map.put("DATE", Policy.ANY);
+    map.put("DATETIME", Policy.ANY);
+    map.put("DATE_ADD", Policy.ANY);
+    map.put("DATE_DIFF", Policy.ANY);
+    map.put("DATE_FORMAT", Policy.ANY);
+    map.put("DATE_TRUNC", Policy.ANY);
+    map.put("DAY", Policy.ANY);
+    map.put("HOUR", Policy.ANY);
+    map.put("FROM_UNIXTIME", Policy.ANY);
+    map.put("ROUND", Policy.ANY);
+
+    // The following types of expressions could potentially be custom.
+    map.put("CASE", Policy.AS_IS);
+    map.put("DECODE", Policy.AS_IS);
+    // NULLIF(1, NULL) yields 1, but NULLIF(1, 1) yields NULL
+    map.put("NULLIF", Policy.AS_IS);
+    // COALESCE(NULL, 2) yields 2
+    map.put("COALESCE", Policy.AS_IS);
+    map.put("NVL", Policy.AS_IS);
+
+    return map;
   }
 
   private static Map<SqlKind, Policy> createPolicyMap() {
@@ -322,11 +405,6 @@ public class Strong {
     map.put(SqlKind.MINUS, Policy.ANY);
     map.put(SqlKind.MINUS_PREFIX, Policy.ANY);
     map.put(SqlKind.TIMES, Policy.ANY);
-    map.put(SqlKind.CHECKED_PLUS, Policy.ANY);
-    map.put(SqlKind.CHECKED_MINUS, Policy.ANY);
-    map.put(SqlKind.CHECKED_MINUS_PREFIX, Policy.ANY);
-    map.put(SqlKind.CHECKED_TIMES, Policy.ANY);
-    map.put(SqlKind.CHECKED_DIVIDE, Policy.ANY);
 
     map.put(SqlKind.DIVIDE, Policy.ANY);
     map.put(SqlKind.CAST, Policy.ANY);
@@ -344,8 +422,7 @@ public class Strong {
     map.put(SqlKind.ITEM, Policy.ANY);
 
     // Assume that any other expressions cannot be simplified.
-    for (SqlKind k
-        : Iterables.concat(SqlKind.EXPRESSION, SqlKind.AGGREGATE)) {
+    for (SqlKind k : Iterables.concat(SqlKind.EXPRESSION, SqlKind.AGGREGATE)) {
       if (!map.containsKey(k)) {
         map.put(k, Policy.AS_IS);
       }
@@ -353,19 +430,18 @@ public class Strong {
     return map;
   }
 
-  /** How whether an operator's operands are null affects whether a call to
-   * that operator evaluates to null. */
+  /**
+   * How whether an operator's operands are null affects whether a call to that operator evaluates
+   * to null.
+   */
   public enum Policy {
-    /** This kind of expression is never null. No need to look at its arguments,
-     * if it has any. */
+    /** This kind of expression is never null. No need to look at its arguments, if it has any. */
     NOT_NULL,
 
-    /** This kind of expression has its own particular rules about whether it
-     * is null. */
+    /** This kind of expression has its own particular rules about whether it is null. */
     CUSTOM,
 
-    /** This kind of expression is null if and only if at least one of its
-     * arguments is null. */
+    /** This kind of expression is null if and only if at least one of its arguments is null. */
     ANY,
 
     /** This kind of expression may be null. There is no way to rewrite. */

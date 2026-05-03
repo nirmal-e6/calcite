@@ -43,40 +43,38 @@ import java.util.function.Supplier;
 
 import static org.apache.calcite.linq4j.Nullness.castNonNull;
 
+/* This class is a copy of Calcite RelMetadataQuery. The only difference is in the
+ * method getDistinctRowCount - validation has been customized to handle
+ * scenarios where NDV is missing.
+ */
+
 /**
- * RelMetadataQuery provides a strongly-typed facade on top of
- * {@link RelMetadataProvider} for the set of relational expression metadata
- * queries defined as standard within Calcite. The Javadoc on these methods
- * serves as their primary specification.
+ * RelMetadataQuery provides a strongly-typed facade on top of {@link RelMetadataProvider} for the
+ * set of relational expression metadata queries defined as standard within Calcite. The Javadoc on
+ * these methods serves as their primary specification.
  *
- * <p>To add a new standard query <code>Xyz</code> to this interface, follow
- * these steps:
+ * <p>To add a new standard query <code>Xyz</code> to this interface, follow these steps:
  *
  * <ol>
  * <li>Add a static method <code>getXyz</code> specification to this class.
- * <li>Add unit tests to {@code org.apache.calcite.test.RelMetadataTest}.
- * <li>Write a new provider class <code>RelMdXyz</code> in this package. Follow
- * the pattern from an existing class such as {@link RelMdColumnOrigins},
- * overloading on all of the logical relational expressions to which the query
- * applies.
- * <li>Add a {@code SOURCE} static member, similar to
- *     {@link RelMdColumnOrigins#SOURCE}.
+ *   <li>Add unit tests to {@code org.apache.calcite.test.RelMetadataTest}.
+ *   <li>Write a new provider class <code>RelMdXyz</code> in this package. Follow the pattern from
+ *       an existing class such as {@link RelMdColumnOrigins}, overloading on all of the logical
+ *       relational expressions to which the query applies.
+ *   <li>Add a {@code SOURCE} static member, similar to {@link RelMdColumnOrigins#SOURCE}.
  * <li>Register the {@code SOURCE} object in {@link DefaultRelMetadataProvider}.
  * <li>Get unit tests working.
  * </ol>
  *
- * <p>Because relational expression metadata is extensible, extension projects
- * can define similar facades in order to specify access to custom metadata.
- * Please do not add queries here (nor on {@link RelNode}) which lack meaning
- * outside of your extension.
+ * <p>Because relational expression metadata is extensible, extension projects can define similar
+ * facades in order to specify access to custom metadata. Please do not add queries here (nor on
+ * {@link RelNode}) which lack meaning outside of your extension.
  *
- * <p>Besides adding new metadata queries, extension projects may need to add
- * custom providers for the standard queries in order to handle additional
- * relational expressions (either logical or physical). In either case, the
- * process is the same: write a reflective provider and chain it on to an
- * instance of {@link DefaultRelMetadataProvider}, pre-pending it to the default
- * providers. Then supply that instance to the planner via the appropriate
- * plugin mechanism.
+ * <p>Besides adding new metadata queries, extension projects may need to add custom providers for
+ * the standard queries in order to handle additional relational expressions (either logical or
+ * physical). In either case, the process is the same: write a reflective provider and chain it on
+ * to an instance of {@link DefaultRelMetadataProvider}, pre-pending it to the default providers.
+ * Then supply that instance to the planner via the appropriate plugin mechanism.
  */
 public class RelMetadataQuery extends RelMetadataQueryBase {
   // An empty prototype. Only initialize on first use.
@@ -110,8 +108,8 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   private BuiltInMetadata.LowerBoundCost.Handler lowerBoundCostHandler;
 
   /**
-   * Creates the instance with {@link JaninoRelMetadataProvider} instance
-   * from {@link #THREAD_PROVIDERS} and {@link #EMPTY} as a prototype.
+   * Creates the instance with {@link JaninoRelMetadataProvider} instance from {@link
+   * #THREAD_PROVIDERS} and {@link #EMPTY} as a prototype.
    */
   protected RelMetadataQuery() {
     this(castNonNull(THREAD_PROVIDERS.get()), EMPTY.get());
@@ -138,8 +136,7 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
     this.maxRowCountHandler = provider.handler(BuiltInMetadata.MaxRowCount.Handler.class);
     this.minRowCountHandler = provider.handler(BuiltInMetadata.MinRowCount.Handler.class);
     this.memoryHandler = provider.handler(BuiltInMetadata.Memory.Handler.class);
-    this.measureHandler =
-        provider.handler(BuiltInMetadata.Measure.Handler.class);
+    this.measureHandler = provider.handler(BuiltInMetadata.Measure.Handler.class);
     this.nonCumulativeCostHandler =
         provider.handler(BuiltInMetadata.NonCumulativeCost.Handler.class);
     this.parallelismHandler = provider.handler(BuiltInMetadata.Parallelism.Handler.class);
@@ -156,8 +153,10 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
     this.lowerBoundCostHandler = provider.handler(BuiltInMetadata.LowerBoundCost.Handler.class);
   }
 
-  /** Creates and initializes the instance that will serve as a prototype for
-   * all other instances in the Janino case. */
+  /**
+   * Creates and initializes the instance that will serve as a prototype for all other instances in
+   * the Janino case.
+   */
   @SuppressWarnings("deprecation")
   private RelMetadataQuery(@SuppressWarnings("unused") boolean dummy) {
     super(null);
@@ -190,8 +189,7 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   private RelMetadataQuery(
-      MetadataHandlerProvider metadataHandlerProvider,
-      RelMetadataQuery prototype) {
+      MetadataHandlerProvider metadataHandlerProvider, RelMetadataQuery prototype) {
     super(metadataHandlerProvider);
     this.collationHandler = prototype.collationHandler;
     this.columnOriginHandler = prototype.columnOriginHandler;
@@ -223,17 +221,15 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   //~ Methods ----------------------------------------------------------------
 
   /**
-   * Returns an instance of RelMetadataQuery. It ensures that cycles do not
-   * occur while computing metadata.
+   * Returns an instance of RelMetadataQuery. It ensures that cycles do not occur while computing
+   * metadata.
    */
   public static RelMetadataQuery instance() {
     return new RelMetadataQuery();
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.NodeTypes#getNodeTypes()}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.NodeTypes#getNodeTypes()} statistic.
    *
    * @param rel the relational expression
    */
@@ -250,18 +246,22 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.RowCount#getRowCount()}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.RowCount#getRowCount()} statistic.
    *
    * @param rel the relational expression
-   * @return estimated row count, or null if no reliable estimate can be
-   * determined
+   * @return estimated row count, or null if no reliable estimate can be determined
    */
   public /* @Nullable: CALCITE-4263 */ Double getRowCount(RelNode rel) {
     for (;;) {
       try {
         Double result = rowCountHandler.getRowCount(rel, this);
+
+        // Avoiding the NDV set to -1 assert. It happens when CBO tries to fetch
+        // aggregate on a column via the RelMdDistinctRowCount handler
+        if (result == -1) {
+          result = 1.0;
+        }
+
         return RelMdUtil.validateResult(castNonNull(result));
       } catch (MetadataHandlerProvider.NoHandler e) {
         rowCountHandler = revise(BuiltInMetadata.RowCount.Handler.class);
@@ -270,9 +270,7 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.MaxRowCount#getMaxRowCount()}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.MaxRowCount#getMaxRowCount()} statistic.
    *
    * @param rel the relational expression
    * @return max row count
@@ -288,9 +286,7 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.MinRowCount#getMinRowCount()}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.MinRowCount#getMinRowCount()} statistic.
    *
    * @param rel the relational expression
    * @return min row count
@@ -309,8 +305,8 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
    * Returns whether the return rows of a given relational expression are empty.
    *
    * @param relNode the relational expression
-   * @return true or false depending on whether the return rows are empty, or
-   * null if not enough information is available to make that determination
+   * @return true or false depending on whether the return rows are empty, or null if not enough
+   *     information is available to make that determination
    */
   public @Nullable Boolean isEmpty(RelNode relNode) {
     Double minRowCount = getMinRowCount(relNode);
@@ -324,11 +320,8 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
     return null;
   }
 
-
   /**
-   * Returns the
-   * {@link BuiltInMetadata.CumulativeCost#getCumulativeCost()}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.CumulativeCost#getCumulativeCost()} statistic.
    *
    * @param rel the relational expression
    * @return estimated cost, or null if no reliable estimate can be determined
@@ -344,9 +337,7 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.NonCumulativeCost#getNonCumulativeCost()}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.NonCumulativeCost#getNonCumulativeCost()} statistic.
    *
    * @param rel the relational expression
    * @return estimated cost, or null if no reliable estimate can be determined
@@ -362,19 +353,17 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.PercentageOriginalRows#getPercentageOriginalRows()}
+   * Returns the {@link BuiltInMetadata.PercentageOriginalRows#getPercentageOriginalRows()}
    * statistic.
    *
    * @param rel the relational expression
-   * @return estimated percentage (between 0.0 and 1.0), or null if no
-   * reliable estimate can be determined
+   * @return estimated percentage (between 0.0 and 1.0), or null if no reliable estimate can be
+   *     determined
    */
   public @Nullable Double getPercentageOriginalRows(RelNode rel) {
     for (;;) {
       try {
-        Double result =
-            percentageOriginalRowsHandler.getPercentageOriginalRows(rel, this);
+        Double result = percentageOriginalRowsHandler.getPercentageOriginalRows(rel, this);
         return RelMdUtil.validatePercentage(result);
       } catch (MetadataHandlerProvider.NoHandler e) {
         percentageOriginalRowsHandler =
@@ -384,15 +373,12 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.ColumnOrigin#getColumnOrigins(int)}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.ColumnOrigin#getColumnOrigins(int)} statistic.
    *
    * @param rel           the relational expression
    * @param column 0-based ordinal for output column of interest
-   * @return set of origin columns, or null if this information cannot be
-   * determined (whereas empty set indicates definitely no origin columns at
-   * all)
+   * @return set of origin columns, or null if this information cannot be determined (whereas empty
+   *     set indicates definitely no origin columns at all)
    */
   public @Nullable Set<RelColumnOrigin> getColumnOrigins(RelNode rel, int column) {
     for (;;) {
@@ -408,11 +394,8 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
    * Determines the origin of a column.
    *
    * @see #getColumnOrigins(org.apache.calcite.rel.RelNode, int)
-   *
    * @param rel the RelNode of the column
-   * @param column the offset of the column whose origin we are trying to
-   * determine
-   *
+   * @param column the offset of the column whose origin we are trying to determine
    * @return the origin of a column
    */
   public @Nullable RelColumnOrigin getColumnOrigin(RelNode rel, int column) {
@@ -424,9 +407,7 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
     return origin;
   }
 
-  /**
-   * Determines the origin of a column.
-   */
+  /** Determines the origin of a column. */
   public @Nullable Set<RexNode> getExpressionLineage(RelNode rel, RexNode expression) {
     for (;;) {
       try {
@@ -437,9 +418,7 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
     }
   }
 
-  /**
-   * Determines the tables used by a plan.
-   */
+  /** Determines the tables used by a plan. */
   public @Nullable Set<RelTableRef> getTableReferences(RelNode rel) {
     for (;;) {
       try {
@@ -451,11 +430,10 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Determines the origin of a {@link RelNode}, provided it maps to a single
-   * table, optionally with filtering and projection.
+   * Determines the origin of a {@link RelNode}, provided it maps to a single table, optionally with
+   * filtering and projection.
    *
    * @param rel the RelNode
-   *
    * @return the table, if the RelNode is a simple table; otherwise null
    */
   public @Nullable RelOptTable getTableOrigin(RelNode rel) {
@@ -473,15 +451,12 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.Selectivity#getSelectivity(RexNode)}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.Selectivity#getSelectivity(RexNode)} statistic.
    *
    * @param rel       the relational expression
-   * @param predicate predicate whose selectivity is to be estimated against
-   *                  {@code rel}'s output
-   * @return estimated selectivity (between 0.0 and 1.0), or null if no
-   * reliable estimate can be determined
+   * @param predicate predicate whose selectivity is to be estimated against {@code rel}'s output
+   * @return estimated selectivity (between 0.0 and 1.0), or null if no reliable estimate can be
+   *     determined
    */
   public @Nullable Double getSelectivity(RelNode rel, @Nullable RexNode predicate) {
     for (;;) {
@@ -495,32 +470,25 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.UniqueKeys#getUniqueKeys(boolean)}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.UniqueKeys#getUniqueKeys(boolean)} statistic.
    *
    * @param rel the relational expression
-   * @return set of keys, or null if this information cannot be determined
-   * (whereas empty set indicates definitely no keys at all)
+   * @return set of keys, or null if this information cannot be determined (whereas empty set
+   *     indicates definitely no keys at all)
    */
   public @Nullable Set<ImmutableBitSet> getUniqueKeys(RelNode rel) {
     return getUniqueKeys(rel, false);
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.UniqueKeys#getUniqueKeys(boolean)}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.UniqueKeys#getUniqueKeys(boolean)} statistic.
    *
    * @param rel         the relational expression
-   * @param ignoreNulls if true, ignore null values when determining
-   *                    whether the keys are unique
-   *
-   * @return set of keys, or null if this information cannot be determined
-   * (whereas empty set indicates definitely no keys at all)
+   * @param ignoreNulls if true, ignore null values when determining whether the keys are unique
+   * @return set of keys, or null if this information cannot be determined (whereas empty set
+   *     indicates definitely no keys at all)
    */
-  public @Nullable Set<ImmutableBitSet> getUniqueKeys(RelNode rel,
-      boolean ignoreNulls) {
+  public @Nullable Set<ImmutableBitSet> getUniqueKeys(RelNode rel, boolean ignoreNulls) {
     for (;;) {
       try {
         return uniqueKeysHandler.getUniqueKeys(rel, this, ignoreNulls);
@@ -531,30 +499,25 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns whether the rows of a given relational expression are distinct,
-   * optionally ignoring NULL values.
+   * Returns whether the rows of a given relational expression are distinct, optionally ignoring
+   * NULL values.
    *
-   * <p>This is derived by applying the
-   * {@link BuiltInMetadata.ColumnUniqueness#areColumnsUnique(org.apache.calcite.util.ImmutableBitSet, boolean)}
-   * statistic over all columns. If
-   * {@link BuiltInMetadata.MaxRowCount#getMaxRowCount()}
-   * is less than or equal to one, we shortcut the process and declare the rows
-   * unique.
+   * <p>This is derived by applying the {@link
+   * BuiltInMetadata.ColumnUniqueness#areColumnsUnique(org.apache.calcite.util.ImmutableBitSet,
+   * boolean)} statistic over all columns. If {@link BuiltInMetadata.MaxRowCount#getMaxRowCount()}
+   * is less than or equal to one, we shortcut the process and declare the rows unique.
    *
    * @param rel     the relational expression
-   * @param ignoreNulls if true, ignore null values when determining column
-   *                    uniqueness
-   *
-   * @return whether the rows are unique, or
-   * null if not enough information is available to make that determination
+   * @param ignoreNulls if true, ignore null values when determining column uniqueness
+   * @return whether the rows are unique, or null if not enough information is available to make
+   *     that determination
    */
   public @Nullable Boolean areRowsUnique(RelNode rel, boolean ignoreNulls) {
     Double maxRowCount = this.getMaxRowCount(rel);
     if (maxRowCount != null && maxRowCount <= 1D) {
       return true;
     }
-    final ImmutableBitSet columns =
-        ImmutableBitSet.range(rel.getRowType().getFieldCount());
+    final ImmutableBitSet columns = ImmutableBitSet.range(rel.getRowType().getFieldCount());
     return areColumnsUnique(rel, columns, ignoreNulls);
   }
 
@@ -564,49 +527,43 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
    * <p>Derived by calling {@link #areRowsUnique(RelNode, boolean)}.
    *
    * @param rel     the relational expression
-   *
-   * @return whether the rows are unique, or
-   * null if not enough information is available to make that determination
+   * @return whether the rows are unique, or null if not enough information is available to make
+   *     that determination
    */
   public @Nullable Boolean areRowsUnique(RelNode rel) {
     return areRowsUnique(rel, false);
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.ColumnUniqueness#areColumnsUnique(ImmutableBitSet, boolean)}
+   * Returns the {@link BuiltInMetadata.ColumnUniqueness#areColumnsUnique(ImmutableBitSet, boolean)}
    * statistic.
    *
    * @param rel     the relational expression
-   * @param columns column mask representing the subset of columns for which
-   *                uniqueness will be determined
-   *
-   * @return true or false depending on whether the columns are unique, or
-   * null if not enough information is available to make that determination
+   * @param columns column mask representing the subset of columns for which uniqueness will be
+   *     determined
+   * @return true or false depending on whether the columns are unique, or null if not enough
+   *     information is available to make that determination
    */
   public @Nullable Boolean areColumnsUnique(RelNode rel, ImmutableBitSet columns) {
     return areColumnsUnique(rel, columns, false);
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.ColumnUniqueness#areColumnsUnique(ImmutableBitSet, boolean)}
+   * Returns the {@link BuiltInMetadata.ColumnUniqueness#areColumnsUnique(ImmutableBitSet, boolean)}
    * statistic.
    *
    * @param rel         the relational expression
-   * @param columns     column mask representing the subset of columns for which
-   *                    uniqueness will be determined
-   * @param ignoreNulls if true, ignore null values when determining column
-   *                    uniqueness
-   * @return true or false depending on whether the columns are unique, or
-   * null if not enough information is available to make that determination
+   * @param columns column mask representing the subset of columns for which uniqueness will be
+   *     determined
+   * @param ignoreNulls if true, ignore null values when determining column uniqueness
+   * @return true or false depending on whether the columns are unique, or null if not enough
+   *     information is available to make that determination
    */
-  public @Nullable Boolean areColumnsUnique(RelNode rel, ImmutableBitSet columns,
-      boolean ignoreNulls) {
+  public @Nullable Boolean areColumnsUnique(
+      RelNode rel, ImmutableBitSet columns, boolean ignoreNulls) {
     for (;;) {
       try {
-        return columnUniquenessHandler.areColumnsUnique(rel, this, columns,
-            ignoreNulls);
+        return columnUniquenessHandler.areColumnsUnique(rel, this, columns, ignoreNulls);
       } catch (MetadataHandlerProvider.NoHandler e) {
         columnUniquenessHandler = revise(BuiltInMetadata.ColumnUniqueness.Handler.class);
       }
@@ -614,13 +571,11 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.Collation#collations()}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.Collation#collations()} statistic.
    *
    * @param rel         the relational expression
-   * @return List of sorted column combinations, or
-   * null if not enough information is available to make that determination
+   * @return List of sorted column combinations, or null if not enough information is available to
+   *     make that determination
    */
   public @Nullable ImmutableList<RelCollation> collations(RelNode rel) {
     for (;;) {
@@ -633,13 +588,11 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.Distribution#distribution()}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.Distribution#distribution()} statistic.
    *
    * @param rel         the relational expression
-   * @return List of sorted column combinations, or
-   * null if not enough information is available to make that determination
+   * @return List of sorted column combinations, or null if not enough information is available to
+   *     make that determination
    */
   public RelDistribution distribution(RelNode rel) {
     for (;;) {
@@ -657,23 +610,19 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.PopulationSize#getPopulationSize(ImmutableBitSet)}
+   * Returns the {@link BuiltInMetadata.PopulationSize#getPopulationSize(ImmutableBitSet)}
    * statistic.
    *
    * @param rel      the relational expression
-   * @param groupKey column mask representing the subset of columns for which
-   *                 the row count will be determined
-   * @return distinct row count for the given groupKey, or null if no reliable
-   * estimate can be determined
-   *
+   * @param groupKey column mask representing the subset of columns for which the row count will be
+   *     determined
+   * @return distinct row count for the given groupKey, or null if no reliable estimate can be
+   *     determined
    */
-  public @Nullable Double getPopulationSize(RelNode rel,
-      ImmutableBitSet groupKey) {
+  public @Nullable Double getPopulationSize(RelNode rel, ImmutableBitSet groupKey) {
     for (;;) {
       try {
-        Double result =
-            populationSizeHandler.getPopulationSize(rel, this, groupKey);
+        Double result = populationSizeHandler.getPopulationSize(rel, this, groupKey);
         return RelMdUtil.validateResult(result);
       } catch (MetadataHandlerProvider.NoHandler e) {
         populationSizeHandler = revise(BuiltInMetadata.PopulationSize.Handler.class);
@@ -682,9 +631,7 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.Size#averageRowSize()}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.Size#averageRowSize()} statistic.
    *
    * @param rel      the relational expression
    * @return average size of a row, in bytes, or null if not known
@@ -700,14 +647,11 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.Size#averageColumnSizes()}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.Size#averageColumnSizes()} statistic.
    *
    * @param rel      the relational expression
-   * @return a list containing, for each column, the average size of a column
-   * value, in bytes. Each value or the entire list may be null if the
-   * metadata is not available
+   * @return a list containing, for each column, the average size of a column value, in bytes. Each
+   *     value or the entire list may be null if the metadata is not available
    */
   public @Nullable List<@Nullable Double> getAverageColumnSizes(RelNode rel) {
     for (;;) {
@@ -719,8 +663,10 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
     }
   }
 
-  /** As {@link #getAverageColumnSizes(org.apache.calcite.rel.RelNode)} but
-   * never returns a null list, only ever a list of nulls. */
+  /**
+   * As {@link #getAverageColumnSizes(org.apache.calcite.rel.RelNode)} but never returns a null
+   * list, only ever a list of nulls.
+   */
   public List<@Nullable Double> getAverageColumnSizesNotNull(RelNode rel) {
     final @Nullable List<@Nullable Double> averageColumnSizes = getAverageColumnSizes(rel);
     return averageColumnSizes == null
@@ -729,14 +675,11 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.Parallelism#isPhaseTransition()}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.Parallelism#isPhaseTransition()} statistic.
    *
    * @param rel      the relational expression
-   * @return whether each physical operator implementing this relational
-   * expression belongs to a different process than its inputs, or null if not
-   * known
+   * @return whether each physical operator implementing this relational expression belongs to a
+   *     different process than its inputs, or null if not known
    */
   public @Nullable Boolean isPhaseTransition(RelNode rel) {
     for (;;) {
@@ -749,9 +692,7 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.Parallelism#splitCount()}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.Parallelism#splitCount()} statistic.
    *
    * @param rel      the relational expression
    * @return the number of distinct splits of the data, or null if not known
@@ -767,14 +708,11 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.Memory#memory()}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.Memory#memory()} statistic.
    *
    * @param rel      the relational expression
-   * @return the expected amount of memory, in bytes, required by a physical
-   * operator implementing this relational expression, across all splits,
-   * or null if not known
+   * @return the expected amount of memory, in bytes, required by a physical operator implementing
+   *     this relational expression, across all splits, or null if not known
    */
   public @Nullable Double memory(RelNode rel) {
     for (;;) {
@@ -787,14 +725,12 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.Memory#cumulativeMemoryWithinPhase()}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.Memory#cumulativeMemoryWithinPhase()} statistic.
    *
    * @param rel      the relational expression
-   * @return the cumulative amount of memory, in bytes, required by the
-   * physical operator implementing this relational expression, and all other
-   * operators within the same phase, across all splits, or null if not known
+   * @return the cumulative amount of memory, in bytes, required by the physical operator
+   *     implementing this relational expression, and all other operators within the same phase,
+   *     across all splits, or null if not known
    */
   public @Nullable Double cumulativeMemoryWithinPhase(RelNode rel) {
     for (;;) {
@@ -807,14 +743,12 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.Memory#cumulativeMemoryWithinPhaseSplit()}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.Memory#cumulativeMemoryWithinPhaseSplit()} statistic.
    *
    * @param rel      the relational expression
-   * @return the expected cumulative amount of memory, in bytes, required by
-   * the physical operator implementing this relational expression, and all
-   * operators within the same phase, within each split, or null if not known
+   * @return the expected cumulative amount of memory, in bytes, required by the physical operator
+   *     implementing this relational expression, and all operators within the same phase, within
+   *     each split, or null if not known
    */
   public @Nullable Double cumulativeMemoryWithinPhaseSplit(RelNode rel) {
     for (;;) {
@@ -827,9 +761,7 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.Measure#isMeasure(int)}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.Measure#isMeasure(int)} statistic.
    *
    * @param rel      The relational expression
    * @param column   Output column of the relational expression
@@ -846,8 +778,7 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.Measure#expand(int, BuiltInMetadata.Measure.Context)}
+   * Returns the {@link BuiltInMetadata.Measure#expand(int, BuiltInMetadata.Measure.Context)}
    * statistic.
    *
    * @param rel      The relational expression
@@ -855,8 +786,7 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
    * @param context  Context of the use of the measure
    * @return expression for measure in the context
    */
-  public RexNode expand(RelNode rel, int column,
-      BuiltInMetadata.Measure.Context context) {
+  public RexNode expand(RelNode rel, int column, BuiltInMetadata.Measure.Context context) {
     for (;;) {
       try {
         return measureHandler.expand(rel, this, column, context);
@@ -874,19 +804,30 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
    * @param rel       the relational expression
    * @param groupKey  column mask representing group by columns
    * @param predicate pre-filtered predicates
-   * @return distinct row count for groupKey, filtered by predicate, or null
-   * if no reliable estimate can be determined
+   * @return distinct row count for groupKey, filtered by predicate, or null if no reliable estimate
+   *     can be determined
    */
   public @Nullable Double getDistinctRowCount(
-      RelNode rel,
-      ImmutableBitSet groupKey,
-      @Nullable RexNode predicate) {
+      RelNode rel, ImmutableBitSet groupKey, @Nullable RexNode predicate) {
     for (;;) {
       try {
-        Double result =
-            distinctRowCountHandler.getDistinctRowCount(rel, this, groupKey,
-                predicate);
-        return RelMdUtil.validateResult(result);
+        Double result = distinctRowCountHandler.getDistinctRowCount(rel, this, groupKey, predicate);
+
+        // e6data change to remove check for negative value
+        if (result == null) {
+          return null;
+        }
+
+        if (result.isInfinite()) {
+          result = Double.MAX_VALUE;
+        }
+        // if (result < 0.0) {
+        //   LOG.debug("NDV Missing! Might result in sub-optimal plan! \n"
+        //       + rel.explain());
+        // }
+
+        return result;
+        // return RelMdUtil.validateResult(result);
       } catch (MetadataHandlerProvider.NoHandler e) {
         distinctRowCountHandler = revise(BuiltInMetadata.DistinctRowCount.Handler.class);
       }
@@ -894,9 +835,7 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.Predicates#getPredicates()}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.Predicates#getPredicates()} statistic.
    *
    * @param rel the relational expression
    * @return Predicates that can be pulled above this RelNode
@@ -913,9 +852,7 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.AllPredicates#getAllPredicates()}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.AllPredicates#getAllPredicates()} statistic.
    *
    * @param rel the relational expression
    * @return All predicates within and below this RelNode
@@ -931,21 +868,17 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.ExplainVisibility#isVisibleInExplain(SqlExplainLevel)}
+   * Returns the {@link BuiltInMetadata.ExplainVisibility#isVisibleInExplain(SqlExplainLevel)}
    * statistic.
    *
    * @param rel          the relational expression
    * @param explainLevel level of detail
-   * @return true for visible, false for invisible; if no metadata is available,
-   * defaults to true
+   * @return true for visible, false for invisible; if no metadata is available, defaults to true
    */
-  public Boolean isVisibleInExplain(RelNode rel,
-      SqlExplainLevel explainLevel) {
+  public Boolean isVisibleInExplain(RelNode rel, SqlExplainLevel explainLevel) {
     for (;;) {
       try {
-        Boolean b =
-            explainVisibilityHandler.isVisibleInExplain(rel, this, explainLevel);
+        Boolean b = explainVisibilityHandler.isVisibleInExplain(rel, this, explainLevel);
         return b == null || b;
       } catch (MetadataHandlerProvider.NoHandler e) {
         explainVisibilityHandler = revise(BuiltInMetadata.ExplainVisibility.Handler.class);
@@ -954,14 +887,10 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
   }
 
   /**
-   * Returns the
-   * {@link BuiltInMetadata.Distribution#distribution()}
-   * statistic.
+   * Returns the {@link BuiltInMetadata.Distribution#distribution()} statistic.
    *
    * @param rel the relational expression
-   *
-   * @return description of how the rows in the relational expression are
-   * physically distributed
+   * @return description of how the rows in the relational expression are physically distributed
    */
   public @Nullable RelDistribution getDistribution(RelNode rel) {
     for (;;) {
@@ -973,9 +902,7 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
     }
   }
 
-  /**
-   * Returns the lower bound cost of a RelNode.
-   */
+  /** Returns the lower bound cost of a RelNode. */
   public @Nullable RelOptCost getLowerBoundCost(RelNode rel, VolcanoPlanner planner) {
     for (;;) {
       try {

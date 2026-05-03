@@ -27,17 +27,16 @@ import org.apache.calcite.sql.validate.SqlValidatorScope;
 
 import static org.apache.calcite.util.Static.RESOURCE;
 
+// e6data shade - Fixes to support query pattern involving WITHIN_GROUP
 /**
  * An operator describing a window function specification.
  *
  * <p>Operands are as follows:
  *
  * <ul>
- * <li>0: name of window function ({@link org.apache.calcite.sql.SqlCall})</li>
- *
- * <li>1: window name ({@link org.apache.calcite.sql.SqlLiteral}) or
- * window in-line specification ({@link SqlWindow})</li>
- *
+ *   <li>0: name of window function ({@link org.apache.calcite.sql.SqlCall})
+ *   <li>1: window name ({@link org.apache.calcite.sql.SqlLiteral}) or window in-line specification
+ *       ({@link SqlWindow})
  * </ul>
  */
 public class SqlOverOperator extends SqlBinaryOperator {
@@ -67,6 +66,8 @@ public class SqlOverOperator extends SqlBinaryOperator {
     switch (aggCall.getKind()) {
     case RESPECT_NULLS:
     case IGNORE_NULLS:
+        // e6data change - add WITHIN_GROUP here also
+    case WITHIN_GROUP:
       validator.validateCall(aggCall, scope);
       aggCall = aggCall.operand(0);
       break;
@@ -80,9 +81,7 @@ public class SqlOverOperator extends SqlBinaryOperator {
     validator.validateWindow(window, scope, aggCall);
   }
 
-  @Override public RelDataType deriveType(
-      SqlValidator validator,
-      SqlValidatorScope scope,
+  @Override public RelDataType deriveType(SqlValidator validator, SqlValidatorScope scope,
       SqlCall call) {
     // Validate type of the inner aggregate call
     validateOperands(validator, scope, call);
@@ -95,19 +94,23 @@ public class SqlOverOperator extends SqlBinaryOperator {
     SqlNode agg = call.operand(0);
 
     if (!(agg instanceof SqlCall)) {
-      throw new IllegalStateException("Argument to SqlOverOperator"
-          + " should be SqlCall, got " + agg.getClass() + ": " + agg);
+      throw new IllegalStateException(
+          "Argument to SqlOverOperator" + " should be SqlCall, got " + agg.getClass() + ": " + agg);
+    }
+
+    // E6data change - Unwrap WITHIN GROUP to get the inner aggregate call
+    SqlCall aggCall = (SqlCall) agg;
+    if (aggCall.getKind() == SqlKind.WITHIN_GROUP) {
+      aggCall = aggCall.operand(0);
     }
 
     SqlNode window = call.operand(1);
     SqlWindow w = validator.resolveWindow(window, scope);
 
-    final int groupCount = w.isAlwaysNonEmpty() ? 1 : 0;
-    final SqlCall aggCall = (SqlCall) agg;
-
-    SqlCallBinding opBinding = new SqlCallBinding(validator, scope, aggCall) {
-      @Override public int getGroupCount() {
-        return groupCount;
+    SqlCallBinding opBinding =
+        new SqlCallBinding(validator, scope, aggCall) {
+          @Override public boolean hasEmptyGroup() {
+            return !w.isAlwaysNonEmpty();
       }
     };
 

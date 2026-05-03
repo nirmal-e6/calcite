@@ -21,8 +21,9 @@ import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.SqlCallBinding;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlOperatorBinding;
+import org.apache.calcite.sql.type.ArraySqlType;
+import org.apache.calcite.sql.type.MapSqlType;
 import org.apache.calcite.sql.type.SqlTypeUtil;
-import org.apache.calcite.sql.validate.SqlValidatorUtil;
 import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.Util;
 
@@ -41,6 +42,8 @@ import static java.util.Objects.requireNonNull;
  * <p>This is an extension to standard SQL.
  */
 public class SqlMapValueConstructor extends SqlMultisetValueConstructor {
+  private boolean areInputsArrayType;
+
   public SqlMapValueConstructor() {
     // no need to deduce NULL operand type
     super("MAP", SqlKind.MAP_VALUE_CONSTRUCTOR, null);
@@ -52,8 +55,14 @@ public class SqlMapValueConstructor extends SqlMultisetValueConstructor {
         getComponentTypes(
             opBinding.getTypeFactory(), opBinding.collectOperandTypes());
 
-    // explicit cast elements to component type if they are not same
-    SqlValidatorUtil.adjustTypeForMapConstructor(type, opBinding);
+    if (type.left instanceof ArraySqlType && type.right instanceof ArraySqlType) {
+      areInputsArrayType = true;
+      return SqlTypeUtil.createMapType(
+          opBinding.getTypeFactory(),
+          requireNonNull(type.left.getComponentType(), "key array element type"),
+          requireNonNull(type.right.getComponentType(), "inferred value array element type"),
+          false);
+    }
 
     return SqlTypeUtil.createMapType(
         opBinding.getTypeFactory(),
@@ -69,7 +78,22 @@ public class SqlMapValueConstructor extends SqlMultisetValueConstructor {
     if (argTypes.isEmpty()) {
       throw callBinding.newValidationError(RESOURCE.mapRequiresTwoOrMoreArgs());
     }
+    if (argTypes.size() % 2 == 0) {
+      if (argTypes.get(0) instanceof MapSqlType) {
+        throw callBinding.newValidationError(RESOURCE.keyCannotBeAMap());
+      }
+      if ((argTypes.get(0) instanceof ArraySqlType
+          && !(argTypes.get(1) instanceof ArraySqlType))
+          || (argTypes.get(1) instanceof ArraySqlType
+          && !(argTypes.get(0) instanceof ArraySqlType))) {
+        throw callBinding.newValidationError(RESOURCE.mapRequiresBothArray());
+      }
+    }
     if (argTypes.size() % 2 > 0) {
+      if (argTypes.get(0) instanceof ArraySqlType
+          && argTypes.get(1) instanceof ArraySqlType) {
+        throw callBinding.newValidationError(RESOURCE.mapRequiresOnlyTwoArrays());
+      }
       throw callBinding.newValidationError(RESOURCE.mapRequiresEvenArgCount());
     }
     final Pair<@Nullable RelDataType, @Nullable RelDataType> componentType =
@@ -91,4 +115,8 @@ public class SqlMapValueConstructor extends SqlMultisetValueConstructor {
         typeFactory.leastRestrictive(Util.quotientList(argTypes, 2, 0)),
         typeFactory.leastRestrictive(Util.quotientList(argTypes, 2, 1)));
   }
+
+  public boolean areInputsArrayType() {
+    return areInputsArrayType;
+}
 }

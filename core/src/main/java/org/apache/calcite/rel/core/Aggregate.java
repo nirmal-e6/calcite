@@ -61,20 +61,22 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 import static java.util.Objects.requireNonNull;
 
+// Shaded from calcite commit - e810d8becb3544d141e7d4bf4fe65de24d0595c7 to port fixes to
+// decorrelation
+// Remove when upgraded to 1.42
+
 /**
- * Relational operator that eliminates
- * duplicates and computes totals.
+ * Relational operator that eliminates duplicates and computes totals.
  *
- * <p>It corresponds to the {@code GROUP BY} operator in a SQL query
- * statement, together with the aggregate functions in the {@code SELECT}
- * clause.
+ * <p>It corresponds to the {@code GROUP BY} operator in a SQL query statement, together with the
+ * aggregate functions in the {@code SELECT} clause.
  *
  * <p>Rules:
  *
  * <ul>
- * <li>{@link org.apache.calcite.rel.rules.AggregateProjectPullUpConstantsRule}
- * <li>{@link org.apache.calcite.rel.rules.AggregateExpandDistinctAggregatesRule}
- * <li>{@link org.apache.calcite.rel.rules.AggregateReduceFunctionsRule}.
+ *   <li>{@link org.apache.calcite.rel.rules.AggregateProjectPullUpConstantsRule}
+ *   <li>{@link org.apache.calcite.rel.rules.AggregateExpandDistinctAggregatesRule}
+ *   <li>{@link org.apache.calcite.rel.rules.AggregateReduceFunctionsRule}.
  * </ul>
  */
 public abstract class Aggregate extends SingleRel implements Hintable {
@@ -87,8 +89,7 @@ public abstract class Aggregate extends SingleRel implements Hintable {
 
   @SuppressWarnings("Guava")
   @Deprecated // to be converted to Java Predicate before 2.0
-  public static final com.google.common.base.Predicate<Aggregate> IS_SIMPLE =
-      Aggregate::isSimple;
+  public static final com.google.common.base.Predicate<Aggregate> IS_SIMPLE = Aggregate::isSimple;
 
   @SuppressWarnings("Guava")
   @Deprecated // to be converted to Java Predicate before 2.0
@@ -97,15 +98,13 @@ public abstract class Aggregate extends SingleRel implements Hintable {
 
   @SuppressWarnings("Guava")
   @Deprecated // to be converted to Java Predicate before 2.0
-  public static final com.google.common.base.Predicate<Aggregate>
-      IS_NOT_GRAND_TOTAL = Aggregate::isNotGrandTotal;
+  public static final com.google.common.base.Predicate<Aggregate> IS_NOT_GRAND_TOTAL =
+      Aggregate::isNotGrandTotal;
 
-  /** Used internally; will removed when {@link #indicator} is removed,
-   * before 2.0. */
+  /** Used internally; will removed when {@link #indicator} is removed, before 2.0. */
   @Experimental
   public static void checkIndicator(boolean indicator) {
-    checkArgument(!indicator,
-        "indicator is no longer supported; use GROUPING function instead");
+    checkArgument(!indicator, "indicator is no longer supported; use GROUPING function instead");
   }
 
   //~ Instance fields --------------------------------------------------------
@@ -122,25 +121,20 @@ public abstract class Aggregate extends SingleRel implements Hintable {
   /**
    * Creates an Aggregate.
    *
-   * <p>All members of {@code groupSets} must be sub-sets of {@code groupSet}.
-   * For a simple {@code GROUP BY}, {@code groupSets} is a singleton list
-   * containing {@code groupSet}.
+   * <p>All members of {@code groupSets} must be sub-sets of {@code groupSet}. For a simple {@code
+   * GROUP BY}, {@code groupSets} is a singleton list containing {@code groupSet}.
    *
-   * <p>It is allowed for {@code groupSet} to contain bits that are not in any
-   * of the {@code groupSets}, even this does not correspond to valid SQL. See
-   * discussion in
-   * {@link org.apache.calcite.tools.RelBuilder#groupKey(ImmutableBitSet, Iterable)}.
+   * <p>It is allowed for {@code groupSet} to contain bits that are not in any of the {@code
+   * groupSets}, even this does not correspond to valid SQL. See discussion in {@link
+   * org.apache.calcite.tools.RelBuilder#groupKey(ImmutableBitSet, Iterable)}.
    *
-   * <p>If {@code GROUP BY} is not specified,
-   * or equivalently if {@code GROUP BY ()} is specified,
-   * {@code groupSet} will be the empty set,
-   * and {@code groupSets} will have one element, that empty set.
+   * <p>If {@code GROUP BY} is not specified, or equivalently if {@code GROUP BY ()} is specified,
+   * {@code groupSet} will be the empty set, and {@code groupSets} will have one element, that empty
+   * set.
    *
-   * <p>If {@code CUBE}, {@code ROLLUP} or {@code GROUPING SETS} are
-   * specified, {@code groupSets} will have additional elements,
-   * but they must each be a subset of {@code groupSet},
-   * and they must be sorted by inclusion:
-   * {@code (0, 1, 2), (1), (0, 2), (0), ()}.
+   * <p>If {@code CUBE}, {@code ROLLUP} or {@code GROUPING SETS} are specified, {@code groupSets}
+   * will have additional elements, but they must each be a subset of {@code groupSet}, and they
+   * must be sorted by inclusion: {@code (0, 1, 2), (1), (0, 2), (0), ()}.
    *
    * @param cluster  Cluster
    * @param traitSet Trait set
@@ -175,8 +169,8 @@ public abstract class Aggregate extends SingleRel implements Hintable {
     assert groupSet.length() <= input.getRowType().getFieldCount();
     for (AggregateCall aggCall : aggCalls) {
       assert typeMatchesInferred(aggCall, Litmus.THROW);
-      checkArgument(aggCall.filterArg < 0
-          || isPredicate(input, aggCall.filterArg),
+      checkArgument(
+          aggCall.filterArg < 0 || isPredicate(input, aggCall.filterArg),
           "filter must be BOOLEAN NOT NULL");
     }
   }
@@ -215,49 +209,55 @@ public abstract class Aggregate extends SingleRel implements Hintable {
   }
 
   private static boolean isPredicate(RelNode input, int index) {
-    final RelDataType type =
-        input.getRowType().getFieldList().get(index).getType();
-    return type.getSqlTypeName() == SqlTypeName.BOOLEAN
-        && !type.isNullable();
+    final RelDataType type = input.getRowType().getFieldList().get(index).getType();
+    return type.getSqlTypeName() == SqlTypeName.BOOLEAN && !type.isNullable();
   }
 
-  /**
-   * Creates an Aggregate by parsing serialized output.
-   */
+  /** Creates an Aggregate by parsing serialized output. */
   protected Aggregate(RelInput input) {
-    this(input.getCluster(), input.getTraitSet(), new ArrayList<>(),
-        input.getInput(), input.getBitSet("group"),
-        input.getBitSetList("groups"), input.getAggregateCalls("aggs"));
+    this(
+        input.getCluster(),
+        input.getTraitSet(),
+        new ArrayList<>(),
+        input.getInput(),
+        input.getBitSet("group"),
+        input.getBitSetList("groups"),
+        input.getAggregateCalls("aggs"));
   }
 
   //~ Methods ----------------------------------------------------------------
 
-  @Override public final RelNode copy(RelTraitSet traitSet,
-      List<RelNode> inputs) {
+  @Override public final RelNode copy(RelTraitSet traitSet, List<RelNode> inputs) {
     return copy(traitSet, sole(inputs), groupSet, groupSets, aggCalls);
   }
 
-  /** Creates a copy of this aggregate.
+  /**
+   * Creates a copy of this aggregate.
    *
    * @param traitSet Traits
    * @param input Input
    * @param groupSet Bit set of grouping fields
    * @param groupSets List of all grouping sets; null for just {@code groupSet}
    * @param aggCalls Collection of calls to aggregate functions
-   * @return New {@code Aggregate} if any parameter differs from the value of
-   *   this {@code Aggregate}, or just {@code this} if all the parameters are
-   *   the same
-   *
+   * @return New {@code Aggregate} if any parameter differs from the value of this {@code
+   *     Aggregate}, or just {@code this} if all the parameters are the same
    * @see #copy(org.apache.calcite.plan.RelTraitSet, java.util.List)
    */
-  public abstract Aggregate copy(RelTraitSet traitSet, RelNode input,
+  public abstract Aggregate copy(
+      RelTraitSet traitSet,
+      RelNode input,
       ImmutableBitSet groupSet,
-      @Nullable List<ImmutableBitSet> groupSets, List<AggregateCall> aggCalls);
+      @Nullable List<ImmutableBitSet> groupSets,
+      List<AggregateCall> aggCalls);
 
   @Deprecated // to be removed before 2.0
-  public Aggregate copy(RelTraitSet traitSet, RelNode input,
-      boolean indicator, ImmutableBitSet groupSet,
-      List<ImmutableBitSet> groupSets, List<AggregateCall> aggCalls) {
+  public Aggregate copy(
+      RelTraitSet traitSet,
+      RelNode input,
+      boolean indicator,
+      ImmutableBitSet groupSet,
+      List<ImmutableBitSet> groupSets,
+      List<AggregateCall> aggCalls) {
     checkIndicator(indicator);
     return copy(traitSet, input, groupSet, groupSets, aggCalls);
   }
@@ -272,8 +272,7 @@ public abstract class Aggregate extends SingleRel implements Hintable {
   }
 
   /**
-   * Returns a list of calls to aggregate functions together with their output
-   * field names.
+   * Returns a list of calls to aggregate functions together with their output field names.
    *
    * @return list of calls to aggregate functions and their output field names
    */
@@ -283,19 +282,21 @@ public abstract class Aggregate extends SingleRel implements Hintable {
   }
 
   /**
-   * Returns the number of grouping fields.
-   * These grouping fields are the leading fields in both the input and output
-   * records.
+   * Returns the number of grouping fields. These grouping fields are the leading fields in both the
+   * input and output records.
    *
-   * <p>NOTE: The {@link #getGroupSet()} data structure allows for the
-   * grouping fields to not be on the leading edge. New code should, if
-   * possible, assume that grouping fields are in arbitrary positions in the
-   * input relational expression.
+   * <p>NOTE: The {@link #getGroupSet()} data structure allows for the grouping fields to not be on
+   * the leading edge. New code should, if possible, assume that grouping fields are in arbitrary
+   * positions in the input relational expression.
    *
    * @return number of grouping fields
    */
   public int getGroupCount() {
     return groupSet.cardinality();
+  }
+
+  public boolean hasEmptyGroup() {
+    return groupSets.contains(ImmutableBitSet.of());
   }
 
   /**
@@ -375,8 +376,13 @@ public abstract class Aggregate extends SingleRel implements Hintable {
   }
 
   @Override protected RelDataType deriveRowType() {
-    return deriveRowType(getCluster().getTypeFactory(), getInput().getRowType(),
-        false, groupSet, groupSets, aggCalls);
+    return deriveRowType(
+        getCluster().getTypeFactory(),
+        getInput().getRowType(),
+        false,
+        groupSet,
+        groupSets,
+        aggCalls);
   }
 
   /**
@@ -390,9 +396,12 @@ public abstract class Aggregate extends SingleRel implements Hintable {
    * @param aggCalls Collection of calls to aggregate functions
    * @return Row type of the aggregate
    */
-  public static RelDataType deriveRowType(RelDataTypeFactory typeFactory,
-      final RelDataType inputRowType, boolean indicator,
-      ImmutableBitSet groupSet, @Nullable List<ImmutableBitSet> groupSets,
+  public static RelDataType deriveRowType(
+      RelDataTypeFactory typeFactory,
+      final RelDataType inputRowType,
+      boolean indicator,
+      ImmutableBitSet groupSet,
+      @Nullable List<ImmutableBitSet> groupSets,
       final List<AggregateCall> aggCalls) {
     final List<Integer> groupList = groupSet.asList();
     assert groupList.size() == groupSet.cardinality();
@@ -428,30 +437,26 @@ public abstract class Aggregate extends SingleRel implements Hintable {
 
   @Override public boolean isValid(Litmus litmus, @Nullable Context context) {
     return super.isValid(litmus, context)
-        && litmus.check(Util.isDistinct(getRowType().getFieldNames()),
-            "distinct field names: {}", getRowType());
+        && litmus.check(
+            Util.isDistinct(getRowType().getFieldNames()),
+            "distinct field names: {}",
+            getRowType());
   }
 
   /**
-   * Returns whether the inferred type of an {@link AggregateCall} matches the
-   * type it was given when it was created.
+   * Returns whether the inferred type of an {@link AggregateCall} matches the type it was given
+   * when it was created.
    *
    * @param aggCall Aggregate call
    * @param litmus What to do if an error is detected (types do not match)
    * @return Whether the inferred and declared types match
    */
-  private boolean typeMatchesInferred(
-      final AggregateCall aggCall,
-      final Litmus litmus) {
+  private boolean typeMatchesInferred(final AggregateCall aggCall, final Litmus litmus) {
     SqlAggFunction aggFunction = aggCall.getAggregation();
     AggCallBinding callBinding = aggCall.createBinding(this);
     RelDataType type = aggFunction.inferReturnType(callBinding);
     RelDataType expectedType = aggCall.type;
-    return RelOptUtil.eq("aggCall type",
-        expectedType,
-        "inferred type",
-        type,
-        litmus);
+    return RelOptUtil.eq("aggCall type", expectedType, "inferred type", type, litmus);
   }
 
   /**
@@ -488,8 +493,7 @@ public abstract class Aggregate extends SingleRel implements Hintable {
     CUBE,
     OTHER;
 
-    public static Group induce(ImmutableBitSet groupSet,
-        List<ImmutableBitSet> groupSets) {
+    public static Group induce(ImmutableBitSet groupSet, List<ImmutableBitSet> groupSets) {
       if (!ImmutableBitSet.ORDERING.isStrictlyOrdered(groupSets)) {
         throw new IllegalArgumentException("must be sorted: " + groupSets);
       }
@@ -505,16 +509,16 @@ public abstract class Aggregate extends SingleRel implements Hintable {
       return OTHER;
     }
 
-    /** Returns whether a list of sets is a rollup.
+    /**
+     * Returns whether a list of sets is a rollup.
      *
-     * <p>For example, if {@code groupSet} is <code>{2, 4, 5}</code>, then
-     * <code>[{2, 4, 5], {2, 5}, {5}, {}]</code> is a rollup. The first item is
-     * equal to {@code groupSet}, and each subsequent item is a subset with one
-     * fewer bit than the previous.
+     * <p>For example, if {@code groupSet} is <code>{2, 4, 5}</code>, then <code>
+     * [{2, 4, 5], {2, 5}, {5}, {}]</code> is a rollup. The first item is equal to {@code groupSet},
+     * and each subsequent item is a subset with one fewer bit than the previous.
      *
-     * @see #getRollup(List) */
-    public static boolean isRollup(ImmutableBitSet groupSet,
-        List<ImmutableBitSet> groupSets) {
+     * @see #getRollup(List)
+     */
+    public static boolean isRollup(ImmutableBitSet groupSet, List<ImmutableBitSet> groupSets) {
       if (groupSets.size() != groupSet.cardinality() + 1) {
         return false;
       }
@@ -528,8 +532,7 @@ public abstract class Aggregate extends SingleRel implements Hintable {
         } else {
           // Each subsequent items must be a subset with one fewer bit than the
           // previous item
-          if (!g.contains(bitSet)
-              || g.cardinality() - bitSet.cardinality() != 1) {
+          if (!g.contains(bitSet) || g.cardinality() - bitSet.cardinality() != 1) {
             return false;
           }
         }
@@ -540,14 +543,15 @@ public abstract class Aggregate extends SingleRel implements Hintable {
       return true;
     }
 
-    /** Returns the ordered list of bits in a rollup.
+    /**
+     * Returns the ordered list of bits in a rollup.
      *
-     * <p>For example, given a {@code groupSets} value
-     * <code>[{2, 4, 5], {2, 5}, {5}, {}]</code>, returns the list
-     * {@code [5, 2, 4]}, which are the succession of bits
-     * added to each of the sets starting with the empty set.
+     * <p>For example, given a {@code groupSets} value <code>[{2, 4, 5], {2, 5}, {5}, {}]</code>,
+     * returns the list {@code [5, 2, 4]}, which are the succession of bits added to each of the
+     * sets starting with the empty set.
      *
-     * @see #isRollup(ImmutableBitSet, List) */
+     * @see #isRollup(ImmutableBitSet, List)
+     */
     public static List<Integer> getRollup(List<ImmutableBitSet> groupSets) {
       final List<Integer> rollUpBits = new ArrayList<>(groupSets.size() - 1);
       ImmutableBitSet g = null;
@@ -580,6 +584,7 @@ public abstract class Aggregate extends SingleRel implements Hintable {
     private final List<RelDataType> operands;
     private final int groupCount;
     private final boolean filter;
+    private final boolean hasEmptyGroup;
 
     /**
      * Creates an AggCallBinding.
@@ -591,32 +596,66 @@ public abstract class Aggregate extends SingleRel implements Hintable {
      * @param groupCount   Number of columns in the GROUP BY clause
      * @param filter       Whether the aggregate function has a FILTER clause
      */
-    public AggCallBinding(RelDataTypeFactory typeFactory,
-        SqlAggFunction aggFunction, List<RelDataType> preOperands,
-        List<RelDataType> operands, int groupCount,
+    public AggCallBinding(
+        RelDataTypeFactory typeFactory,
+        SqlAggFunction aggFunction,
+        List<RelDataType> preOperands,
+        List<RelDataType> operands,
+        int groupCount,
         boolean filter) {
       super(typeFactory, aggFunction);
       this.preOperands = requireNonNull(preOperands, "preOperands");
-      this.operands =
-          requireNonNull(operands,
-              "operands of aggregate call should not be null");
+      this.operands = requireNonNull(operands, "operands of aggregate call should not be null");
       this.groupCount = groupCount;
+      this.hasEmptyGroup = groupCount == 0;
       this.filter = filter;
-      checkArgument(groupCount >= 0,
-          "number of group by columns should be greater than zero in "
-              + "aggregate call. Got %s", groupCount);
+      checkArgument(
+          groupCount >= 0,
+          "number of group by columns should be greater than zero in " + "aggregate call. Got %s",
+          groupCount);
+    }
+
+    /**
+     * Creates an AggCallBinding.
+     *
+     * @param typeFactory Type factory
+     * @param aggFunction Aggregate function
+     * @param preOperands Data types of pre-operands
+     * @param operands Data types of operands
+     * @param hasEmptyGroup Whether the aggregate has a empty group
+     * @param filter Whether the aggregate function has a FILTER clause
+     */
+    public AggCallBinding(
+        RelDataTypeFactory typeFactory,
+        SqlAggFunction aggFunction,
+        List<RelDataType> preOperands,
+        List<RelDataType> operands,
+        boolean hasEmptyGroup,
+        boolean filter) {
+      super(typeFactory, aggFunction);
+      this.preOperands = requireNonNull(preOperands, "preOperands");
+      this.operands = requireNonNull(operands, "operands of aggregate call should not be null");
+      this.filter = filter;
+      this.hasEmptyGroup = hasEmptyGroup;
+      this.groupCount = hasEmptyGroup ? 0 : 1;
     }
 
     @Deprecated // to be removed before 2.0
-    public AggCallBinding(RelDataTypeFactory typeFactory,
-        SqlAggFunction aggFunction, List<RelDataType> operands, int groupCount,
+    public AggCallBinding(
+        RelDataTypeFactory typeFactory,
+        SqlAggFunction aggFunction,
+        List<RelDataType> operands,
+        int groupCount,
         boolean filter) {
-      this(typeFactory, aggFunction, ImmutableList.of(), operands, groupCount,
-          filter);
+      this(typeFactory, aggFunction, ImmutableList.of(), operands, groupCount, filter);
     }
 
     @Override public int getGroupCount() {
       return groupCount;
+    }
+
+    @Override public boolean hasEmptyGroup() {
+      return hasEmptyGroup;
     }
 
     @Override public boolean hasFilter() {
@@ -637,8 +676,7 @@ public abstract class Aggregate extends SingleRel implements Hintable {
           : operands.get(ordinal - preOperands.size());
     }
 
-    @Override public CalciteException newError(
-        Resources.ExInst<SqlValidatorException> e) {
+    @Override public CalciteException newError(Resources.ExInst<SqlValidatorException> e) {
       return SqlUtil.newContextException(SqlParserPos.ZERO, e);
     }
   }
@@ -647,10 +685,14 @@ public abstract class Aggregate extends SingleRel implements Hintable {
   public static class PercentileDiscAggCallBinding extends AggCallBinding {
     private final RelDataType collationType;
 
-    PercentileDiscAggCallBinding(RelDataTypeFactory typeFactory, SqlAggFunction aggFunction,
-        List<RelDataType> operands, RelDataType collationType, int groupCount,
+    PercentileDiscAggCallBinding(
+        RelDataTypeFactory typeFactory,
+        SqlAggFunction aggFunction,
+        List<RelDataType> operands,
+        RelDataType collationType,
+        boolean hasEmptyGroup,
         boolean filter) {
-      super(typeFactory, aggFunction, operands, groupCount, filter);
+      super(typeFactory, aggFunction, ImmutableList.of(), operands, hasEmptyGroup, filter);
       assert aggFunction.isPercentile();
       this.collationType = collationType;
     }

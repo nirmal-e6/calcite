@@ -33,34 +33,31 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 import static java.util.Objects.requireNonNull;
 
-/**
- * Abstract implementation of {@link SqlValidatorNamespace}.
- */
+// SHADED for exposing current state of some members
+
+/** Abstract implementation of {@link SqlValidatorNamespace}. */
 abstract class AbstractNamespace implements SqlValidatorNamespace {
   //~ Instance fields --------------------------------------------------------
 
   protected final SqlValidatorImpl validator;
 
-  /**
-   * Whether this scope is currently being validated. Used to check for
-   * cycles.
-   */
-  private SqlValidatorImpl.Status status =
-      SqlValidatorImpl.Status.UNVALIDATED;
+  /** Whether this scope is currently being validated. Used to check for cycles. */
+  private SqlValidatorImpl.Status status = SqlValidatorImpl.Status.UNVALIDATED;
 
   /**
-   * Type of the output row, which comprises the name and type of each output
-   * column. Set on validate.
+   * Type of the output row, which comprises the name and type of each output column. Set on
+   * validate.
    */
   protected @Nullable RelDataType rowType;
 
   /** As {@link #rowType}, but not necessarily a struct. */
   protected @Nullable RelDataType type;
 
-  /** Information about what fields need to be filtered and what bypass fields
-   * can defuse the errors if they are filtered on as an alternative.
-   * Initialized as an empty object, but typically re-assigned during
-   * validation. */
+  /**
+   * Information about what fields need to be filtered and what bypass fields can defuse the errors
+   * if they are filtered on as an alternative. Initialized as an empty object, but typically
+   * re-assigned during validation.
+   */
   protected FilterRequirement filterRequirement = FilterRequirement.EMPTY;
 
   protected final @Nullable SqlNode enclosingNode;
@@ -73,9 +70,7 @@ abstract class AbstractNamespace implements SqlValidatorNamespace {
    * @param validator     Validator
    * @param enclosingNode Enclosing node
    */
-  AbstractNamespace(
-      SqlValidatorImpl validator,
-      @Nullable SqlNode enclosingNode) {
+  AbstractNamespace(SqlValidatorImpl validator, @Nullable SqlNode enclosingNode) {
     this.validator = validator;
     this.enclosingNode = enclosingNode;
   }
@@ -91,8 +86,8 @@ abstract class AbstractNamespace implements SqlValidatorNamespace {
     case UNVALIDATED:
       try {
         status = SqlValidatorImpl.Status.IN_PROGRESS;
-        checkArgument(rowType == null,
-            "Namespace.rowType must be null before validate has been called");
+        checkArgument(
+              rowType == null, "Namespace.rowType must be null before validate has been called");
         RelDataType type = validateImpl(targetRowType);
         requireNonNull(type, "validateImpl() returned null");
         setType(type);
@@ -110,12 +105,10 @@ abstract class AbstractNamespace implements SqlValidatorNamespace {
   }
 
   /**
-   * Validates this scope and returns the type of the records it returns.
-   * External users should call {@link #validate}, which uses the
-   * {@link #status} field to protect against cycles.
+   * Validates this scope and returns the type of the records it returns. External users should call
+   * {@link #validate}, which uses the {@link #status} field to protect against cycles.
    *
-   * @param targetRowType Desired row type, must not be null, may be the data
-   *                      type 'unknown'.
+   * @param targetRowType Desired row type, must not be null, may be the data type 'unknown'.
    * @return record data type, never null
    */
   protected abstract RelDataType validateImpl(RelDataType targetRowType);
@@ -151,9 +144,7 @@ abstract class AbstractNamespace implements SqlValidatorNamespace {
   }
 
   @Override public @Nullable SqlValidatorNamespace lookupChild(String name) {
-    return validator.lookupFieldNamespace(
-        getRowType(),
-        name);
+    return validator.lookupFieldNamespace(getRowType(), name);
   }
 
   @Override public @Nullable RelDataTypeField field(String name) {
@@ -166,8 +157,8 @@ abstract class AbstractNamespace implements SqlValidatorNamespace {
   }
 
   @Override public FilterRequirement getFilterRequirement() {
-    return requireNonNull(filterRequirement,
-        "filterRequirement (maybe validation is not complete?)");
+    return requireNonNull(
+        filterRequirement, "filterRequirement (maybe validation is not complete?)");
   }
 
   @Override public SqlMonotonicity getMonotonicity(String columnName) {
@@ -175,8 +166,7 @@ abstract class AbstractNamespace implements SqlValidatorNamespace {
   }
 
   @SuppressWarnings("deprecation")
-  @Override public void makeNullable() {
-  }
+  @Override public void makeNullable() {}
 
   public String translate(String name) {
     return name;
@@ -223,8 +213,7 @@ abstract class AbstractNamespace implements SqlValidatorNamespace {
     default:
       throw new AssertionError(type);
     }
-    return typeFactory.createTypeWithNullability(collectionType,
-        type.isNullable());
+    return typeFactory.createTypeWithNullability(collectionType, type.isNullable());
   }
 
   /** Converts a type to a struct if it is not already. */
@@ -232,8 +221,22 @@ abstract class AbstractNamespace implements SqlValidatorNamespace {
     if (type.isStruct()) {
       return type;
     }
-    return validator.getTypeFactory().builder()
+    return validator
+        .getTypeFactory()
+        .builder()
         .add(SqlValidatorUtil.alias(requireNonNull(unnest, "unnest"), 0), type)
         .build();
+  }
+
+  // added by E6Data
+  // used at DelegatingScope to fix CyclicException for MatchRecognise
+  public boolean currentlyValidationInProgress() {
+    return status == SqlValidatorImpl.Status.IN_PROGRESS;
+}
+
+  // added by E6Data
+  // used at SqlValidator to early check if row type is null or not
+  public boolean isRowTypeUnknown() {
+    return rowType == null;
   }
 }

@@ -41,6 +41,7 @@ import org.apache.calcite.sql.type.SqlTypeFamily;
 import org.apache.calcite.sql.type.SqlTypeMappingRule;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.type.SqlTypeUtil;
+import org.apache.calcite.sql.type.VariantTypeUtil;
 import org.apache.calcite.sql.validate.SqlMonotonicity;
 import org.apache.calcite.sql.validate.SqlValidator;
 
@@ -142,17 +143,26 @@ public class SqlCastFunction extends SqlFunction {
       RelDataType expressionType, RelDataType targetType, boolean safe) {
     boolean isNullable = expressionType.isNullable() || safe;
 
-    if (targetType.getSqlTypeName() == SqlTypeName.VARIANT) {
+    // E6data change: raw variant types behave like VARIANT.
+    if (targetType.getSqlTypeName() == SqlTypeName.VARIANT
+        || VariantTypeUtil.checkVariantType(targetType)) {
       // A variant can be cast from any other type, and it inherits
       // the nullability of the source.
       // Note that the order of this test and the next one is important.
       return typeFactory.createTypeWithNullability(targetType, expressionType.isNullable());
     }
 
-    if (expressionType.getSqlTypeName() == SqlTypeName.VARIANT) {
+    if (expressionType.getSqlTypeName() == SqlTypeName.VARIANT
+        || VariantTypeUtil.checkVariantType(expressionType)) {
       // A variant can be cast to any other type, but the result
       // is always nullable, like in the case of a safe cast.
       return typeFactory.createTypeWithNullability(targetType, true);
+    }
+
+    // E6data change: allow casting from complex types to primitive types.
+    if (!isPrimitive(expressionType) && isPrimitive(targetType)) {
+      return typeFactory.createTypeWithNullability(targetType,
+          targetType.isNullable());
     }
 
     if (isCollection(expressionType)) {
@@ -206,6 +216,10 @@ public class SqlCastFunction extends SqlFunction {
     return typeFactory.createTypeWithNullability(targetType, isNullable);
   }
 
+  private static boolean isPrimitive(RelDataType type) {
+    return !(isCollection(type) || isRow(type) || isMap(type));
+  }
+
   @Override public String getSignatureTemplate(final int operandsCount) {
     assert operandsCount <= 3;
     return "{0}({1} AS {2} [FORMAT {3}])";
@@ -237,6 +251,13 @@ public class SqlCastFunction extends SqlFunction {
         validator.getValidatedNodeType(left);
     final RelDataType returnType = SqlTypeUtil.deriveType(callBinding, right);
     final SqlTypeMappingRule mappingRule = validator.getTypeMappingRule();
+
+    if (VariantTypeUtil.checkVariantType(validatedNodeType)
+        || VariantTypeUtil.checkVariantType(returnType)) {
+      // Any type can be cast to variant.
+      // Variant can be cast to any type.
+      return true;
+    }
 
     if (!SqlTypeUtil.canCastFrom(returnType, validatedNodeType, mappingRule)) {
       if (throwOnFailure) {

@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.rel.core;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.linq4j.Ord;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelOptCost;
@@ -60,9 +61,12 @@ import java.util.Set;
 
 import static java.util.Objects.requireNonNull;
 
+// shaded for allowing duplicate alias in projection
+// check method isValid
+
 /**
- * Relational expression that computes a set of
- * 'select expressions' from its input relational expression.
+ * Relational expression that computes a set of 'select expressions' from its input relational
+ * expression.
  *
  * @see org.apache.calcite.rel.logical.LogicalProject
  */
@@ -86,8 +90,8 @@ public abstract class Project extends SingleRel implements Hintable {
    * @param input    Input relational expression
    * @param projects List of expressions for the input columns
    * @param rowType  Output row type
-   * @param variableSet Correlation variables set by this relational expression
-   *                    to be used by nested expressions
+   * @param variableSet Correlation variables set by this relational expression to be used by nested
+   *     expressions
    */
   @SuppressWarnings("method.invocation.invalid")
   protected Project(
@@ -118,23 +122,31 @@ public abstract class Project extends SingleRel implements Hintable {
   }
 
   @Deprecated // to be removed before 2.0
-  protected Project(RelOptCluster cluster, RelTraitSet traits,
-      RelNode input, List<? extends RexNode> projects, RelDataType rowType) {
+  protected Project(
+      RelOptCluster cluster,
+      RelTraitSet traits,
+      RelNode input,
+      List<? extends RexNode> projects,
+      RelDataType rowType) {
     this(cluster, traits, ImmutableList.of(), input, projects, rowType, ImmutableSet.of());
   }
 
   @Deprecated // to be removed before 2.0
-  protected Project(RelOptCluster cluster, RelTraitSet traitSet, RelNode input,
-      List<? extends RexNode> projects, RelDataType rowType, int flags) {
+  protected Project(
+      RelOptCluster cluster,
+      RelTraitSet traitSet,
+      RelNode input,
+      List<? extends RexNode> projects,
+      RelDataType rowType,
+      int flags) {
     this(cluster, traitSet, ImmutableList.of(), input, projects, rowType, ImmutableSet.of());
     Util.discard(flags);
   }
 
-  /**
-   * Creates a Project by parsing serialized output.
-   */
+  /** Creates a Project by parsing serialized output. */
   protected Project(RelInput input) {
-    this(input.getCluster(),
+    this(
+        input.getCluster(),
         input.getTraitSet(),
         ImmutableList.of(),
         input.getInput(),
@@ -149,8 +161,7 @@ public abstract class Project extends SingleRel implements Hintable {
 
   //~ Methods ----------------------------------------------------------------
 
-  @Override public final RelNode copy(RelTraitSet traitSet,
-      List<RelNode> inputs) {
+  @Override public final RelNode copy(RelTraitSet traitSet, List<RelNode> inputs) {
     return copy(traitSet, sole(inputs), exps, getRowType());
   }
 
@@ -161,18 +172,16 @@ public abstract class Project extends SingleRel implements Hintable {
    * @param input Input
    * @param projects Project expressions
    * @param rowType Output row type
-   * @return New {@code Project} if any parameter differs from the value of this
-   *   {@code Project}, or just {@code this} if all the parameters are
-   *   the same
-   *
+   * @return New {@code Project} if any parameter differs from the value of this {@code Project}, or
+   *     just {@code this} if all the parameters are the same
    * @see #copy(RelTraitSet, List)
    */
-  public abstract Project copy(RelTraitSet traitSet, RelNode input,
-      List<RexNode> projects, RelDataType rowType);
+  public abstract Project copy(
+      RelTraitSet traitSet, RelNode input, List<RexNode> projects, RelDataType rowType);
 
   @Deprecated // to be removed before 2.0
-  public Project copy(RelTraitSet traitSet, RelNode input,
-      List<RexNode> projects, RelDataType rowType, int flags) {
+  public Project copy(
+      RelTraitSet traitSet, RelNode input, List<RexNode> projects, RelDataType rowType, int flags) {
     Util.discard(flags);
     return copy(traitSet, input, projects, rowType);
   }
@@ -189,10 +198,7 @@ public abstract class Project extends SingleRel implements Hintable {
     }
     final RelDataType rowType =
         RexUtil.createStructType(
-            getInput().getCluster().getTypeFactory(),
-            exps,
-            getRowType().getFieldNames(),
-            null);
+            getInput().getCluster().getTypeFactory(), exps, getRowType().getFieldNames(), null);
     return copy(traitSet, getInput(), exps, rowType);
   }
 
@@ -206,8 +212,7 @@ public abstract class Project extends SingleRel implements Hintable {
   }
 
   /**
-   * Returns a list of (expression, name) pairs. Convenient for various
-   * transformations.
+   * Returns a list of (expression, name) pairs. Convenient for various transformations.
    *
    * @return List of (expression, name) pairs
    */
@@ -215,11 +220,12 @@ public abstract class Project extends SingleRel implements Hintable {
     return Pair.zip(getProjects(), getRowType().getFieldNames());
   }
 
-  /** Returns a list of project expressions, each of which is wrapped in a
-   * call to {@code AS} if its field name differs from the default.
+  /**
+   * Returns a list of project expressions, each of which is wrapped in a call to {@code AS} if its
+   * field name differs from the default.
    *
-   * <p>This method has a similar effect to {@link #getNamedProjects()},
-   * but the single list is easier to manage.
+   * <p>This method has a similar effect to {@link #getNamedProjects()}, but the single list is
+   * easier to manage.
    *
    * @see org.apache.calcite.tools.RelBuilder#alias(RexNode, String)
    */
@@ -227,8 +233,7 @@ public abstract class Project extends SingleRel implements Hintable {
   // TODO: replace calls to getNamedProjects
   public final List<RexNode> getAliasedProjects(RelBuilder b) {
     final ImmutableList.Builder<RexNode> builder = ImmutableList.builder();
-    Pair.forEach(exps, getRowType().getFieldList(), (e, f) ->
-        builder.add(b.alias(e, f.getName())));
+    Pair.forEach(exps, getRowType().getFieldList(), (e, f) -> builder.add(b.alias(e, f.getName())));
     return builder.build();
   }
 
@@ -253,15 +258,16 @@ public abstract class Project extends SingleRel implements Hintable {
     if (!RexUtil.compatibleTypes(exps, getRowType(), litmus)) {
       return litmus.fail("incompatible types");
     }
-    RexChecker checker =
-        new RexChecker(
-            getInput().getRowType(), context, litmus);
+    RexChecker checker = new RexChecker(getInput().getRowType(), context, litmus);
     for (RexNode exp : exps) {
       exp.accept(checker);
       if (checker.getFailureCount() > 0) {
-        return litmus.fail("{} failures in expression {}",
-            checker.getFailureCount(), exp);
+        return litmus.fail("{} failures in expression {}", checker.getFailureCount(), exp);
       }
+    }
+    // E6Data change for allowing duplicate alias in projection
+    if (CalciteForkSettings.allowDuplicateAliasInProjection()) {
+      return litmus.succeed();
     }
     if (!Util.isDistinct(getRowType().getFieldNames())) {
       return litmus.fail("field names not distinct: {}", rowType);
@@ -288,8 +294,8 @@ public abstract class Project extends SingleRel implements Hintable {
   }
 
   /**
-   * Returns the number of expressions at the front of an array which are
-   * simply projections of the same field.
+   * Returns the number of expressions at the front of an array which are simply projections of the
+   * same field.
    *
    * @param refs References
    * @return the index of the first non-trivial expression, or list.size otherwise
@@ -297,8 +303,7 @@ public abstract class Project extends SingleRel implements Hintable {
   private static int countTrivial(List<RexNode> refs) {
     for (int i = 0; i < refs.size(); i++) {
       RexNode ref = refs.get(i);
-      if (!(ref instanceof RexInputRef)
-          || ((RexInputRef) ref).getIndex() != i) {
+      if (!(ref instanceof RexInputRef) || ((RexInputRef) ref).getIndex() != i) {
         return i;
       }
     }
@@ -377,25 +382,21 @@ public abstract class Project extends SingleRel implements Hintable {
   /**
    * Returns a mapping of a set of project expressions.
    *
-   * <p>The mapping is an inverse surjection.
-   * Every target has a source field, but no
-   * source has more than one target.
-   * Thus you can safely call
-   * {@link org.apache.calcite.util.mapping.Mappings.TargetMapping#getSourceOpt(int)}.
+   * <p>The mapping is an inverse surjection. Every target has a source field, but no source has
+   * more than one target. Thus you can safely call {@link
+   * org.apache.calcite.util.mapping.Mappings.TargetMapping#getSourceOpt(int)}.
    *
    * @param inputFieldCount Number of input fields
    * @param projects Project expressions
-   * @return Mapping of a set of project expressions, or null if projection is
-   * not a mapping
+   * @return Mapping of a set of project expressions, or null if projection is not a mapping
    */
-  public static Mappings.@Nullable TargetMapping getMapping(int inputFieldCount,
-      List<? extends RexNode> projects) {
+  public static Mappings.@Nullable TargetMapping getMapping(
+      int inputFieldCount, List<? extends RexNode> projects) {
     if (inputFieldCount < projects.size()) {
       return null; // surjection is not possible
     }
     Mappings.TargetMapping mapping =
-        Mappings.create(MappingType.INVERSE_SURJECTION,
-            inputFieldCount, projects.size());
+        Mappings.create(MappingType.INVERSE_SURJECTION, inputFieldCount, projects.size());
     for (Ord<RexNode> exp : Ord.<RexNode>zip(projects)) {
       if (!(exp.e instanceof RexInputRef)) {
         return null;
@@ -413,21 +414,17 @@ public abstract class Project extends SingleRel implements Hintable {
   /**
    * Returns a partial mapping of a set of project expressions.
    *
-   * <p>The mapping is an inverse function.
-   * Every target has a source field, but
-   * a source might have 0, 1 or more targets.
-   * Project expressions that do not consist of
-   * a mapping are ignored.
+   * <p>The mapping is an inverse function. Every target has a source field, but a source might have
+   * 0, 1 or more targets. Project expressions that do not consist of a mapping are ignored.
    *
    * @param inputFieldCount Number of input fields
    * @param projects Project expressions
    * @return Mapping of a set of project expressions, never null
    */
-  public static Mappings.TargetMapping getPartialMapping(int inputFieldCount,
-      List<? extends RexNode> projects) {
+  public static Mappings.TargetMapping getPartialMapping(
+      int inputFieldCount, List<? extends RexNode> projects) {
     Mappings.TargetMapping mapping =
-        Mappings.create(MappingType.INVERSE_FUNCTION,
-            inputFieldCount, projects.size());
+        Mappings.create(MappingType.INVERSE_FUNCTION, inputFieldCount, projects.size());
     for (Ord<RexNode> exp : Ord.<RexNode>zip(projects)) {
       if (exp.e instanceof RexInputRef) {
         mapping.set(((RexInputRef) exp.e).getIndex(), exp.i);
@@ -437,22 +434,22 @@ public abstract class Project extends SingleRel implements Hintable {
   }
 
   /**
-   * Returns a permutation, if this projection is merely a permutation of its
-   * input fields; otherwise null.
+   * Returns a permutation, if this projection is merely a permutation of its input fields;
+   * otherwise null.
    *
-   * @return Permutation, if this projection is merely a permutation of its
-   *   input fields; otherwise null
+   * @return Permutation, if this projection is merely a permutation of its input fields; otherwise
+   *     null
    */
   public @Nullable Permutation getPermutation() {
     return getPermutation(getInput().getRowType().getFieldCount(), exps);
   }
 
   /**
-   * Returns a permutation, if this projection is merely a permutation of its
-   * input fields; otherwise null.
+   * Returns a permutation, if this projection is merely a permutation of its input fields;
+   * otherwise null.
    */
-  public static @Nullable Permutation getPermutation(int inputFieldCount,
-      List<? extends RexNode> projects) {
+  public static @Nullable Permutation getPermutation(
+      int inputFieldCount, List<? extends RexNode> projects) {
     final int fieldCount = projects.size();
     if (fieldCount != inputFieldCount) {
       return null;
@@ -475,9 +472,8 @@ public abstract class Project extends SingleRel implements Hintable {
   }
 
   /**
-   * Checks whether this is a functional mapping.
-   * Every output is a source field, but
-   * a source field may appear as zero, one, or more output fields.
+   * Checks whether this is a functional mapping. Every output is a source field, but a source field
+   * may appear as zero, one, or more output fields.
    */
   public boolean isMapping() {
     for (RexNode exp : exps) {

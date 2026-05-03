@@ -723,6 +723,15 @@ public interface CalciteResource {
   @BaseMessage("Function ''{0}'' should all be of type map, but it is ''{1}''")
   ExInst<SqlValidatorException> typesShouldAllBeMap(String funcName, String type);
 
+  @BaseMessage("Map type requires only two arrays")
+  ExInst<SqlValidatorException> mapRequiresOnlyTwoArrays();
+
+  @BaseMessage("When passing array type, map requires both types to be array")
+  ExInst<SqlValidatorException> mapRequiresBothArray();
+
+  @BaseMessage("key to a map cannot be another map")
+  ExInst<SqlValidatorException> keyCannotBeAMap();
+
   @BaseMessage("Incompatible types")
   ExInst<SqlValidatorException> incompatibleTypes();
 
@@ -798,6 +807,16 @@ public interface CalciteResource {
   @BaseMessage("SELECT * requires a FROM clause")
   ExInst<SqlValidatorException> selectStarRequiresFrom();
 
+  // e6data change - ported EXCEPT/EXCLUDE syntax from CALCITE-7310
+  @BaseMessage("EXCLUDE/EXCEPT clause must follow a STAR expression")
+  ExInst<CalciteException> selectExcludeRequiresStar();
+
+  @BaseMessage("SELECT * EXCLUDE/EXCEPT list contains unknown column(s): {0}")
+  ExInst<SqlValidatorException> selectStarExcludeListContainsUnknownColumns(String columns);
+
+  @BaseMessage("SELECT * EXCLUDE/EXCEPT list cannot exclude all columns")
+  ExInst<SqlValidatorException> selectStarExcludeCannotExcludeAllColumns();
+
   @BaseMessage("Group function ''{0}'' can only appear in GROUP BY clause")
   ExInst<SqlValidatorException> groupFunctionMustAppearInGroupByClause(String funcName);
 
@@ -806,6 +825,9 @@ public interface CalciteResource {
 
   @BaseMessage("Measure expression in PIVOT must use aggregate function")
   ExInst<SqlValidatorException> pivotAggMalformed();
+
+  @BaseMessage("Measure expression in PIVOT must be input-independent or an aggregate expression")
+  ExInst<SqlValidatorException> pivotAggExpressionMalformed();
 
   @BaseMessage("Value count in PIVOT ({0,number,#}) must match number of FOR columns ({1,number,#})")
   ExInst<SqlValidatorException> pivotValueArityMismatch(int valueCount, int forCount);

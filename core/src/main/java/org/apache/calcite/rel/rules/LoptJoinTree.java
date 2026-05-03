@@ -112,6 +112,41 @@ public class LoptJoinTree {
     this.removableSelfJoin = removableSelfJoin;
   }
 
+  /**
+   * Associates the factor ids with a join-tree using existing child join
+   * trees. This constructor allows external join-ordering rules to preserve
+   * factor-tree state without depending on {@link BinaryTree}'s internal
+   * representation.
+   *
+   * @param joinTree RelNodes corresponding to the join tree
+   * @param leftJoinTree left subtree and factor tree
+   * @param rightJoinTree right subtree and factor tree
+   */
+  public LoptJoinTree(
+      RelNode joinTree,
+      LoptJoinTree leftJoinTree,
+      LoptJoinTree rightJoinTree) {
+    this(joinTree, leftJoinTree, rightJoinTree, false);
+  }
+
+  /**
+   * Associates the factor ids with a join-tree using existing child join
+   * trees. Also indicates whether the join is a removable self-join.
+   *
+   * @param joinTree RelNodes corresponding to the join tree
+   * @param leftJoinTree left subtree and factor tree
+   * @param rightJoinTree right subtree and factor tree
+   * @param removableSelfJoin true if the join is a removable self-join
+   */
+  public LoptJoinTree(
+      RelNode joinTree,
+      LoptJoinTree leftJoinTree,
+      LoptJoinTree rightJoinTree,
+      boolean removableSelfJoin) {
+    this(joinTree, leftJoinTree.getFactorTree(), rightJoinTree.getFactorTree(),
+        removableSelfJoin);
+  }
+
   //~ Methods ----------------------------------------------------------------
 
   public RelNode getJoinTree() {
@@ -150,6 +185,14 @@ public class LoptJoinTree {
 
   public boolean isRemovableSelfJoin() {
     return removableSelfJoin;
+  }
+
+  /** Returns the factor id when this join tree contains a single factor. */
+  public int getOnlyFactorId() {
+    if (factorTree instanceof Leaf) {
+      return ((Leaf) factorTree).getId();
+    }
+    throw new IllegalStateException("Join tree does not contain a single factor");
   }
 
   //~ Inner Classes ----------------------------------------------------------

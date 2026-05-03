@@ -14,8 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to you under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.calcite.sql.validate;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.sql.SqlCall;
@@ -30,6 +48,8 @@ import com.google.common.collect.ImmutableList;
 
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -38,8 +58,8 @@ import static org.apache.calcite.util.Static.RESOURCE;
 import static java.util.Objects.requireNonNull;
 
 /**
- * Namespace whose contents are defined by the type of an
- * {@link org.apache.calcite.sql.SqlIdentifier identifier}.
+ * Namespace whose contents are defined by the type of an {@link
+ * org.apache.calcite.sql.SqlIdentifier identifier}.
  */
 public class IdentifierNamespace extends AbstractNamespace {
   //~ Instance fields --------------------------------------------------------
@@ -48,16 +68,13 @@ public class IdentifierNamespace extends AbstractNamespace {
   private final SqlValidatorScope parentScope;
   public final @Nullable SqlNodeList extendList;
 
-  /**
-   * The underlying namespace. Often a {@link TableNamespace}.
-   * Set on validate.
-   */
+  /** The underlying namespace. Often a {@link TableNamespace}. Set on validate. */
   private @MonotonicNonNull SqlValidatorNamespace resolvedNamespace;
 
-  /**
-   * List of monotonic expressions. Set on validate.
-   */
+  /** List of monotonic expressions. Set on validate. */
   private @Nullable List<Pair<SqlNode, SqlMonotonicity>> monotonicExprs;
+
+  protected static final Logger LOG = LoggerFactory.getLogger(IdentifierNamespace.class);
 
   //~ Constructors -----------------------------------------------------------
 
@@ -65,13 +82,16 @@ public class IdentifierNamespace extends AbstractNamespace {
    * Creates an IdentifierNamespace.
    *
    * @param validator     Validator
-   * @param id            Identifier node (or "identifier EXTEND column-list")
+   * @param id Identifier node (or "identifier EXTEND column-list")
    * @param extendList    Extension columns, or null
    * @param enclosingNode Enclosing node
    * @param parentScope   Parent scope which this namespace turns to in order to
    */
-  IdentifierNamespace(SqlValidatorImpl validator, SqlIdentifier id,
-      @Nullable SqlNodeList extendList, @Nullable SqlNode enclosingNode,
+  IdentifierNamespace(
+      SqlValidatorImpl validator,
+      SqlIdentifier id,
+      @Nullable SqlNodeList extendList,
+      @Nullable SqlNode enclosingNode,
       SqlValidatorScope parentScope) {
     super(validator, enclosingNode);
     this.id = id;
@@ -79,10 +99,16 @@ public class IdentifierNamespace extends AbstractNamespace {
     this.parentScope = requireNonNull(parentScope, "parentScope");
   }
 
-  IdentifierNamespace(SqlValidatorImpl validator, SqlNode node,
-      @Nullable SqlNode enclosingNode, SqlValidatorScope parentScope) {
-    this(validator, split(node).left, split(node).right, enclosingNode,
-        parentScope);
+  public IdentifierNamespace(
+      SqlValidatorImpl validator,
+      SqlNode node,
+      @Nullable SqlNode enclosingNode,
+      SqlValidatorScope parentScope) {
+    this(validator, split(node).left, split(node).right, enclosingNode, parentScope);
+  }
+
+  public SqlValidatorScope getParentScope() {
+    return parentScope;
   }
 
   //~ Methods ----------------------------------------------------------------
@@ -92,7 +118,8 @@ public class IdentifierNamespace extends AbstractNamespace {
     case EXTEND:
       final SqlCall call = (SqlCall) node;
       final SqlNode operand0 = call.operand(0);
-      final SqlIdentifier identifier = operand0.getKind() == SqlKind.TABLE_REF
+      final SqlIdentifier identifier =
+            operand0.getKind() == SqlKind.TABLE_REF
           ? ((SqlCall) operand0).operand(0)
           : (SqlIdentifier) operand0;
       return Pair.of(identifier, call.operand(1));
@@ -108,25 +135,21 @@ public class IdentifierNamespace extends AbstractNamespace {
 
   private SqlValidatorNamespace resolveImpl(SqlIdentifier id) {
     final SqlNameMatcher nameMatcher = validator.catalogReader.nameMatcher();
-    final SqlValidatorScope.ResolvedImpl resolved =
-        new SqlValidatorScope.ResolvedImpl();
+    final SqlValidatorScope.ResolvedImpl resolved = new SqlValidatorScope.ResolvedImpl();
     final List<String> names = SqlIdentifier.toStar(id.names);
     try {
-      parentScope.resolveTable(names, nameMatcher,
-          SqlValidatorScope.Path.EMPTY, resolved);
+      parentScope.resolveTable(names, nameMatcher, SqlValidatorScope.Path.EMPTY, resolved);
     } catch (CyclicDefinitionException e) {
       if (e.depth == 1) {
-        throw validator.newValidationError(id,
-            RESOURCE.cyclicDefinition(id.toString(),
-                SqlIdentifier.getString(e.path)));
+        throw validator.newValidationError(
+            id, RESOURCE.cyclicDefinition(id.toString(), SqlIdentifier.getString(e.path)));
       } else {
         throw new CyclicDefinitionException(e.depth - 1, e.path);
       }
     }
     SqlValidatorScope.Resolve previousResolve = null;
     if (resolved.count() == 1) {
-      final SqlValidatorScope.Resolve resolve =
-          previousResolve = resolved.only();
+      final SqlValidatorScope.Resolve resolve = previousResolve = resolved.only();
       if (resolve.remainingNames.isEmpty()) {
         return resolve.namespace;
       }
@@ -134,9 +157,55 @@ public class IdentifierNamespace extends AbstractNamespace {
       // If we're case sensitive, we'll shortly try again and give an error
       // then.
       if (!nameMatcher.isCaseSensitive()) {
-        throw validator.newValidationError(id,
-            RESOURCE.objectNotFoundWithin(resolve.remainingNames.get(0),
-                SqlIdentifier.getString(resolve.path.stepNames())));
+        final String nameToBeResolved = resolve.remainingNames.get(0);
+        final String resolvedPath = SqlIdentifier.getString(resolve.path.stepNames());
+        switch (resolve.remainingNames.size()) {
+        case 1:
+            // e6-changes for immediate table consistency if table not found in first pass
+          if (CalciteForkSettings.immediateConsistencyEnabled()) {
+            LOG.info("table {} not found, refreshing table", nameToBeResolved);
+
+            String tableName = nameToBeResolved;
+
+            String[] pathParts = resolvedPath.split("\\.");
+            if (pathParts.length >= 2
+                  && CalciteForkSettings.refreshTable(pathParts[0], pathParts[1], tableName)) {
+              return resolveImpl(id);
+            }
+          }
+          throw validator.newValidationError(
+                id, RESOURCE.objectNotFoundWithin(nameToBeResolved, resolvedPath));
+        case 2:
+          throw CalciteForkSettings.invalidSchemaException(id, nameToBeResolved, resolvedPath);
+        default:
+          break;
+        }
+      }
+    }
+
+    if (resolved.count() == 0) {
+      switch (names.size()) {
+      case 1:
+          // e6-changes for immediate table consistency if table not found in first pass
+        if (CalciteForkSettings.immediateConsistencyEnabled()) {
+          String tableName = names.get(0);
+          LOG.info("table {} not found, refreshing table", tableName);
+          String catalogName = CalciteForkSettings.defaultCatalog(validator);
+          String schemaName = CalciteForkSettings.defaultSchema(validator);
+          if (catalogName != null
+                && schemaName != null
+                && CalciteForkSettings.refreshTable(catalogName, schemaName, tableName)) {
+            return resolveImpl(id);
+          }
+        }
+        break;
+      case 2:
+        throw CalciteForkSettings.invalidSchemaException(
+              id, names.get(0), CalciteForkSettings.defaultCatalog(validator));
+      case 3:
+        throw CalciteForkSettings.invalidCatalogException(id, names.get(0));
+      default:
+        break;
       }
     }
 
@@ -145,43 +214,53 @@ public class IdentifierNamespace extends AbstractNamespace {
     if (nameMatcher.isCaseSensitive()) {
       final SqlNameMatcher liberalMatcher = SqlNameMatchers.liberal();
       resolved.clear();
-      parentScope.resolveTable(names, liberalMatcher,
-          SqlValidatorScope.Path.EMPTY, resolved);
+      parentScope.resolveTable(names, liberalMatcher, SqlValidatorScope.Path.EMPTY, resolved);
       if (resolved.count() == 1) {
         final SqlValidatorScope.Resolve resolve = resolved.only();
-        if (resolve.remainingNames.isEmpty()
-            || previousResolve == null) {
+        if (resolve.remainingNames.isEmpty() || previousResolve == null) {
           // We didn't match it case-sensitive, so they must have had the
           // right identifier, wrong case.
           //
           // If previousResolve is null, we matched nothing case-sensitive and
           // everything case-insensitive, so the mismatch must have been at
           // position 0.
-          final int i =
-              previousResolve == null ? 0
-                  : previousResolve.path.stepCount();
-          final int offset = resolve.path.stepCount()
-              + resolve.remainingNames.size() - names.size();
-          final List<String> prefix =
-              resolve.path.stepNames().subList(0, offset + i);
+          final int i = previousResolve == null ? 0 : previousResolve.path.stepCount();
+          final int offset =
+              resolve.path.stepCount() + resolve.remainingNames.size() - names.size();
+          final List<String> prefix = resolve.path.stepNames().subList(0, offset + i);
           final String next = resolve.path.stepNames().get(i + offset);
           if (prefix.isEmpty()) {
-            throw validator.newValidationError(id,
-                RESOURCE.objectNotFoundDidYouMean(names.get(i), next));
+            throw validator.newValidationError(
+                id, RESOURCE.objectNotFoundDidYouMean(names.get(i), next));
           } else {
-            throw validator.newValidationError(id,
-                RESOURCE.objectNotFoundWithinDidYouMean(names.get(i),
-                    SqlIdentifier.getString(prefix), next));
+            throw validator.newValidationError(
+                id,
+                RESOURCE.objectNotFoundWithinDidYouMean(
+                    names.get(i), SqlIdentifier.getString(prefix), next));
           }
         } else {
-          throw validator.newValidationError(id,
-              RESOURCE.objectNotFoundWithin(resolve.remainingNames.get(0),
+          throw validator.newValidationError(
+              id,
+              RESOURCE.objectNotFoundWithin(
+                  resolve.remainingNames.get(0),
                   SqlIdentifier.getString(resolve.path.stepNames())));
         }
       }
     }
-    throw validator.newValidationError(id,
-        RESOURCE.objectNotFound(id.getComponent(0).toString()));
+
+    // check temp schema
+    // E6data change
+    //    if(resolved.count() == 0 && parentScope instanceof DelegatingScope delegatingScope) {
+    //        delegatingScope.resolveTempTable(names, nameMatcher,
+    //            SqlValidatorScope.Path.EMPTY, resolved);
+    //
+    //        final SqlValidatorScope.Resolve resolve = resolved.only();
+    //        if (resolve.remainingNames.isEmpty()) {
+    //            return resolve.namespace;
+    //        }
+    //    }
+
+    throw validator.newValidationError(id, RESOURCE.objectNotFound(id.getComponent(0).toString()));
   }
 
   @Override public RelDataType validateImpl(RelDataType targetRowType) {
@@ -198,11 +277,11 @@ public class IdentifierNamespace extends AbstractNamespace {
         // adds names to the front, e.g. FOO.BAR becomes BAZ.FOO.BAR.
         // Test offset in case catalog supports fewer qualifiers than catalog
         // reader.
-        ImmutableList.Builder<SqlParserPos> positions =
-            ImmutableList.builder();
+        ImmutableList.Builder<SqlParserPos> positions = ImmutableList.builder();
         int offset = qualifiedNames.size() - id.names.size();
         for (int i = 0; i < qualifiedNames.size(); i++) {
-          positions.add(offset >= 0 && i >= offset
+          positions.add(
+              offset >= 0 && i >= offset
               ? id.getComponentParserPosition(i - offset)
               : id.getParserPosition());
         }
@@ -217,23 +296,18 @@ public class IdentifierNamespace extends AbstractNamespace {
       if (!(resolvedNamespace instanceof TableNamespace)) {
         throw new RuntimeException("cannot convert");
       }
-      resolvedNamespace =
-          ((TableNamespace) resolvedNamespace).extend(extendList);
+      resolvedNamespace = ((TableNamespace) resolvedNamespace).extend(extendList);
       rowType = resolvedNamespace.getRowType();
     }
 
     // Build a list of monotonic expressions.
-    final ImmutableList.Builder<Pair<SqlNode, SqlMonotonicity>> builder =
-        ImmutableList.builder();
+    final ImmutableList.Builder<Pair<SqlNode, SqlMonotonicity>> builder = ImmutableList.builder();
     List<RelDataTypeField> fields = rowType.getFieldList();
     for (RelDataTypeField field : fields) {
       final String fieldName = field.getName();
-      final SqlMonotonicity monotonicity =
-          resolvedNamespace.getMonotonicity(fieldName);
+      final SqlMonotonicity monotonicity = resolvedNamespace.getMonotonicity(fieldName);
       if (monotonicity != null && monotonicity != SqlMonotonicity.NOT_MONOTONIC) {
-        builder.add(
-            Pair.of(new SqlIdentifier(fieldName, SqlParserPos.ZERO),
-                monotonicity));
+        builder.add(Pair.of(new SqlIdentifier(fieldName, SqlParserPos.ZERO), monotonicity));
       }
     }
     monotonicExprs = builder.build();

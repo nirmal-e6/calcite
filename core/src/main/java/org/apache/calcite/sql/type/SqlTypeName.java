@@ -14,6 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+// Added for Lambda expression
+
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to you under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.calcite.sql.type;
 
 import org.apache.calcite.avatica.util.TimeUnit;
@@ -39,16 +58,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+// Shaded for INTEGER_EXCLUDING_BIG_INT type
+
 /**
- * Enumeration of the type names which can be used to construct a SQL type.
- * Rationale for this class's existence (instead of just using the standard
- * java.sql.Type ordinals):
+ * Enumeration of the type names which can be used to construct a SQL type. Rationale for this
+ * class's existence (instead of just using the standard java.sql.Type ordinals):
  *
  * <ul>
  * <li>{@link java.sql.Types} does not include all SQL2003 data-types;
  * <li>SqlTypeName provides a type-safe enumeration;
- * <li>SqlTypeName provides a place to hang extra information such as whether
- * the type carries precision and scale.
+ *   <li>SqlTypeName provides a place to hang extra information such as whether the type carries
+ *       precision and scale.
  * </ul>
  */
 public enum SqlTypeName {
@@ -57,62 +77,87 @@ public enum SqlTypeName {
   SMALLINT(PrecScale.NO_NO, false, Types.SMALLINT, SqlTypeFamily.NUMERIC),
   INTEGER(PrecScale.NO_NO, false, Types.INTEGER, SqlTypeFamily.NUMERIC),
   BIGINT(PrecScale.NO_NO, false, Types.BIGINT, SqlTypeFamily.NUMERIC),
-  DECIMAL(PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES, false,
-      Types.DECIMAL, SqlTypeFamily.NUMERIC),
+  DECIMAL(
+      PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
+      false,
+      Types.DECIMAL,
+      SqlTypeFamily.NUMERIC),
   FLOAT(PrecScale.NO_NO, false, Types.FLOAT, SqlTypeFamily.NUMERIC),
   REAL(PrecScale.NO_NO, false, Types.REAL, SqlTypeFamily.NUMERIC),
   DOUBLE(PrecScale.NO_NO, false, Types.DOUBLE, SqlTypeFamily.NUMERIC),
   DATE(PrecScale.NO_NO, false, Types.DATE, SqlTypeFamily.DATE),
-  TIME(PrecScale.NO_NO | PrecScale.YES_NO, false, Types.TIME,
-      SqlTypeFamily.TIME),
-  TIME_WITH_LOCAL_TIME_ZONE(PrecScale.NO_NO | PrecScale.YES_NO, false, Types.TIME,
-      SqlTypeFamily.TIME),
-  TIME_TZ(PrecScale.NO_NO | PrecScale.YES_NO, false, Types.TIME,
-      SqlTypeFamily.TIME),
-  TIMESTAMP(PrecScale.NO_NO | PrecScale.YES_NO, false, Types.TIMESTAMP,
-      SqlTypeFamily.TIMESTAMP),
-  TIMESTAMP_WITH_LOCAL_TIME_ZONE(PrecScale.NO_NO | PrecScale.YES_NO, false,
-      Types.TIMESTAMP, SqlTypeFamily.TIMESTAMP),
-  TIMESTAMP_TZ(PrecScale.NO_NO | PrecScale.YES_NO, false,
-      Types.TIMESTAMP, SqlTypeFamily.TIMESTAMP),
-  INTERVAL_YEAR(PrecScale.NO_NO, false, Types.OTHER,
-      SqlTypeFamily.INTERVAL_YEAR_MONTH),
-  INTERVAL_YEAR_MONTH(PrecScale.NO_NO, false, Types.OTHER,
-      SqlTypeFamily.INTERVAL_YEAR_MONTH),
-  INTERVAL_MONTH(PrecScale.NO_NO, false, Types.OTHER,
-      SqlTypeFamily.INTERVAL_YEAR_MONTH),
-  INTERVAL_DAY(PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
-      false, Types.OTHER, SqlTypeFamily.INTERVAL_DAY_TIME),
-  INTERVAL_DAY_HOUR(PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
-      false, Types.OTHER, SqlTypeFamily.INTERVAL_DAY_TIME),
-  INTERVAL_DAY_MINUTE(PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
-      false, Types.OTHER, SqlTypeFamily.INTERVAL_DAY_TIME),
-  INTERVAL_DAY_SECOND(PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
-      false, Types.OTHER, SqlTypeFamily.INTERVAL_DAY_TIME),
-  INTERVAL_HOUR(PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
-      false, Types.OTHER, SqlTypeFamily.INTERVAL_DAY_TIME),
-  INTERVAL_HOUR_MINUTE(PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
-      false, Types.OTHER, SqlTypeFamily.INTERVAL_DAY_TIME),
-  INTERVAL_HOUR_SECOND(PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
-      false, Types.OTHER, SqlTypeFamily.INTERVAL_DAY_TIME),
-  INTERVAL_MINUTE(PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
-      false, Types.OTHER, SqlTypeFamily.INTERVAL_DAY_TIME),
-  INTERVAL_MINUTE_SECOND(PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
-      false, Types.OTHER, SqlTypeFamily.INTERVAL_DAY_TIME),
-  INTERVAL_SECOND(PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
-      false, Types.OTHER, SqlTypeFamily.INTERVAL_DAY_TIME),
-  CHAR(PrecScale.NO_NO | PrecScale.YES_NO, false, Types.CHAR,
-      SqlTypeFamily.CHARACTER),
-  VARCHAR(PrecScale.NO_NO | PrecScale.YES_NO, false, Types.VARCHAR,
-      SqlTypeFamily.CHARACTER),
-  BINARY(PrecScale.NO_NO | PrecScale.YES_NO, false, Types.BINARY,
-      SqlTypeFamily.BINARY),
-  VARBINARY(PrecScale.NO_NO | PrecScale.YES_NO, false, Types.VARBINARY,
-      SqlTypeFamily.BINARY),
+  TIME(PrecScale.NO_NO | PrecScale.YES_NO, false, Types.TIME, SqlTypeFamily.TIME),
+  TIME_WITH_LOCAL_TIME_ZONE(
+      PrecScale.NO_NO | PrecScale.YES_NO, false, Types.TIME, SqlTypeFamily.TIME),
+  TIME_TZ(PrecScale.NO_NO | PrecScale.YES_NO, false, Types.TIME, SqlTypeFamily.TIME),
+  TIMESTAMP(PrecScale.NO_NO | PrecScale.YES_NO, false, Types.TIMESTAMP, SqlTypeFamily.TIMESTAMP),
+  TIMESTAMP_WITH_LOCAL_TIME_ZONE(
+      PrecScale.NO_NO | PrecScale.YES_NO, false, Types.TIMESTAMP, SqlTypeFamily.TIMESTAMP),
+  TIMESTAMP_TZ(PrecScale.NO_NO | PrecScale.YES_NO, false, Types.TIMESTAMP, SqlTypeFamily.TIMESTAMP),
+  INTERVAL_YEAR(PrecScale.NO_NO, false, Types.OTHER, SqlTypeFamily.INTERVAL_YEAR_MONTH),
+  INTERVAL_YEAR_MONTH(PrecScale.NO_NO, false, Types.OTHER, SqlTypeFamily.INTERVAL_YEAR_MONTH),
+  INTERVAL_MONTH(PrecScale.NO_NO, false, Types.OTHER, SqlTypeFamily.INTERVAL_YEAR_MONTH),
+  INTERVAL_DAY(
+      PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
+      false,
+      Types.OTHER,
+      SqlTypeFamily.INTERVAL_DAY_TIME),
+  INTERVAL_DAY_HOUR(
+      PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
+      false,
+      Types.OTHER,
+      SqlTypeFamily.INTERVAL_DAY_TIME),
+  INTERVAL_DAY_MINUTE(
+      PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
+      false,
+      Types.OTHER,
+      SqlTypeFamily.INTERVAL_DAY_TIME),
+  INTERVAL_DAY_SECOND(
+      PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
+      false,
+      Types.OTHER,
+      SqlTypeFamily.INTERVAL_DAY_TIME),
+  INTERVAL_HOUR(
+      PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
+      false,
+      Types.OTHER,
+      SqlTypeFamily.INTERVAL_DAY_TIME),
+  INTERVAL_HOUR_MINUTE(
+      PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
+      false,
+      Types.OTHER,
+      SqlTypeFamily.INTERVAL_DAY_TIME),
+  INTERVAL_HOUR_SECOND(
+      PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
+      false,
+      Types.OTHER,
+      SqlTypeFamily.INTERVAL_DAY_TIME),
+  INTERVAL_MINUTE(
+      PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
+      false,
+      Types.OTHER,
+      SqlTypeFamily.INTERVAL_DAY_TIME),
+  INTERVAL_MINUTE_SECOND(
+      PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
+      false,
+      Types.OTHER,
+      SqlTypeFamily.INTERVAL_DAY_TIME),
+  INTERVAL_SECOND(
+      PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
+      false,
+      Types.OTHER,
+      SqlTypeFamily.INTERVAL_DAY_TIME),
+  CHAR(PrecScale.NO_NO | PrecScale.YES_NO, false, Types.CHAR, SqlTypeFamily.CHARACTER),
+  VARCHAR(PrecScale.NO_NO | PrecScale.YES_NO, false, Types.VARCHAR, SqlTypeFamily.CHARACTER),
+  BINARY(PrecScale.NO_NO | PrecScale.YES_NO, false, Types.BINARY, SqlTypeFamily.BINARY),
+  VARBINARY(PrecScale.NO_NO | PrecScale.YES_NO, false, Types.VARBINARY, SqlTypeFamily.BINARY),
   NULL(PrecScale.NO_NO, true, Types.NULL, SqlTypeFamily.NULL),
   UNKNOWN(PrecScale.NO_NO, true, Types.NULL, SqlTypeFamily.NULL),
-  ANY(PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES, true,
-      Types.JAVA_OBJECT, SqlTypeFamily.ANY),
+  ANY(
+      PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
+      true,
+      Types.JAVA_OBJECT,
+      SqlTypeFamily.ANY),
   SYMBOL(PrecScale.NO_NO, true, Types.OTHER, null),
   MULTISET(PrecScale.NO_NO, false, Types.ARRAY, SqlTypeFamily.MULTISET),
   ARRAY(PrecScale.NO_NO, false, Types.ARRAY, SqlTypeFamily.ARRAY),
@@ -121,21 +166,26 @@ public enum SqlTypeName {
   STRUCTURED(PrecScale.NO_NO, false, Types.STRUCT, null),
   ROW(PrecScale.NO_NO, false, Types.STRUCT, null),
   OTHER(PrecScale.NO_NO, false, Types.OTHER, null),
-  CURSOR(PrecScale.NO_NO, false, ExtraSqlTypes.REF_CURSOR,
-      SqlTypeFamily.CURSOR),
-  COLUMN_LIST(PrecScale.NO_NO, false, Types.OTHER + 2,
-      SqlTypeFamily.COLUMN_LIST),
-  DYNAMIC_STAR(PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES, true,
-      Types.JAVA_OBJECT, SqlTypeFamily.ANY),
-  /** Spatial type. Though not standard, it is common to several DBs, so we
-   * do not flag it 'special' (internal). */
+  CURSOR(PrecScale.NO_NO, false, ExtraSqlTypes.REF_CURSOR, SqlTypeFamily.CURSOR),
+  COLUMN_LIST(PrecScale.NO_NO, false, Types.OTHER + 2, SqlTypeFamily.COLUMN_LIST),
+  DYNAMIC_STAR(
+      PrecScale.NO_NO | PrecScale.YES_NO | PrecScale.YES_YES,
+      true,
+      Types.JAVA_OBJECT,
+      SqlTypeFamily.ANY),
+  /**
+   * Spatial type. Though not standard, it is common to several DBs, so we do not flag it 'special'
+   * (internal).
+   */
   GEOMETRY(PrecScale.NO_NO, false, ExtraSqlTypes.GEOMETRY, SqlTypeFamily.GEO),
   MEASURE(PrecScale.NO_NO, true, Types.OTHER, SqlTypeFamily.ANY),
   FUNCTION(PrecScale.NO_NO, true, Types.OTHER, SqlTypeFamily.FUNCTION),
   SARG(PrecScale.NO_NO, true, Types.OTHER, SqlTypeFamily.ANY),
   UUID(PrecScale.NO_NO, false, Types.OTHER, SqlTypeFamily.UUID),
-  /** VARIANT data type, a dynamically-typed value that can have at runtime
-   * any of the other data types in this table. */
+  /**
+   * VARIANT data type, a dynamically-typed value that can have at runtime any of the other data
+   * types in this table.
+   */
   VARIANT(PrecScale.NO_NO, false, Types.OTHER, SqlTypeFamily.VARIANT);
 
   public static final int MAX_DATETIME_PRECISION = 3;
@@ -151,8 +201,7 @@ public enum SqlTypeName {
   public static final int MAX_INTERVAL_FRACTIONAL_SECOND_PRECISION = 9;
 
   // Cached map of enum values
-  private static final Map<String, SqlTypeName> VALUES_MAP =
-      Util.enumConstants(SqlTypeName.class);
+  private static final Map<String, SqlTypeName> VALUES_MAP = Util.enumConstants(SqlTypeName.class);
 
   // categorizations used by SqlTypeFamily definitions
 
@@ -161,62 +210,97 @@ public enum SqlTypeName {
   // SqlTypeFamily.ANY
   public static final List<SqlTypeName> ALL_TYPES =
       ImmutableList.of(
-          BOOLEAN, INTEGER, VARCHAR, DATE, TIME, TIMESTAMP, NULL, DECIMAL,
-          ANY, CHAR, BINARY, VARBINARY, TINYINT, SMALLINT, BIGINT, REAL,
-          DOUBLE, SYMBOL, INTERVAL_YEAR, INTERVAL_YEAR_MONTH, INTERVAL_MONTH,
-          INTERVAL_DAY, INTERVAL_DAY_HOUR, INTERVAL_DAY_MINUTE,
-          INTERVAL_DAY_SECOND, INTERVAL_HOUR, INTERVAL_HOUR_MINUTE,
-          INTERVAL_HOUR_SECOND, INTERVAL_MINUTE, INTERVAL_MINUTE_SECOND,
-          INTERVAL_SECOND, TIME_WITH_LOCAL_TIME_ZONE, TIME_TZ,
-          TIMESTAMP_WITH_LOCAL_TIME_ZONE, TIMESTAMP_TZ,
-          FLOAT, MULTISET, DISTINCT, STRUCTURED, ROW, CURSOR, COLUMN_LIST, VARIANT);
+          BOOLEAN,
+          INTEGER,
+          VARCHAR,
+          DATE,
+          TIME,
+          TIMESTAMP,
+          NULL,
+          DECIMAL,
+          ANY,
+          CHAR,
+          BINARY,
+          VARBINARY,
+          TINYINT,
+          SMALLINT,
+          BIGINT,
+          REAL,
+          DOUBLE,
+          SYMBOL,
+          INTERVAL_YEAR,
+          INTERVAL_YEAR_MONTH,
+          INTERVAL_MONTH,
+          INTERVAL_DAY,
+          INTERVAL_DAY_HOUR,
+          INTERVAL_DAY_MINUTE,
+          INTERVAL_DAY_SECOND,
+          INTERVAL_HOUR,
+          INTERVAL_HOUR_MINUTE,
+          INTERVAL_HOUR_SECOND,
+          INTERVAL_MINUTE,
+          INTERVAL_MINUTE_SECOND,
+          INTERVAL_SECOND,
+          TIME_WITH_LOCAL_TIME_ZONE,
+          TIME_TZ,
+          TIMESTAMP_WITH_LOCAL_TIME_ZONE,
+          TIMESTAMP_TZ,
+          FLOAT,
+          MULTISET,
+          DISTINCT,
+          STRUCTURED,
+          ROW,
+          CURSOR,
+          COLUMN_LIST,
+          VARIANT);
 
-  public static final List<SqlTypeName> BOOLEAN_TYPES =
-      ImmutableList.of(BOOLEAN);
+  public static final List<SqlTypeName> BOOLEAN_TYPES = ImmutableList.of(BOOLEAN);
 
-  public static final List<SqlTypeName> BINARY_TYPES =
-      ImmutableList.of(BINARY, VARBINARY);
+  public static final List<SqlTypeName> BINARY_TYPES = ImmutableList.of(BINARY, VARBINARY);
 
   public static final List<SqlTypeName> INT_TYPES =
       ImmutableList.of(TINYINT, SMALLINT, INTEGER, BIGINT);
 
-  public static final List<SqlTypeName> EXACT_TYPES =
-      combine(INT_TYPES, ImmutableList.of(DECIMAL));
+  public static final List<SqlTypeName> INTEGER_EXCLDUING_BIG_INT =
+      ImmutableList.of(TINYINT, SMALLINT, INTEGER);
 
-  public static final List<SqlTypeName> APPROX_TYPES =
-      ImmutableList.of(FLOAT, REAL, DOUBLE);
+  public static final List<SqlTypeName> EXACT_TYPES = combine(INT_TYPES, ImmutableList.of(DECIMAL));
 
-  public static final List<SqlTypeName> NUMERIC_TYPES =
-      combine(EXACT_TYPES, APPROX_TYPES);
+  public static final List<SqlTypeName> APPROX_TYPES = ImmutableList.of(FLOAT, REAL, DOUBLE);
+
+  public static final List<SqlTypeName> NUMERIC_TYPES = combine(EXACT_TYPES, APPROX_TYPES);
 
   public static final List<SqlTypeName> FRACTIONAL_TYPES =
       combine(APPROX_TYPES, ImmutableList.of(DECIMAL));
 
-  public static final List<SqlTypeName> CHAR_TYPES =
-      ImmutableList.of(CHAR, VARCHAR);
+  public static final List<SqlTypeName> CHAR_TYPES = ImmutableList.of(CHAR, VARCHAR);
 
-  public static final List<SqlTypeName> STRING_TYPES =
-      combine(CHAR_TYPES, BINARY_TYPES);
+  public static final List<SqlTypeName> STRING_TYPES = combine(CHAR_TYPES, BINARY_TYPES);
 
-  public static final List<SqlTypeName> GEOMETRY_TYPES =
-      ImmutableList.of(GEOMETRY);
+  public static final List<SqlTypeName> GEOMETRY_TYPES = ImmutableList.of(GEOMETRY);
 
   public static final List<SqlTypeName> DATETIME_TYPES =
-      ImmutableList.of(DATE, TIME, TIME_WITH_LOCAL_TIME_ZONE, TIME_TZ,
-          TIMESTAMP, TIMESTAMP_WITH_LOCAL_TIME_ZONE, TIMESTAMP_TZ);
+      ImmutableList.of(
+          DATE,
+          TIME,
+          TIME_WITH_LOCAL_TIME_ZONE,
+          TIME_TZ,
+          TIMESTAMP,
+          TIMESTAMP_WITH_LOCAL_TIME_ZONE,
+          TIMESTAMP_TZ);
 
   /** Types that contain time zone information. */
   public static final List<SqlTypeName> TZ_TYPES =
-      ImmutableList.of(TIME_WITH_LOCAL_TIME_ZONE, TIME_TZ,
-          TIMESTAMP_WITH_LOCAL_TIME_ZONE, TIMESTAMP_TZ);
+      ImmutableList.of(
+          TIME_WITH_LOCAL_TIME_ZONE, TIME_TZ, TIMESTAMP_WITH_LOCAL_TIME_ZONE, TIMESTAMP_TZ);
 
   public static final Set<SqlTypeName> YEAR_INTERVAL_TYPES =
-      Sets.immutableEnumSet(SqlTypeName.INTERVAL_YEAR,
-          SqlTypeName.INTERVAL_YEAR_MONTH,
-          SqlTypeName.INTERVAL_MONTH);
+      Sets.immutableEnumSet(
+          SqlTypeName.INTERVAL_YEAR, SqlTypeName.INTERVAL_YEAR_MONTH, SqlTypeName.INTERVAL_MONTH);
 
   public static final Set<SqlTypeName> DAY_INTERVAL_TYPES =
-      Sets.immutableEnumSet(SqlTypeName.INTERVAL_DAY,
+      Sets.immutableEnumSet(
+          SqlTypeName.INTERVAL_DAY,
           SqlTypeName.INTERVAL_DAY_HOUR,
           SqlTypeName.INTERVAL_DAY_MINUTE,
           SqlTypeName.INTERVAL_DAY_SECOND,
@@ -228,14 +312,11 @@ public enum SqlTypeName {
           SqlTypeName.INTERVAL_SECOND);
 
   public static final Set<SqlTypeName> INTERVAL_TYPES =
-      Sets.immutableEnumSet(
-          Iterables.concat(YEAR_INTERVAL_TYPES, DAY_INTERVAL_TYPES));
+      Sets.immutableEnumSet(Iterables.concat(YEAR_INTERVAL_TYPES, DAY_INTERVAL_TYPES));
 
-  /** The possible types of a time frame argument to a function such as
-   * {@code TIMESTAMP_DIFF}. */
+  /** The possible types of a time frame argument to a function such as {@code TIMESTAMP_DIFF}. */
   public static final Set<SqlTypeName> TIME_FRAME_TYPES =
-      Sets.immutableEnumSet(
-          Iterables.concat(INTERVAL_TYPES, ImmutableList.of(SYMBOL)));
+      Sets.immutableEnumSet(Iterables.concat(INTERVAL_TYPES, ImmutableList.of(SYMBOL)));
 
   private static final Map<Integer, SqlTypeName> JDBC_TYPE_TO_NAME =
       ImmutableMap.<Integer, SqlTypeName>builder()
@@ -245,19 +326,17 @@ public enum SqlTypeName {
           .put(Types.INTEGER, INTEGER)
           .put(Types.NUMERIC, DECIMAL) // REVIEW
           .put(Types.DECIMAL, DECIMAL)
-
           .put(Types.FLOAT, FLOAT)
           .put(Types.REAL, REAL)
           .put(Types.DOUBLE, DOUBLE)
-
           .put(Types.CHAR, CHAR)
           .put(Types.VARCHAR, VARCHAR)
 
-              // TODO: provide real support for these eventually
+          // TODO: provide real support for these eventually
           .put(ExtraSqlTypes.NCHAR, CHAR)
           .put(ExtraSqlTypes.NVARCHAR, VARCHAR)
 
-              // TODO: additional types not yet supported. See ExtraSqlTypes.
+          // TODO: additional types not yet supported. See ExtraSqlTypes.
               // .put(Types.LONGVARCHAR, Longvarchar)
               // .put(Types.CLOB, Clob)
               // .put(Types.LONGVARBINARY, Longvarbinary)
@@ -269,7 +348,6 @@ public enum SqlTypeName {
 
           .put(Types.BINARY, BINARY)
           .put(Types.VARBINARY, VARBINARY)
-
           .put(Types.DATE, DATE)
           .put(Types.TIME, TIME)
           .put(Types.TIMESTAMP, TIMESTAMP)
@@ -280,21 +358,19 @@ public enum SqlTypeName {
           .put(Types.ARRAY, ARRAY)
           .build();
 
-  /**
-   * Bitwise-or of flags indicating allowable precision/scale combinations.
-   */
+  /** Bitwise-or of flags indicating allowable precision/scale combinations. */
   private final int signatures;
 
   /**
-   * Returns true if not of a "pure" standard sql type. "Inpure" types include
-   * {@link #ANY}, {@link #NULL} and {@link #SYMBOL}
+   * Returns true if not of a "pure" standard sql type. "Inpure" types include {@link #ANY}, {@link
+   * #NULL} and {@link #SYMBOL}
    */
   private final boolean special;
+
   private final int jdbcOrdinal;
   private final @Nullable SqlTypeFamily family;
 
-  SqlTypeName(int signatures, boolean special, int jdbcType,
-      @Nullable SqlTypeFamily family) {
+  SqlTypeName(int signatures, boolean special, int jdbcType, @Nullable SqlTypeFamily family) {
     this.signatures = signatures;
     this.special = special;
     this.jdbcOrdinal = jdbcType;
@@ -319,9 +395,10 @@ public enum SqlTypeName {
     return VALUES_MAP.get(name);
   }
 
-  /** Returns the SqlTypeName value whose name or {@link #getSpaceName()}
-   * matches the given name, or throws {@link IllegalArgumentException}; never
-   * returns null. */
+  /**
+   * Returns the SqlTypeName value whose name or {@link #getSpaceName()} matches the given name, or
+   * throws {@link IllegalArgumentException}; never returns null.
+   */
   public static SqlTypeName lookup(String tag) {
     // Special handling for TIME WITH TIME ZONE and
     // TIMESTAMP WITH TIME ZONE, whose type names are TIME_TZ and TIMESTAMP_TZ.
@@ -341,8 +418,7 @@ public enum SqlTypeName {
   }
 
   public boolean allowsPrec() {
-    return allowsPrecScale(true, true)
-        || allowsPrecScale(true, false);
+    return allowsPrecScale(true, true) || allowsPrecScale(true, false);
   }
 
   public boolean allowsScale() {
@@ -350,31 +426,26 @@ public enum SqlTypeName {
   }
 
   /**
-   * Returns whether this type can be specified with a given combination of
-   * precision and scale. For example,
+   * Returns whether this type can be specified with a given combination of precision and scale. For
+   * example,
    *
    * <ul>
    * <li><code>Varchar.allowsPrecScale(true, false)</code> returns <code>
-   * true</code>, because the VARCHAR type allows a precision parameter, as in
-   * <code>VARCHAR(10)</code>.</li>
+   * true</code>, because the VARCHAR type allows a precision parameter, as in <code>VARCHAR(10)
+   *       </code>.
    * <li><code>Varchar.allowsPrecScale(true, true)</code> returns <code>
-   * false</code>, because the VARCHAR type does not allow a precision and a
-   * scale parameter, as in <code>VARCHAR(10, 4)</code>.</li>
-   * <li><code>allowsPrecScale(false, true)</code> returns <code>false</code>
-   * for every type.</li>
+   * false</code>, because the VARCHAR type does not allow a precision and a scale parameter, as in
+   *       <code>VARCHAR(10, 4)</code>.
+   *   <li><code>allowsPrecScale(false, true)</code> returns <code>false</code> for every type.
    * </ul>
    *
-   * @param precision Whether the precision/length field is part of the type
-   *                  specification
+   * @param precision Whether the precision/length field is part of the type specification
    * @param scale     Whether the scale field is part of the type specification
    * @return Whether this combination of precision/scale is valid
    */
-  public boolean allowsPrecScale(
-      boolean precision,
-      boolean scale) {
+  public boolean allowsPrecScale(boolean precision, boolean scale) {
     int mask =
-        precision ? (scale ? PrecScale.YES_YES : PrecScale.YES_NO)
-            : (scale ? 0 : PrecScale.NO_NO);
+        precision ? (scale ? PrecScale.YES_YES : PrecScale.YES_NO) : (scale ? 0 : PrecScale.NO_NO);
     return (signatures & mask) != 0;
   }
 
@@ -382,27 +453,22 @@ public enum SqlTypeName {
     return special;
   }
 
-  /** Returns the ordinal from {@link java.sql.Types} corresponding to this
-   * SqlTypeName. */
+  /** Returns the ordinal from {@link java.sql.Types} corresponding to this SqlTypeName. */
   public int getJdbcOrdinal() {
     return jdbcOrdinal;
   }
 
-  private static List<SqlTypeName> combine(
-      List<SqlTypeName> list0,
-      List<SqlTypeName> list1) {
-    return ImmutableList.<SqlTypeName>builder()
-        .addAll(list0)
-        .addAll(list1)
-        .build();
+  private static List<SqlTypeName> combine(List<SqlTypeName> list0, List<SqlTypeName> list1) {
+    return ImmutableList.<SqlTypeName>builder().addAll(list0).addAll(list1).build();
   }
 
-  /** Returns the default scale for this type if supported, otherwise -1 if
-   * scale is either unsupported or must be specified explicitly.
+  /**
+   * Returns the default scale for this type if supported, otherwise -1 if scale is either
+   * unsupported or must be specified explicitly.
    *
-   * @deprecated
-   * Use {@link org.apache.calcite.rel.type.RelDataTypeSystem#getDefaultScale(SqlTypeName)}
-   * but return Integer.MIN_VALUE if scale is unsupported.
+   * @deprecated Use {@link
+   *     org.apache.calcite.rel.type.RelDataTypeSystem#getDefaultScale(SqlTypeName)} but return
+   *     Integer.MIN_VALUE if scale is unsupported.
    */
   @Deprecated
   public int getDefaultScale() {
@@ -509,20 +575,16 @@ public enum SqlTypeName {
    * </table>
    *
    * @param sign      If true, returns upper limit, otherwise lower limit
-   * @param limit     If true, returns value at or near to overflow; otherwise
-   *                  value at or near to underflow
-   * @param beyond    If true, returns the value just beyond the limit,
-   *                  otherwise the value at the limit
+   * @param limit If true, returns value at or near to overflow; otherwise value at or near to
+   *     underflow
+   * @param beyond If true, returns the value just beyond the limit, otherwise the value at the
+   *     limit
    * @param precision Precision, or -1 if not applicable
    * @param scale     Scale, or -1 if not applicable
    * @return Limit value
    */
   public @Nullable Object getLimit(
-      boolean sign,
-      Limit limit,
-      boolean beyond,
-      int precision,
-      int scale) {
+      boolean sign, Limit limit, boolean beyond, int precision, int scale) {
     assert allowsPrecScale(precision != -1, scale != -1) : this;
     if (limit == Limit.ZERO) {
       if (beyond) {
@@ -562,8 +624,7 @@ public enum SqlTypeName {
       return getNumericLimit(2, 64, sign, limit, beyond);
 
     case DECIMAL:
-      BigDecimal decimal =
-          getNumericLimit(10, precision, sign, limit, beyond);
+      BigDecimal decimal = getNumericLimit(10, precision, sign, limit, beyond);
       if (decimal == null) {
         return null;
       }
@@ -572,8 +633,7 @@ public enum SqlTypeName {
       // a DECIMAL(19, 0) is 2^63 - 1, not 10^19 - 1.
       switch (limit) {
       case OVERFLOW:
-        final BigDecimal other =
-            (BigDecimal) BIGINT.getLimit(sign, limit, beyond, -1, -1);
+        final BigDecimal other = (BigDecimal) BIGINT.getLimit(sign, limit, beyond, -1, -1);
         if (other != null && decimal.compareTo(other) == (sign ? 1 : -1)) {
           decimal = other;
         }
@@ -671,7 +731,7 @@ public enum SqlTypeName {
           return null;
         }
 
-        // "SQL:2003 6.1 <data type> Access Rules 6" says that year is
+            // "SQL:2003 6.1 <data type> Access Rules 6" says that year is
         // between 1 and 9999, and days/months are the valid Gregorian
         // calendar values for these years.
         if (sign) {
@@ -716,8 +776,7 @@ public enum SqlTypeName {
         calendar.set(Calendar.MINUTE, 59);
         calendar.set(Calendar.SECOND, 59);
         int millis =
-            (precision >= 3) ? 999
-                : ((precision == 2) ? 990 : ((precision == 1) ? 900 : 0));
+                (precision >= 3) ? 999 : ((precision == 2) ? 990 : ((precision == 1) ? 900 : 0));
         calendar.set(Calendar.MILLISECOND, millis);
         break;
       default:
@@ -751,7 +810,7 @@ public enum SqlTypeName {
           return null;
         }
 
-        // "SQL:2003 6.1 <data type> Access Rules 6" says that year is
+            // "SQL:2003 6.1 <data type> Access Rules 6" says that year is
         // between 1 and 9999, and days/months are the valid Gregorian
         // calendar values for these years.
         if (sign) {
@@ -762,9 +821,7 @@ public enum SqlTypeName {
           calendar.set(Calendar.MINUTE, 59);
           calendar.set(Calendar.SECOND, 59);
           int millis =
-              (precision >= 3) ? 999
-                  : ((precision == 2) ? 990
-                      : ((precision == 1) ? 900 : 0));
+                  (precision >= 3) ? 999 : ((precision == 2) ? 990 : ((precision == 1) ? 900 : 0));
           calendar.set(Calendar.MILLISECOND, millis);
         } else {
           calendar.set(Calendar.YEAR, 1);
@@ -787,13 +844,12 @@ public enum SqlTypeName {
   }
 
   /**
-   * Returns the minimum precision (or length) allowed for this type, or -1 if
-   * precision/length are not applicable for this type.
+   * Returns the minimum precision (or length) allowed for this type, or -1 if precision/length are
+   * not applicable for this type.
    *
    * @return Minimum allowed precision
-   *
-   * @deprecated
-   * Use {@link org.apache.calcite.rel.type.RelDataTypeSystem#getMinPrecision(SqlTypeName)}.
+   * @deprecated Use {@link
+   *     org.apache.calcite.rel.type.RelDataTypeSystem#getMinPrecision(SqlTypeName)}.
    */
   @Deprecated
   public int getMinPrecision() {
@@ -830,20 +886,17 @@ public enum SqlTypeName {
   }
 
   /**
-   * Returns the minimum scale (or fractional second precision in the case of
-   * intervals) allowed for this type, or -1 if scale are not
-   * applicable for this type.
+   * Returns the minimum scale (or fractional second precision in the case of intervals) allowed for
+   * this type, or -1 if scale are not applicable for this type.
    *
    * @return Minimum allowed scale
-   *
-   * @deprecated
-   * Use {@link org.apache.calcite.rel.type.RelDataTypeSystem#getMinScale(SqlTypeName)}
+   * @deprecated Use {@link org.apache.calcite.rel.type.RelDataTypeSystem#getMinScale(SqlTypeName)}
    * but return Integer.MIN_VALUE if scale is unsupported.
    */
   @Deprecated
   public int getMinScale() {
     switch (this) {
-    // TODO: Minimum numeric scale for decimal
+        // TODO: Minimum numeric scale for decimal
     case INTERVAL_YEAR:
     case INTERVAL_YEAR_MONTH:
     case INTERVAL_MONTH:
@@ -863,8 +916,10 @@ public enum SqlTypeName {
     }
   }
 
-  /** Returns {@code HOUR} for {@code HOUR TO SECOND} and
-   * {@code HOUR}, {@code SECOND} for {@code SECOND}. */
+  /**
+   * Returns {@code HOUR} for {@code HOUR TO SECOND} and {@code HOUR}, {@code SECOND} for {@code
+   * SECOND}.
+   */
   public TimeUnit getStartUnit() {
     switch (this) {
     case INTERVAL_YEAR:
@@ -891,8 +946,7 @@ public enum SqlTypeName {
     }
   }
 
-  /** Returns {@code SECOND} for both {@code HOUR TO SECOND} and
-   * {@code SECOND}. */
+  /** Returns {@code SECOND} for both {@code HOUR TO SECOND} and {@code SECOND}. */
   public TimeUnit getEndUnit() {
     switch (this) {
     case INTERVAL_YEAR:
@@ -932,15 +986,13 @@ public enum SqlTypeName {
 
   /** Limit. */
   public enum Limit {
-    ZERO, UNDERFLOW, OVERFLOW
+    ZERO,
+    UNDERFLOW,
+    OVERFLOW
   }
 
   private static @Nullable BigDecimal getNumericLimit(
-      int radix,
-      int exponent,
-      boolean sign,
-      Limit limit,
-      boolean beyond) {
+      int radix, int exponent, boolean sign, Limit limit, boolean beyond) {
     switch (limit) {
     case OVERFLOW:
 
@@ -962,8 +1014,7 @@ public enum SqlTypeName {
       }
       return decimal;
     case UNDERFLOW:
-      return beyond ? null
-          : (sign ? BigDecimal.ONE : BigDecimal.ONE.negate());
+      return beyond ? null : (sign ? BigDecimal.ONE : BigDecimal.ONE.negate());
     case ZERO:
       return BigDecimal.ZERO;
     default:
@@ -988,17 +1039,22 @@ public enum SqlTypeName {
     case BINARY:
       return SqlLiteral.createBinaryString((byte[]) o, pos);
     case DATE:
-      return SqlLiteral.createDate(o instanceof Calendar
-          ? DateString.fromCalendarFields((Calendar) o)
-          : (DateString) o, pos);
+      return SqlLiteral.createDate(
+            o instanceof Calendar ? DateString.fromCalendarFields((Calendar) o) : (DateString) o,
+            pos);
     case TIME:
-      return SqlLiteral.createTime(o instanceof Calendar
-          ? TimeString.fromCalendarFields((Calendar) o)
-          : (TimeString) o, 0 /* todo */, pos);
+      return SqlLiteral.createTime(
+            o instanceof Calendar ? TimeString.fromCalendarFields((Calendar) o) : (TimeString) o,
+            0 /* todo */,
+            pos);
     case TIMESTAMP:
-      return SqlLiteral.createTimestamp(this, o instanceof Calendar
+      return SqlLiteral.createTimestamp(
+            this,
+            o instanceof Calendar
           ? TimestampString.fromCalendarFields((Calendar) o)
-          : (TimestampString) o, 0 /* todo */, pos);
+                : (TimestampString) o,
+            0 /* todo */,
+            pos);
     default:
       throw Util.unexpected(this);
     }
@@ -1009,8 +1065,10 @@ public enum SqlTypeName {
     return name();
   }
 
-  /** Returns the name of this type, with underscores converted to spaces,
-   * for example "TIMESTAMP WITH LOCAL TIME ZONE", "DATE". */
+  /**
+   * Returns the name of this type, with underscores converted to spaces, for example "TIMESTAMP
+   * WITH LOCAL TIME ZONE", "DATE".
+   */
   public String getSpaceName() {
     return name().replace('_', ' ');
   }
@@ -1021,8 +1079,8 @@ public enum SqlTypeName {
    * <p>Note: for intervals:
    *
    * <ul>
-   * <li>precision = start (leading field) precision</li>
-   * <li>scale = fractional second precision</li>
+   *   <li>precision = start (leading field) precision
+   *   <li>scale = fractional second precision
    * </ul>
    */
   private interface PrecScale {

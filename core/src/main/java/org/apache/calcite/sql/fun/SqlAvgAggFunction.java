@@ -16,12 +16,16 @@
  */
 package org.apache.calcite.sql.fun;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlFunctionCategory;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.type.OperandTypes;
-import org.apache.calcite.sql.type.ReturnTypes;
+import org.apache.calcite.sql.type.SqlReturnTypeInference;
+import org.apache.calcite.sql.type.SqlTypeName;
+import org.apache.calcite.sql.type.SqlTypeUtil;
 import org.apache.calcite.util.Optionality;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -47,7 +51,7 @@ public class SqlAvgAggFunction extends SqlAggFunction {
     super(name,
         null,
         kind,
-        ReturnTypes.AVG_AGG_FUNCTION,
+        AVG_AGG_FUNCTION,
         null,
         OperandTypes.NUMERIC,
         SqlFunctionCategory.NUMERIC,
@@ -86,4 +90,35 @@ public class SqlAvgAggFunction extends SqlAggFunction {
     VAR_POP,
     VAR_SAMP
   }
+
+  private static final SqlReturnTypeInference AVG_AGG_FUNCTION = opBinding -> {
+    final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+    RelDataType operandType = opBinding.getOperandType(0);
+
+    if (SqlTypeUtil.isExactNumeric(operandType)
+        && SqlTypeUtil.isDecimal(operandType)
+        && operandType.getScale() <= 6
+        && CalciteForkSettings.decimal128Enabled()) {
+      RelDataType countReturnType = typeFactory.createSqlType(SqlTypeName.BIGINT);
+      RelDataType type =
+          typeFactory.getTypeSystem()
+              .deriveDecimalDivideType(typeFactory, operandType, countReturnType);
+      assert type != null;
+      return typeFactory.createTypeWithNullability(type, true);
+}
+
+    final RelDataType type =
+        typeFactory.getTypeSystem().deriveAvgAggType(typeFactory, operandType);
+    SqlTypeName sqlTypeName = type.getSqlTypeName();
+    if (sqlTypeName == SqlTypeName.BIGINT
+        || sqlTypeName == SqlTypeName.INTEGER
+        || sqlTypeName == SqlTypeName.TINYINT
+        || sqlTypeName == SqlTypeName.SMALLINT) {
+      return typeFactory.createSqlType(SqlTypeName.DOUBLE);
+    }
+    if (opBinding.getGroupCount() == 0 || opBinding.hasFilter()) {
+      return typeFactory.createTypeWithNullability(type, true);
+    }
+    return type;
+  };
 }

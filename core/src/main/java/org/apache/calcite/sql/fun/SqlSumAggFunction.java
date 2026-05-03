@@ -16,14 +16,18 @@
  */
 package org.apache.calcite.sql.fun;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlFunctionCategory;
 import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.SqlOperatorBinding;
 import org.apache.calcite.sql.SqlSplittableAggFunction;
+import org.apache.calcite.sql.type.E6TypeSystemImpl;
 import org.apache.calcite.sql.type.OperandTypes;
 import org.apache.calcite.sql.type.ReturnTypes;
+import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.Optionality;
 
 import com.google.common.collect.ImmutableList;
@@ -32,11 +36,12 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 
+import static java.util.Objects.requireNonNull;
+
 /**
- * <code>Sum</code> is an aggregator which returns the sum of the values which
- * go into it. It has precisely one argument of numeric type (<code>int</code>,
- * <code>long</code>, <code>float</code>, <code>double</code>), and the result
- * is the same type.
+ * <code>Sum</code> is an aggregator which returns the sum of the values which go into it. It has
+ * precisely one argument of numeric type (<code>int</code>, <code>long</code>, <code>float</code>,
+ * <code>double</code>), and the result is the same type.
  */
 public class SqlSumAggFunction extends SqlAggFunction {
 
@@ -52,7 +57,7 @@ public class SqlSumAggFunction extends SqlAggFunction {
         "SUM",
         null,
         SqlKind.SUM,
-        ReturnTypes.AGG_SUM,
+        null,
         null,
         OperandTypes.NUMERIC,
         SqlFunctionCategory.NUMERIC,
@@ -63,6 +68,16 @@ public class SqlSumAggFunction extends SqlAggFunction {
   }
 
   //~ Methods ----------------------------------------------------------------
+
+  @Override public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+    RelDataType operandType = opBinding.getOperandType(0);
+    if (operandType.getSqlTypeName().equals(SqlTypeName.DECIMAL)
+        && operandType.getPrecision() > E6TypeSystemImpl.MAX_DOUBLE_PRECISION
+        && (operandType.getScale() == 0 || CalciteForkSettings.decimal128Enabled())) {
+      return operandType;
+    }
+    return requireNonNull(ReturnTypes.DOUBLE_NULLABLE.inferReturnType(opBinding));
+  }
 
   @SuppressWarnings("deprecation")
   @Override public List<RelDataType> getParameterTypes(RelDataTypeFactory typeFactory) {

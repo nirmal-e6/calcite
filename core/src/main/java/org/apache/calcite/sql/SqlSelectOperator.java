@@ -31,25 +31,26 @@ import static org.apache.calcite.linq4j.Nullness.castNonNull;
 
 import static java.util.Objects.requireNonNull;
 
+// Shaded to support Except() Clause in select
+
 /**
  * An operator describing a query. (Not a query itself.)
  *
  * <p>Operands are:
  *
  * <ul>
- * <li>0: distinct ({@link SqlLiteral})</li>
- * <li>1: selectClause ({@link SqlNodeList})</li>
- * <li>2: fromClause ({@link SqlCall} to "join" operator)</li>
- * <li>3: whereClause ({@link SqlNode})</li>
- * <li>4: havingClause ({@link SqlNode})</li>
- * <li>5: groupClause ({@link SqlNode})</li>
- * <li>6: windowClause ({@link SqlNodeList})</li>
- * <li>7: orderClause ({@link SqlNode})</li>
+ *   <li>0: distinct ({@link SqlLiteral})
+ *   <li>1: selectClause ({@link SqlNodeList})
+ *   <li>2: fromClause ({@link SqlCall} to "join" operator)
+ *   <li>3: whereClause ({@link SqlNode})
+ *   <li>4: havingClause ({@link SqlNode})
+ *   <li>5: groupClause ({@link SqlNode})
+ *   <li>6: windowClause ({@link SqlNodeList})
+ *   <li>7: orderClause ({@link SqlNode})
  * </ul>
  */
 public class SqlSelectOperator extends SqlOperator {
-  public static final SqlSelectOperator INSTANCE =
-      new SqlSelectOperator();
+  public static final SqlSelectOperator INSTANCE = new SqlSelectOperator();
 
   //~ Constructors -----------------------------------------------------------
 
@@ -63,24 +64,25 @@ public class SqlSelectOperator extends SqlOperator {
     return SqlSyntax.SPECIAL;
   }
 
+  // modified by e6data
   @Override public SqlCall createCall(
-      @Nullable SqlLiteral functionQualifier,
-      SqlParserPos pos,
-      @Nullable SqlNode... operands) {
+      @Nullable SqlLiteral functionQualifier, SqlParserPos pos, @Nullable SqlNode... operands) {
     assert functionQualifier == null;
-    return new SqlSelect(pos,
+    return new SqlSelect(
+        pos,
         (SqlNodeList) operands[0],
         requireNonNull((SqlNodeList) operands[1], "selectList"),
-        operands[2],
+        (SqlNodeList) operands[2],
         operands[3],
-        (SqlNodeList) operands[4],
-        operands[5],
-        (SqlNodeList) operands[6],
-        operands[7],
-        (SqlNodeList) operands[8],
-        operands[9],
+        operands[4],
+        (SqlNodeList) operands[5],
+        operands[6],
+        (SqlNodeList) operands[7],
+        operands[8],
+        (SqlNodeList) operands[9],
         operands[10],
-        (SqlNodeList) operands[11]);
+        operands[11],
+        (SqlNodeList) operands[12]);
   }
 
   /**
@@ -131,14 +133,9 @@ public class SqlSelectOperator extends SqlOperator {
   }
 
   @SuppressWarnings("deprecation")
-  @Override public void unparse(
-      SqlWriter writer,
-      SqlCall call,
-      int leftPrec,
-      int rightPrec) {
+  @Override public void unparse(SqlWriter writer, SqlCall call, int leftPrec, int rightPrec) {
     SqlSelect select = (SqlSelect) call;
-    final SqlWriter.Frame selectFrame =
-        writer.startList(SqlWriter.FrameTypeEnum.SELECT);
+    final SqlWriter.Frame selectFrame = writer.startList(SqlWriter.FrameTypeEnum.SELECT);
     writer.sep("SELECT");
 
     if (select.hasHints()) {
@@ -154,8 +151,7 @@ public class SqlSelectOperator extends SqlOperator {
     }
     writer.topN(select.fetch, select.offset);
     final SqlNodeList selectClause = select.selectList;
-    writer.list(SqlWriter.FrameTypeEnum.SELECT_LIST, SqlWriter.COMMA,
-        selectClause);
+    writer.list(SqlWriter.FrameTypeEnum.SELECT_LIST, SqlWriter.COMMA, selectClause);
 
     if (select.from != null) {
       // Calcite SQL requires FROM but MySQL does not.
@@ -164,8 +160,7 @@ public class SqlSelectOperator extends SqlOperator {
       // for FROM clause, use precedence just below join operator to make
       // sure that an un-joined nested select will be properly
       // parenthesized
-      final SqlWriter.Frame fromFrame =
-          writer.startList(SqlWriter.FrameTypeEnum.FROM_LIST);
+      final SqlWriter.Frame fromFrame = writer.startList(SqlWriter.FrameTypeEnum.FROM_LIST);
       select.from.unparse(
           writer,
           SqlJoin.COMMA_OPERATOR.getLeftPrec() - 1,
@@ -182,8 +177,7 @@ public class SqlSelectOperator extends SqlOperator {
 
         // decide whether to split on ORs or ANDs
         SqlBinaryOperator whereSep = SqlStdOperatorTable.AND;
-        if ((node instanceof SqlCall)
-            && node.getKind() == SqlKind.OR) {
+        if ((node instanceof SqlCall) && node.getKind() == SqlKind.OR) {
           whereSep = SqlStdOperatorTable.OR;
         }
 
@@ -198,18 +192,19 @@ public class SqlSelectOperator extends SqlOperator {
         list.add(0, node);
 
         // unparse in a WHERE_LIST frame
-        writer.list(SqlWriter.FrameTypeEnum.WHERE_LIST, whereSep,
+        writer.list(
+            SqlWriter.FrameTypeEnum.WHERE_LIST,
+            whereSep,
             new SqlNodeList(list, where.getParserPosition()));
       } else {
         where.unparse(writer, 0, 0);
       }
     }
     if (select.groupBy != null) {
-      SqlNodeList groupBy =
-          select.groupBy.isEmpty() ? SqlNodeList.SINGLETON_EMPTY
-              : select.groupBy;
+      SqlNodeList groupBy = select.groupBy.isEmpty() ? SqlNodeList.SINGLETON_EMPTY : select.groupBy;
       // if the DISTINCT keyword of GROUP BY is present it can be the only item
-      if (groupBy.size() == 1 && groupBy.get(0) != null
+      if (groupBy.size() == 1
+          && groupBy.get(0) != null
           && groupBy.get(0).getKind() == SqlKind.GROUP_BY_DISTINCT) {
         writer.sep("GROUP BY DISTINCT");
         List<SqlNode> operandList = ((SqlCall) groupBy.get(0)).getOperandList();
@@ -217,8 +212,7 @@ public class SqlSelectOperator extends SqlOperator {
       } else {
         writer.sep("GROUP BY");
       }
-      writer.list(SqlWriter.FrameTypeEnum.GROUP_BY_LIST, SqlWriter.COMMA,
-          groupBy);
+      writer.list(SqlWriter.FrameTypeEnum.GROUP_BY_LIST, SqlWriter.COMMA, groupBy);
     }
     if (select.having != null) {
       writer.sep("HAVING");
@@ -226,8 +220,7 @@ public class SqlSelectOperator extends SqlOperator {
     }
     if (!select.windowDecls.isEmpty()) {
       writer.sep("WINDOW");
-      writer.list(SqlWriter.FrameTypeEnum.WINDOW_DECL_LIST, SqlWriter.COMMA,
-          select.windowDecls);
+      writer.list(SqlWriter.FrameTypeEnum.WINDOW_DECL_LIST, SqlWriter.COMMA, select.windowDecls);
     }
     if (select.qualify != null) {
       writer.sep("QUALIFY");
@@ -235,8 +228,7 @@ public class SqlSelectOperator extends SqlOperator {
     }
     if (select.orderBy != null && !select.orderBy.isEmpty()) {
       writer.sep("ORDER BY");
-      writer.list(SqlWriter.FrameTypeEnum.ORDER_BY_LIST, SqlWriter.COMMA,
-          select.orderBy);
+      writer.list(SqlWriter.FrameTypeEnum.ORDER_BY_LIST, SqlWriter.COMMA, select.orderBy);
     }
     writer.fetchOffset(select.fetch, select.offset);
     writer.endList(selectFrame);

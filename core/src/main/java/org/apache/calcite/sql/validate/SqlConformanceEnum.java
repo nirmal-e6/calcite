@@ -18,6 +18,7 @@ package org.apache.calcite.sql.validate;
 
 import org.apache.calcite.sql.fun.SqlLibrary;
 
+// e6data - Shaded to add our own conformance flags
 /**
  * Enumeration of built-in SQL compatibility modes.
  */
@@ -76,6 +77,11 @@ public enum SqlConformanceEnum implements SqlConformance {
   /** Conformance value that instructs Calcite to use SQL semantics
    * consistent with Presto. */
   PRESTO,
+
+  // e6data change - Add SPARK conformance for SPARK style Pivot
+  /** Conformance value that instructs Calcite to use SQL semantics
+   * consistent with Apache Spark. */
+  SPARK,
 
   /** Conformance value that instructs Calcite to use SQL semantics
    * consistent with Microsoft SQL Server version 2008. */
@@ -236,6 +242,14 @@ public enum SqlConformanceEnum implements SqlConformance {
     default:
       return false;
     }
+  }
+
+  @Override public boolean allowPivotAggregateExpression() {
+    return this == SPARK;
+  }
+
+  @Override public boolean isPivotValueNullOnEmpty() {
+    return this == SPARK;
   }
 
   @Override public boolean isMinusAllowed() {

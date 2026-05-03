@@ -14,6 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+// E6data shade - Added for hypergraph backport from 1.41
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to you under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.calcite.rex;
 
 import org.apache.calcite.avatica.util.DateTimeUtils;
@@ -48,10 +66,11 @@ import java.util.function.IntPredicate;
  * Evaluates {@link RexNode} expressions.
  *
  * <p>Caveats:
+ *
  * <ul>
  *   <li>It uses interpretation, so it is not very efficient.
- *   <li>It is intended for testing, so does not cover very many functions and
- *   operators. (Feel free to contribute more!)
+ *   <li>It is intended for testing, so does not cover very many functions and operators. (Feel free
+ *       to contribute more!)
  *   <li>It is not well tested.
  * </ul>
  */
@@ -59,28 +78,45 @@ public class RexInterpreter implements RexVisitor<Comparable> {
   private static final NullSentinel N = NullSentinel.INSTANCE;
 
   public static final EnumSet<SqlKind> SUPPORTED_SQL_KIND =
-      EnumSet.of(SqlKind.IS_NOT_DISTINCT_FROM, SqlKind.EQUALS, SqlKind.IS_DISTINCT_FROM,
-          SqlKind.NOT_EQUALS, SqlKind.GREATER_THAN, SqlKind.GREATER_THAN_OR_EQUAL,
-          SqlKind.LESS_THAN, SqlKind.LESS_THAN_OR_EQUAL, SqlKind.AND, SqlKind.OR,
-          SqlKind.NOT, SqlKind.CASE, SqlKind.IS_TRUE, SqlKind.IS_NOT_TRUE,
-          SqlKind.IS_FALSE, SqlKind.IS_NOT_FALSE, SqlKind.PLUS_PREFIX,
-          SqlKind.MINUS_PREFIX, SqlKind.PLUS, SqlKind.MINUS, SqlKind.TIMES,
-          SqlKind.DIVIDE, SqlKind.COALESCE, SqlKind.CEIL,
-          SqlKind.FLOOR, SqlKind.EXTRACT);
+      EnumSet.of(
+          SqlKind.IS_NOT_DISTINCT_FROM,
+          SqlKind.EQUALS,
+          SqlKind.IS_DISTINCT_FROM,
+          SqlKind.NOT_EQUALS,
+          SqlKind.GREATER_THAN,
+          SqlKind.GREATER_THAN_OR_EQUAL,
+          SqlKind.LESS_THAN,
+          SqlKind.LESS_THAN_OR_EQUAL,
+          SqlKind.AND,
+          SqlKind.OR,
+          SqlKind.NOT,
+          SqlKind.CASE,
+          SqlKind.IS_TRUE,
+          SqlKind.IS_NOT_TRUE,
+          SqlKind.IS_FALSE,
+          SqlKind.IS_NOT_FALSE,
+          SqlKind.PLUS_PREFIX,
+          SqlKind.MINUS_PREFIX,
+          SqlKind.PLUS,
+          SqlKind.MINUS,
+          SqlKind.TIMES,
+          SqlKind.DIVIDE,
+          SqlKind.COALESCE,
+          SqlKind.CEIL,
+          SqlKind.FLOOR,
+          SqlKind.EXTRACT);
 
-  private final SqlFunctions.LikeFunction likeFunction =
-      new SqlFunctions.LikeFunction();
-  private final SqlFunctions.SimilarFunction similarFunction =
-      new SqlFunctions.SimilarFunction();
+  private final SqlFunctions.LikeFunction likeFunction = new SqlFunctions.LikeFunction();
+  private final SqlFunctions.SimilarFunction similarFunction = new SqlFunctions.SimilarFunction();
   private final SqlFunctions.SimilarEscapeFunction similarEscapeFunction =
       new SqlFunctions.SimilarEscapeFunction();
 
   private final Map<RexNode, Comparable> environment;
 
-  /** Creates an interpreter.
+  /**
+   * Creates an interpreter.
    *
-   * @param environment Values of certain expressions (usually
-   *       {@link RexInputRef}s)
+   * @param environment Values of certain expressions (usually {@link RexInputRef}s)
    */
   private RexInterpreter(Map<RexNode, Comparable> environment) {
     this.environment = ImmutableMap.copyOf(environment);
@@ -158,6 +194,10 @@ public class RexInterpreter implements RexVisitor<Comparable> {
   @Override public Comparable visitLambdaRef(RexLambdaRef lambdaRef) {
     throw unbound(lambdaRef);
   }
+  // backported by E6data from calcite 1.41 for HyperGraph
+  @Override public Comparable visitNodeAndFieldIndex(RexNodeAndFieldIndex nodeAndFieldIndex) {
+    throw unbound(nodeAndFieldIndex);
+  }
 
   @Override public Comparable visitCall(RexCall call) {
     final List<Comparable> values = visitList(call.operands);
@@ -185,11 +225,9 @@ public class RexInterpreter implements RexVisitor<Comparable> {
     case LESS_THAN_OR_EQUAL:
       return compare(values, c -> c <= 0);
     case AND:
-      return values.stream().map(Truthy::of).min(Comparator.naturalOrder())
-          .get().toComparable();
+      return values.stream().map(Truthy::of).min(Comparator.naturalOrder()).get().toComparable();
     case OR:
-      return values.stream().map(Truthy::of).max(Comparator.naturalOrder())
-          .get().toComparable();
+      return values.stream().map(Truthy::of).max(Comparator.naturalOrder()).get().toComparable();
     case NOT:
       return not(values.get(0));
     case CASE:
@@ -209,20 +247,15 @@ public class RexInterpreter implements RexVisitor<Comparable> {
     case PLUS_PREFIX:
       return values.get(0);
     case MINUS_PREFIX:
-      return containsNull(values) ? N
-          : number(values.get(0)).negate();
+      return containsNull(values) ? N : number(values.get(0)).negate();
     case PLUS:
-      return containsNull(values) ? N
-          : number(values.get(0)).add(number(values.get(1)));
+      return containsNull(values) ? N : number(values.get(0)).add(number(values.get(1)));
     case MINUS:
-      return containsNull(values) ? N
-          : number(values.get(0)).subtract(number(values.get(1)));
+      return containsNull(values) ? N : number(values.get(0)).subtract(number(values.get(1)));
     case TIMES:
-      return containsNull(values) ? N
-          : number(values.get(0)).multiply(number(values.get(1)));
+      return containsNull(values) ? N : number(values.get(0)).multiply(number(values.get(1)));
     case DIVIDE:
-      return containsNull(values) ? N
-          : number(values.get(0)).divide(number(values.get(1)));
+      return containsNull(values) ? N : number(values.get(0)).divide(number(values.get(1)));
     case CAST:
       return cast(values);
     case COALESCE:
@@ -271,8 +304,7 @@ public class RexInterpreter implements RexVisitor<Comparable> {
       return likeFunction.like(value.getValue(), pattern.getValue());
     case 3:
       final NlsString escape = (NlsString) values.get(2);
-      return likeFunction.like(value.getValue(), pattern.getValue(),
-          escape.getValue());
+      return likeFunction.like(value.getValue(), pattern.getValue(), escape.getValue());
     default:
       throw new AssertionError();
     }
@@ -289,8 +321,8 @@ public class RexInterpreter implements RexVisitor<Comparable> {
       return similarFunction.similar(value.getValue(), pattern.getValue());
     case 3:
       final NlsString escape = (NlsString) values.get(2);
-      return similarEscapeFunction.similar(value.getValue(), pattern.getValue(),
-          escape.getValue());
+      return similarEscapeFunction.similar(
+            value.getValue(), pattern.getValue(), escape.getValue());
     default:
       throw new AssertionError();
     }
@@ -313,9 +345,10 @@ public class RexInterpreter implements RexVisitor<Comparable> {
     return translate(sarg.rangeSet, typeName).contains(value);
   }
 
-  /** Translates the values in a RangeSet from literal format to runtime format.
-   * For example the DATE SQL type uses DateString for literals and Integer at
-   * runtime. */
+  /**
+   * Translates the values in a RangeSet from literal format to runtime format. For example the DATE
+   * SQL type uses DateString for literals and Integer at runtime.
+   */
   @SuppressWarnings({"rawtypes", "unchecked"})
   private static RangeSet translate(RangeSet rangeSet, SqlTypeName typeName) {
     switch (typeName) {
@@ -464,11 +497,12 @@ public class RexInterpreter implements RexVisitor<Comparable> {
     return false;
   }
 
-  /** An enum that wraps boolean and unknown values and makes them
-   * comparable. */
+  /** An enum that wraps boolean and unknown values and makes them comparable. */
   enum Truthy {
     // Order is important; AND returns the min, OR returns the max
-    FALSE, UNKNOWN, TRUE;
+    FALSE,
+    UNKNOWN,
+    TRUE;
 
     static Truthy of(Comparable c) {
       return c.equals(true) ? TRUE : c.equals(false) ? FALSE : UNKNOWN;
@@ -476,9 +510,12 @@ public class RexInterpreter implements RexVisitor<Comparable> {
 
     Comparable toComparable() {
       switch (this) {
-      case TRUE: return true;
-      case FALSE: return false;
-      case UNKNOWN: return N;
+      case TRUE:
+        return true;
+      case FALSE:
+        return false;
+      case UNKNOWN:
+        return N;
       default:
         throw new AssertionError();
       }

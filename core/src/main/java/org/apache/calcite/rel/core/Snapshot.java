@@ -38,16 +38,17 @@ import java.util.List;
 
 import static java.util.Objects.requireNonNull;
 
+// shaded for isValid method condition change
+
 /**
- * Relational expression that returns the contents of a relation expression as
- * it was at a given time in the past.
+ * Relational expression that returns the contents of a relation expression as it was at a given
+ * time in the past.
  *
- * <p>For example, if {@code Products} is a temporal table, and
- * {@link TableScan}(Products) is a relational operator that returns all
- * versions of the contents of the table, then
- * {@link Snapshot}(TableScan(Products)) is a relational operator that only
- * returns the contents whose versions that overlap with the given specific
- * period (i.e. those that started before given period and ended after it).
+ * <p>For example, if {@code Products} is a temporal table, and {@link TableScan}(Products) is a
+ * relational operator that returns all versions of the contents of the table, then {@link
+ * Snapshot}(TableScan(Products)) is a relational operator that only returns the contents whose
+ * versions that overlap with the given specific period (i.e. those that started before given period
+ * and ended after it).
  */
 public abstract class Snapshot extends SingleRel implements Hintable {
   //~ Instance fields --------------------------------------------------------
@@ -58,11 +59,10 @@ public abstract class Snapshot extends SingleRel implements Hintable {
 
   //~ Constructors -----------------------------------------------------------
 
-  /**
-   * Creates a Snapshot by parsing serialized output.
-   */
+  /** Creates a Snapshot by parsing serialized output. */
   public Snapshot(RelInput input) {
-    this(input.getCluster(),
+    this(
+        input.getCluster(),
         input.getTraitSet(),
         ImmutableList.of(),
         input.getInput(),
@@ -76,12 +76,15 @@ public abstract class Snapshot extends SingleRel implements Hintable {
    * @param traitSet  The traits of this relational expression
    * @param hints     Hints for this node
    * @param input     Input relational expression
-   * @param period    Timestamp expression which as the table was at the given
-   *                  time in the past
+   * @param period Timestamp expression which as the table was at the given time in the past
    */
   @SuppressWarnings("method.invocation.invalid")
-  protected Snapshot(RelOptCluster cluster, RelTraitSet traitSet, List<RelHint> hints,
-      RelNode input, RexNode period) {
+  protected Snapshot(
+      RelOptCluster cluster,
+      RelTraitSet traitSet,
+      List<RelHint> hints,
+      RelNode input,
+      RexNode period) {
     super(cluster, traitSet, input);
     this.period = requireNonNull(period, "period");
     this.hints = ImmutableList.copyOf(hints);
@@ -94,12 +97,10 @@ public abstract class Snapshot extends SingleRel implements Hintable {
    * @param cluster   Cluster that this relational expression belongs to
    * @param traitSet  The traits of this relational expression
    * @param input     Input relational expression
-   * @param period    Timestamp expression which as the table was at the given
-   *                  time in the past
+   * @param period Timestamp expression which as the table was at the given time in the past
    */
   @SuppressWarnings("method.invocation.invalid")
-  protected Snapshot(
-      RelOptCluster cluster, RelTraitSet traitSet, RelNode input, RexNode period) {
+  protected Snapshot(RelOptCluster cluster, RelTraitSet traitSet, RelNode input, RexNode period) {
     this(cluster, traitSet, ImmutableList.of(), input, period);
   }
 
@@ -120,8 +121,7 @@ public abstract class Snapshot extends SingleRel implements Hintable {
   }
 
   @Override public RelWriter explainTerms(RelWriter pw) {
-    return super.explainTerms(pw)
-        .item("period", period);
+    return super.explainTerms(pw).item("period", period);
   }
 
   public RexNode getPeriod() {
@@ -130,9 +130,11 @@ public abstract class Snapshot extends SingleRel implements Hintable {
 
   @Override public boolean isValid(Litmus litmus, @Nullable Context context) {
     RelDataType dataType = period.getType();
-    if (!SqlTypeUtil.isTimestamp(dataType)) {
-      return litmus.fail("The system time period specification expects Timestamp type but is '"
-          + dataType.getSqlTypeName() + "'");
+    if (!SqlTypeUtil.isTimestamp(dataType) && !SqlTypeUtil.isNumeric(dataType)) {
+      return litmus.fail(
+          "The system time period specification expects Timestamp type but is '"
+              + dataType.getSqlTypeName()
+              + "'");
     }
     return litmus.succeed();
   }

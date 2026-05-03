@@ -2733,4 +2733,16 @@ public abstract class SqlLibraryOperators {
   public static final SqlFunction RANDOM = SqlStdOperatorTable.RAND
       .withName("RANDOM")
       .withOperandTypeChecker(OperandTypes.NILADIC);
+
+  // LEFT_SHIFT, RIGHT_SHIFT, BITWISE_AND operators added by E6Data
+  @LibraryOperator(libraries = {MYSQL})
+  public static final SqlOperator LEFT_SHIFT = SqlCustomLibraryOperators.rightShift("<<");
+
+  @LibraryOperator(libraries = {MYSQL})
+  public static final SqlOperator RIGHT_SHIFT = SqlCustomLibraryOperators.rightShift(">>");
+
+  @LibraryOperator(libraries = {MYSQL})
+  public static final SqlOperator BITWISE_AND = SqlCustomLibraryOperators.bitAnd("&");
+
+
 }

@@ -33,10 +33,13 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.AbstractList;
 import java.util.List;
 
+// Shaded from calcite commit - e810d8becb3544d141e7d4bf4fe65de24d0595c7 to port fixes to
+// decorrelation
+// Remove when upgraded to 1.42
+
 /**
- * <code>SqlOperatorBinding</code> represents the binding of an
- * {@link SqlOperator} to actual operands, along with any additional information
- * required to validate those operands if needed.
+ * <code>SqlOperatorBinding</code> represents the binding of an {@link SqlOperator} to actual
+ * operands, along with any additional information required to validate those operands if needed.
  */
 public abstract class SqlOperatorBinding {
   //~ Instance fields --------------------------------------------------------
@@ -52,9 +55,7 @@ public abstract class SqlOperatorBinding {
    * @param typeFactory Type factory
    * @param sqlOperator Operator which is subject of this call
    */
-  protected SqlOperatorBinding(
-      RelDataTypeFactory typeFactory,
-      SqlOperator sqlOperator) {
+  protected SqlOperatorBinding(RelDataTypeFactory typeFactory, SqlOperator sqlOperator) {
     this.typeFactory = typeFactory;
     this.sqlOperator = sqlOperator;
   }
@@ -62,12 +63,11 @@ public abstract class SqlOperatorBinding {
   //~ Methods ----------------------------------------------------------------
 
   /**
-   * If the operator call occurs in an aggregate query, returns the number of
-   * columns in the GROUP BY clause. For example, for "SELECT count(*) FROM emp
-   * GROUP BY deptno, gender", returns 2.
+   * If the operator call occurs in an aggregate query, returns the number of columns in the GROUP
+   * BY clause. For example, for "SELECT count(*) FROM emp GROUP BY deptno, gender", returns 2.
    *
-   * <p>Returns 0 if the query is implicitly "GROUP BY ()" because of an
-   * aggregate expression. For example, "SELECT sum(sal) FROM emp".
+   * <p>Returns 0 if the query is implicitly "GROUP BY ()" because of an aggregate expression. For
+   * example, "SELECT sum(sal) FROM emp".
    *
    * <p>Returns -1 if the query is not an aggregate query.
    */
@@ -76,8 +76,22 @@ public abstract class SqlOperatorBinding {
   }
 
   /**
-   * Returns whether the operator is an aggregate function with a filter.
+   * If the operator call occurs in an aggregate query, returns whether there are empty groups in
+   * the GROUP BY clause. For example,
+   *
+   * <pre>
+   * SELECT count(*) FROM emp GROUP BY deptno, gender;            returns false
+   * SELECT count(*) FROM emp;                                    returns true
+   * SELECT count(*) FROM emp GROUP BY ROLLUP(deptno, gender);    returns true
+   * </pre>
+   *
+   * Returns false if the query is not an aggregate query.
    */
+  public boolean hasEmptyGroup() {
+    return false;
+  }
+
+  /** Returns whether the operator is an aggregate function with a filter. */
   public boolean hasFilter() {
     return false;
   }
@@ -118,24 +132,20 @@ public abstract class SqlOperatorBinding {
    * Gets the value of a literal operand.
    *
    * <p>Cases:
+   *
    * <ul>
    * <li>If the operand is not a literal, the value is null.
-   *
-   * <li>If the operand is a string literal,
-   * the value will be of type {@link org.apache.calcite.util.NlsString}.
-   *
-   * <li>If the operand is a numeric literal,
-   * the value will be of type {@link java.math.BigDecimal}.
-   *
-   * <li>If the operand is an interval qualifier,
-   * the value will be of type {@link SqlIntervalQualifier}</li>
-   *
+   *   <li>If the operand is a string literal, the value will be of type {@link
+   *       org.apache.calcite.util.NlsString}.
+   *   <li>If the operand is a numeric literal, the value will be of type {@link
+   *       java.math.BigDecimal}.
+   *   <li>If the operand is an interval qualifier, the value will be of type {@link
+   *       SqlIntervalQualifier}
    * <li>Otherwise the type is undefined, and the value may be null.
    * </ul>
    *
    * @param ordinal zero-based ordinal of operand of interest
    * @param clazz Desired valued type
-   *
    * @return value of operand
    */
   public <T extends Object> @Nullable T getOperandLiteralValue(int ordinal, Class<T> clazz) {
@@ -147,7 +157,6 @@ public abstract class SqlOperatorBinding {
    *
    * @param ordinal zero-based ordinal of operand of interest
    * @param type Desired valued type
-   *
    * @return value of operand
    */
   public @Nullable Object getOperandLiteralValue(int ordinal, RelDataType type) {
@@ -166,7 +175,6 @@ public abstract class SqlOperatorBinding {
     return EnumUtils.evaluate(o2, clazz);
   }
 
-
   @Deprecated // to be removed before 2.0
   public @Nullable Comparable getOperandLiteralValue(int ordinal) {
     return getOperandLiteralValue(ordinal, Comparable.class);
@@ -179,8 +187,7 @@ public abstract class SqlOperatorBinding {
    *
    * @param ordinal   zero-based ordinal of operand of interest
    * @param allowCast whether to regard CAST(constant) as a constant
-   * @return whether operand is null; false for everything except SQL
-   * validation
+   * @return whether operand is null; false for everything except SQL validation
    */
   public boolean isOperandNull(int ordinal, boolean allowCast) {
     throw new UnsupportedOperationException();
@@ -205,16 +212,13 @@ public abstract class SqlOperatorBinding {
    */
   public boolean isOperandTimeFrame(int ordinal) {
     return getOperandCount() > 0
-        && SqlTypeName.TIME_FRAME_TYPES.contains(
-            getOperandType(ordinal).getSqlTypeName());
+        && SqlTypeName.TIME_FRAME_TYPES.contains(getOperandType(ordinal).getSqlTypeName());
   }
 
-  /** Returns the number of bound operands.
-   * Includes pre-operands and regular operands. */
+  /** Returns the number of bound operands. Includes pre-operands and regular operands. */
   public abstract int getOperandCount();
 
-  /** Returns the number of pre-operands.
-   * Zero except for a few aggregate functions. */
+  /** Returns the number of pre-operands. Zero except for a few aggregate functions. */
   public int getPreOperandCount() {
     return 0;
   }
@@ -237,10 +241,7 @@ public abstract class SqlOperatorBinding {
     return SqlMonotonicity.NOT_MONOTONIC;
   }
 
-
-  /**
-   * Returns the collation type.
-   */
+  /** Returns the collation type. */
   public RelDataType getCollationType() {
     throw new UnsupportedOperationException();
   }
@@ -263,8 +264,7 @@ public abstract class SqlOperatorBinding {
   }
 
   /**
-   * Returns the rowtype of the <code>ordinal</code>th operand, which is a
-   * cursor.
+   * Returns the rowtype of the <code>ordinal</code>th operand, which is a cursor.
    *
    * <p>This is only implemented for {@link SqlCallBinding}.
    *
@@ -280,15 +280,13 @@ public abstract class SqlOperatorBinding {
    *
    * @param ordinal    ordinal position of the column list parameter
    * @param paramName  name of the column list parameter
-   * @param columnList returns a list of the column names that are referenced
-   *                   in the column list parameter
-   * @return the name of the parent cursor referenced by the column list
-   * parameter if it is a column list parameter; otherwise, null is returned
+   * @param columnList returns a list of the column names that are referenced in the column list
+   *     parameter
+   * @return the name of the parent cursor referenced by the column list parameter if it is a column
+   *     list parameter; otherwise, null is returned
    */
   public @Nullable String getColumnListParamInfo(
-      int ordinal,
-      String paramName,
-      List<String> columnList) {
+      int ordinal, String paramName, List<String> columnList) {
     throw new UnsupportedOperationException();
   }
 
@@ -298,11 +296,12 @@ public abstract class SqlOperatorBinding {
    * @param e Validation error, not null
    * @return Error wrapped, if possible, with positional information
    */
-  public abstract CalciteException newError(
-      Resources.ExInst<SqlValidatorException> e);
+  public abstract CalciteException newError(Resources.ExInst<SqlValidatorException> e);
 
-  /** Returns an operator binding equivalent that is equivalent to this
-   * except that a transform has been applied to each operand type. */
+  /**
+   * Returns an operator binding equivalent that is equivalent to this except that a transform has
+   * been applied to each operand type.
+   */
   public SqlOperatorBinding transform(SqlTypeTransform typeTransform) {
     final SqlOperatorBinding operatorBinding = this;
     return new SqlOperatorBinding(typeFactory, sqlOperator) {
@@ -311,12 +310,11 @@ public abstract class SqlOperatorBinding {
       }
 
       @Override public RelDataType getOperandType(int ordinal) {
-        return typeTransform.transformType(operatorBinding,
-            operatorBinding.getOperandType(ordinal));
+        return typeTransform.transformType(
+            operatorBinding, operatorBinding.getOperandType(ordinal));
       }
 
-      @Override public CalciteException newError(
-          Resources.ExInst<SqlValidatorException> e) {
+      @Override public CalciteException newError(Resources.ExInst<SqlValidatorException> e) {
         return operatorBinding.newError(e);
       }
     };

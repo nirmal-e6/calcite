@@ -51,9 +51,9 @@ import static org.apache.calcite.util.Static.RESOURCE;
 
 import static java.util.Objects.requireNonNull;
 
-/**
- * Abstract base for implementations of the {@link RelOptPlanner} interface.
- */
+// e6data shade - Shaded to allow us to have both old and latest decorrelator
+// Once we move fully to new one / upgrade remove this file
+/** Abstract base for implementations of the {@link RelOptPlanner} interface. */
 public abstract class AbstractRelOptPlanner implements RelOptPlanner {
   //~ Static fields/initializers ---------------------------------------------
 
@@ -62,10 +62,7 @@ public abstract class AbstractRelOptPlanner implements RelOptPlanner {
 
   //~ Instance fields --------------------------------------------------------
 
-  /**
-   * Maps rule description to rule, just to ensure that rules' descriptions
-   * are unique.
-   */
+  /** Maps rule description to rule, just to ensure that rules' descriptions are unique. */
   protected final Map<String, RelOptRule> mapDescToRule = new LinkedHashMap<>();
 
   protected final RelOptCostFactory costFactory;
@@ -89,13 +86,13 @@ public abstract class AbstractRelOptPlanner implements RelOptPlanner {
 
   private @Nullable RelDecorrelator decorrelator;
 
+  // e6data change - to allow us to have both old and latest decorrelator
+  private @Nullable Object oldDecorrelator;
+
   //~ Constructors -----------------------------------------------------------
 
-  /**
-   * Creates an AbstractRelOptPlanner.
-   */
-  protected AbstractRelOptPlanner(RelOptCostFactory costFactory,
-      @Nullable Context context) {
+  /** Creates an AbstractRelOptPlanner. */
+  protected AbstractRelOptPlanner(RelOptCostFactory costFactory, @Nullable Context context) {
     this.costFactory = requireNonNull(costFactory, "costFactory");
     if (context == null) {
       context = Contexts.empty();
@@ -103,7 +100,8 @@ public abstract class AbstractRelOptPlanner implements RelOptPlanner {
     this.context = context;
 
     this.cancelFlag =
-        context.maybeUnwrap(CancelFlag.class)
+        context
+            .maybeUnwrap(CancelFlag.class)
             .map(flag -> flag.atomicBoolean)
             .orElseGet(AtomicBoolean::new);
 
@@ -136,10 +134,7 @@ public abstract class AbstractRelOptPlanner implements RelOptPlanner {
     // ignored
   }
 
-  /**
-   * Checks to see whether cancellation has been requested, and if so, throws
-   * an exception.
-   */
+  /** Checks to see whether cancellation has been requested, and if so, throws an exception. */
   public void checkCancel() {
     if (cancelFlag.get()) {
       throw RESOURCE.preparationAborted().ex();
@@ -162,8 +157,12 @@ public abstract class AbstractRelOptPlanner implements RelOptPlanner {
         // This rule has the same description as one previously
         // registered, yet it is not equal. You may need to fix the
         // rule's equals and hashCode methods.
-        throw new AssertionError("Rule's description should be unique; "
-            + "existing rule=" + existingRule + "; new rule=" + rule);
+        throw new AssertionError(
+            "Rule's description should be unique; "
+                + "existing rule="
+                + existingRule
+                + "; new rule="
+                + rule);
       }
     }
     return true;
@@ -221,16 +220,14 @@ public abstract class AbstractRelOptPlanner implements RelOptPlanner {
     return null;
   }
 
-  @Override public void registerSchema(RelOptSchema schema) {
-  }
+  @Override public void registerSchema(RelOptSchema schema) {}
 
   @Deprecated // to be removed before 2.0
   @Override public long getRelMetadataTimestamp(RelNode rel) {
     return 0;
   }
 
-  @Override public void prune(RelNode rel) {
-  }
+  @Override public void prune(RelNode rel) {}
 
   @Override public void registerClass(RelNode node) {
     final Class<? extends RelNode> clazz = node.getClass();
@@ -263,8 +260,7 @@ public abstract class AbstractRelOptPlanner implements RelOptPlanner {
   }
 
   @Override public void addListener(
-      @UnknownInitialization AbstractRelOptPlanner this,
-      RelOptListener newListener) {
+      @UnknownInitialization AbstractRelOptPlanner this, RelOptListener newListener) {
     if (listener == null) {
       listener = new MulticastRelOptListener();
     }
@@ -272,8 +268,7 @@ public abstract class AbstractRelOptPlanner implements RelOptPlanner {
   }
 
   @Deprecated // to be removed before 2.0
-  @Override public void registerMetadataProviders(List<RelMetadataProvider> list) {
-  }
+  @Override public void registerMetadataProviders(List<RelMetadataProvider> list) {}
 
   @Override public boolean addRelTraitDef(RelTraitDef relTraitDef) {
     return false;
@@ -304,6 +299,19 @@ public abstract class AbstractRelOptPlanner implements RelOptPlanner {
     return decorrelator;
   }
 
+  // e6data change - to allow old decorrelator
+  @Override public <T> void setOldDecorrelator(@Nullable T oldDecorrelator) {
+    this.oldDecorrelator = oldDecorrelator;
+  }
+
+  @Override @SuppressWarnings("unchecked")
+  public <T> T getOldDecorrelator() {
+    if (oldDecorrelator == null) {
+      throw new IllegalStateException("Old RelDecorrelator has not been set");
+    }
+    return (T) oldDecorrelator;
+  }
+
   @Override public void onCopy(RelNode rel, RelNode newRel) {
     // do nothing
   }
@@ -320,30 +328,25 @@ public abstract class AbstractRelOptPlanner implements RelOptPlanner {
    *
    * @param ruleCall description of rule call
    */
-  protected void fireRule(
-      RelOptRuleCall ruleCall) {
+  protected void fireRule(RelOptRuleCall ruleCall) {
     checkCancel();
 
     assert ruleCall.getRule().matches(ruleCall);
     if (isRuleExcluded(ruleCall.getRule())) {
-      LOGGER.debug("call#{}: Rule [{}] not fired due to exclusion filter",
-          ruleCall.id, ruleCall.getRule());
+      LOGGER.debug(
+          "call#{}: Rule [{}] not fired due to exclusion filter", ruleCall.id, ruleCall.getRule());
       return;
     }
 
     if (ruleCall.isRuleExcluded()) {
-      LOGGER.debug("call#{}: Rule [{}] not fired due to exclusion hint",
-          ruleCall.id, ruleCall.getRule());
+      LOGGER.debug(
+          "call#{}: Rule [{}] not fired due to exclusion hint", ruleCall.id, ruleCall.getRule());
       return;
     }
 
     if (listener != null) {
       RelOptListener.RuleAttemptedEvent event =
-          new RelOptListener.RuleAttemptedEvent(
-              this,
-              ruleCall.rel(0),
-              ruleCall,
-              true);
+          new RelOptListener.RuleAttemptedEvent(this, ruleCall.rel(0), ruleCall, true);
       listener.ruleAttempted(event);
     }
 
@@ -351,41 +354,28 @@ public abstract class AbstractRelOptPlanner implements RelOptPlanner {
 
     if (listener != null) {
       RelOptListener.RuleAttemptedEvent event =
-          new RelOptListener.RuleAttemptedEvent(
-              this,
-              ruleCall.rel(0),
-              ruleCall,
-              false);
+          new RelOptListener.RuleAttemptedEvent(this, ruleCall.rel(0), ruleCall, false);
       listener.ruleAttempted(event);
     }
   }
 
   /**
-   * Takes care of tracing and listener notification when a rule's
-   * transformation is applied.
+   * Takes care of tracing and listener notification when a rule's transformation is applied.
    *
    * @param ruleCall description of rule call
    * @param newRel   result of transformation
    * @param before   true before registration of new rel; false after
    */
-  protected void notifyTransformation(
-      RelOptRuleCall ruleCall,
-      RelNode newRel,
-      boolean before) {
+  protected void notifyTransformation(RelOptRuleCall ruleCall, RelNode newRel, boolean before) {
     if (listener != null) {
       RelOptListener.RuleProductionEvent event =
-          new RelOptListener.RuleProductionEvent(
-              this,
-              newRel,
-              ruleCall,
-              before);
+          new RelOptListener.RuleProductionEvent(this, newRel, ruleCall, before);
       listener.ruleProductionSucceeded(event);
     }
   }
 
   /**
-   * Takes care of tracing and listener notification when a rel is chosen as
-   * part of the final plan.
+   * Takes care of tracing and listener notification when a rel is chosen as part of the final plan.
    *
    * @param rel chosen rel
    */
@@ -393,31 +383,20 @@ public abstract class AbstractRelOptPlanner implements RelOptPlanner {
     LOGGER.debug("For final plan, using {}", rel);
 
     if (listener != null) {
-      RelOptListener.RelChosenEvent event =
-          new RelOptListener.RelChosenEvent(
-              this,
-              rel);
+      RelOptListener.RelChosenEvent event = new RelOptListener.RelChosenEvent(this, rel);
       listener.relChosen(event);
     }
   }
 
   /**
-   * Takes care of tracing and listener notification when a rel equivalence is
-   * detected.
+   * Takes care of tracing and listener notification when a rel equivalence is detected.
    *
    * @param rel chosen rel
    */
-  protected void notifyEquivalence(
-      RelNode rel,
-      Object equivalenceClass,
-      boolean physical) {
+  protected void notifyEquivalence(RelNode rel, Object equivalenceClass, boolean physical) {
     if (listener != null) {
       RelOptListener.RelEquivalenceEvent event =
-          new RelOptListener.RelEquivalenceEvent(
-              this,
-              rel,
-              equivalenceClass,
-              physical);
+          new RelOptListener.RelEquivalenceEvent(this, rel, equivalenceClass, physical);
       listener.relEquivalenceFound(event);
     }
   }
@@ -429,10 +408,7 @@ public abstract class AbstractRelOptPlanner implements RelOptPlanner {
    */
   protected void notifyDiscard(RelNode rel) {
     if (listener != null) {
-      RelOptListener.RelDiscardedEvent event =
-          new RelOptListener.RelDiscardedEvent(
-              this,
-              rel);
+      RelOptListener.RelDiscardedEvent event = new RelOptListener.RelDiscardedEvent(this, rel);
       listener.relDiscarded(event);
     }
   }
@@ -443,9 +419,10 @@ public abstract class AbstractRelOptPlanner implements RelOptPlanner {
   }
 
   /** Returns sub-classes of relational expression. */
-  public Iterable<Class<? extends RelNode>> subClasses(
-      final Class<? extends RelNode> clazz) {
-    return Util.filter(classes, c -> {
+  public Iterable<Class<? extends RelNode>> subClasses(final Class<? extends RelNode> clazz) {
+    return Util.filter(
+        classes,
+        c -> {
       // RelSubset must be exact type, not subclass
       if (c == RelSubset.class) {
         return c == clazz;
@@ -463,8 +440,7 @@ public abstract class AbstractRelOptPlanner implements RelOptPlanner {
       ruleAttempts = new HashMap<>();
     }
 
-    @Override public void relEquivalenceFound(RelEquivalenceEvent event) {
-    }
+    @Override public void relEquivalenceFound(RelEquivalenceEvent event) {}
 
     @Override public void ruleAttempted(RuleAttemptedEvent event) {
       if (event.isBefore()) {
@@ -472,28 +448,25 @@ public abstract class AbstractRelOptPlanner implements RelOptPlanner {
       } else {
         long elapsed = (System.nanoTime() - this.beforeTimestamp) / 1000;
         String rule = event.getRuleCall().getRule().toString();
-        ruleAttempts.compute(rule, (k, p) ->
-            p == null
-                ? Pair.of(1L,  elapsed)
-                : Pair.of(p.left + 1, p.right + elapsed));
+        ruleAttempts.compute(
+            rule,
+            (k, p) -> p == null ? Pair.of(1L, elapsed) : Pair.of(p.left + 1, p.right + elapsed));
       }
     }
 
-    @Override public void ruleProductionSucceeded(RuleProductionEvent event) {
-    }
+    @Override public void ruleProductionSucceeded(RuleProductionEvent event) {}
 
-    @Override public void relDiscarded(RelDiscardedEvent event) {
-    }
+    @Override public void relDiscarded(RelDiscardedEvent event) {}
 
-    @Override public void relChosen(RelChosenEvent event) {
-    }
+    @Override public void relChosen(RelChosenEvent event) {}
 
     public String dump() {
       // Sort rules by number of attempts descending, then by rule elapsed time descending,
       // then by rule name ascending.
       List<Map.Entry<String, Pair<Long, Long>>> list =
           new ArrayList<>(this.ruleAttempts.entrySet());
-      list.sort((left, right) -> {
+      list.sort(
+          (left, right) -> {
         int res = right.getValue().left.compareTo(left.getValue().left);
         if (res == 0) {
           res = right.getValue().right.compareTo(left.getValue().right);
@@ -506,14 +479,15 @@ public abstract class AbstractRelOptPlanner implements RelOptPlanner {
 
       // Print out rule attempts and time
       StringBuilder sb = new StringBuilder();
-      sb.append(String
-          .format(Locale.ROOT, "%n%-60s%20s%20s%n", "Rules", "Attempts", "Time (us)"));
+      sb.append(String.format(Locale.ROOT, "%n%-60s%20s%20s%n", "Rules", "Attempts", "Time (us)"));
       NumberFormat usFormat = NumberFormat.getNumberInstance(Locale.US);
       long totalAttempts = 0;
       long totalTime = 0;
       for (Map.Entry<String, Pair<Long, Long>> entry : list) {
         sb.append(
-            String.format(Locale.ROOT, "%-60s%20s%20s%n",
+            String.format(
+                Locale.ROOT,
+                "%-60s%20s%20s%n",
                 entry.getKey(),
                 usFormat.format(entry.getValue().left),
                 usFormat.format(entry.getValue().right)));
@@ -521,7 +495,9 @@ public abstract class AbstractRelOptPlanner implements RelOptPlanner {
         totalTime += entry.getValue().right;
       }
       sb.append(
-          String.format(Locale.ROOT, "%-60s%20s%20s%n",
+          String.format(
+              Locale.ROOT,
+              "%-60s%20s%20s%n",
               "* Total",
               usFormat.format(totalAttempts),
               usFormat.format(totalTime)));

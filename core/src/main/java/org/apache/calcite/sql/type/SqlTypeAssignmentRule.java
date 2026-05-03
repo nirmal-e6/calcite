@@ -24,6 +24,8 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+// shaded for changing timestamp assignment
+
 /**
  * Rules that determine whether a type is assignable from another type.
  */
@@ -179,7 +181,9 @@ public class SqlTypeAssignmentRule implements SqlTypeMappingRule {
     rules.add(SqlTypeName.TIME_TZ, EnumSet.of(SqlTypeName.TIME_TZ));
 
     // TIMESTAMP is assignable from ...
-    rules.add(SqlTypeName.TIMESTAMP, EnumSet.of(SqlTypeName.TIMESTAMP));
+    // E6data change
+    // added DATE in EnumSet
+    rules.add(SqlTypeName.TIMESTAMP, EnumSet.of(SqlTypeName.TIMESTAMP, SqlTypeName.DATE));
 
     // TIMESTAMP WITH LOCAL TIME ZONE is assignable from...
     rules.add(SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE,

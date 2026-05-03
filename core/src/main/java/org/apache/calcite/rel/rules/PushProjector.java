@@ -57,18 +57,15 @@ import java.util.stream.IntStream;
 import static java.util.Objects.requireNonNull;
 
 /**
- * PushProjector is a utility class used to perform operations used in push
- * projection rules.
+ * PushProjector is a utility class used to perform operations used in push projection rules.
  *
- * <p>Pushing is particularly interesting in the case of join, because there
- * are multiple inputs. Generally an expression can be pushed down to a
- * particular input if it depends upon no other inputs. If it can be pushed
- * down to both sides, it is pushed down to the left.
+ * <p>Pushing is particularly interesting in the case of join, because there are multiple inputs.
+ * Generally an expression can be pushed down to a particular input if it depends upon no other
+ * inputs. If it can be pushed down to both sides, it is pushed down to the left.
  *
- * <p>Sometimes an expression needs to be split before it can be pushed down.
- * To flag that an expression cannot be split, specify a rule that it must be
- * <dfn>preserved</dfn>. Such an expression will be pushed down intact to one
- * of the inputs, or not pushed down at all.
+ * <p>Sometimes an expression needs to be split before it can be pushed down. To flag that an
+ * expression cannot be split, specify a rule that it must be <dfn>preserved</dfn>. Such an
+ * expression will be pushed down intact to one of the inputs, or not pushed down at all.
  */
 public class PushProjector {
   //~ Instance fields --------------------------------------------------------
@@ -79,116 +76,107 @@ public class PushProjector {
   private final ExprCondition preserveExprCondition;
   private final RelBuilder relBuilder;
 
-  /**
-   * Original projection expressions.
-   */
+  /** Original projection expressions. */
   final List<RexNode> origProjExprs;
 
-  /**
-   * Fields from the RelNode that the projection is being pushed past.
-   */
+  /** Fields from the RelNode that the projection is being pushed past. */
   final List<RelDataTypeField> childFields;
 
-  /**
-   * Number of fields in the RelNode that the projection is being pushed past.
-   */
+  /** Number of fields in the RelNode that the projection is being pushed past. */
   final int nChildFields;
 
-  /**
-   * Bitmap containing the references in the original projection.
-   */
+  /** Bitmap containing the references in the original projection. */
   final BitSet projRefs;
 
   /**
-   * Bitmap containing the fields in the RelNode that the projection is being
-   * pushed past, if the RelNode is not a join. If the RelNode is a join, then
-   * the fields correspond to the left hand side of the join.
+   * Bitmap containing the fields in the RelNode that the projection is being pushed past, if the
+   * RelNode is not a join. If the RelNode is a join, then the fields correspond to the left hand
+   * side of the join.
    */
   final ImmutableBitSet childBitmap;
 
   /**
-   * Bitmap containing the fields in the right hand side of a join, in the
-   * case where the projection is being pushed past a join. Not used
-   * otherwise.
+   * Bitmap containing the fields in the right hand side of a join, in the case where the projection
+   * is being pushed past a join. Not used otherwise.
    */
   final @Nullable ImmutableBitSet rightBitmap;
 
   /**
-   * Bitmap containing the fields that should be strong, i.e. when preserving expressions
-   * we can only preserve them if the expressions if it is null when these fields are null.
+   * Bitmap containing the fields that should be strong, i.e. when preserving expressions we can
+   * only preserve them if the expressions if it is null when these fields are null.
    */
   final @Nullable ImmutableBitSet strongBitmap;
 
   /**
-   * Number of fields in the RelNode that the projection is being pushed past,
-   * if the RelNode is not a join. If the RelNode is a join, then this is the
-   * number of fields in the left hand side of the join.
+   * Number of fields in the RelNode that the projection is being pushed past, if the RelNode is not
+   * a join. If the RelNode is a join, then this is the number of fields in the left hand side of
+   * the join.
    *
-   * <p>The identity
-   * {@code nChildFields == nSysFields + nFields + nFieldsRight}
-   * holds. {@code nFields} does not include {@code nSysFields}.
-   * The output of a join looks like this:
+   * <p>The identity {@code nChildFields == nSysFields + nFields + nFieldsRight} holds. {@code
+   * nFields} does not include {@code nSysFields}. The output of a join looks like this:
    *
-   * <blockquote><pre>
+   * <blockquote>
+   *
+   * <pre>
    * | nSysFields | nFields | nFieldsRight |
-   * </pre></blockquote>
+   * </pre>
+   *
+   * </blockquote>
    *
    * <p>The output of a single-input rel looks like this:
    *
-   * <blockquote><pre>
+   * <blockquote>
+   *
+   * <pre>
    * | nSysFields | nFields |
-   * </pre></blockquote>
+   * </pre>
+   *
+   * </blockquote>
    */
   final int nFields;
 
   /**
-   * Number of fields in the right hand side of a join, in the case where the
-   * projection is being pushed past a join. Always 0 otherwise.
+   * Number of fields in the right hand side of a join, in the case where the projection is being
+   * pushed past a join. Always 0 otherwise.
    */
   final int nFieldsRight;
 
   /**
-   * Number of system fields. System fields appear at the start of a join,
-   * before the first field from the left input.
+   * Number of system fields. System fields appear at the start of a join, before the first field
+   * from the left input.
    */
   private final int nSysFields;
 
   /**
-   * Expressions referenced in the projection/filter that should be preserved.
-   * In the case where the projection is being pushed past a join, then the
-   * list only contains the expressions corresponding to the left hand side of
-   * the join.
+   * Expressions referenced in the projection/filter that should be preserved. In the case where the
+   * projection is being pushed past a join, then the list only contains the expressions
+   * corresponding to the left hand side of the join.
    */
   final List<RexNode> childPreserveExprs;
 
   /**
-   * Expressions referenced in the projection/filter that should be preserved,
-   * corresponding to expressions on the right hand side of the join, if the
-   * projection is being pushed past a join. Empty list otherwise.
+   * Expressions referenced in the projection/filter that should be preserved, corresponding to
+   * expressions on the right hand side of the join, if the projection is being pushed past a join.
+   * Empty list otherwise.
    */
-  final List<RexNode> rightPreserveExprs;
+  List<RexNode> rightPreserveExprs;
 
-  /**
-   * Number of system fields being projected.
-   */
+  /** Number of system fields being projected. */
   int nSystemProject;
 
   /**
-   * Number of fields being projected. In the case where the projection is
-   * being pushed past a join, the number of fields being projected from the
-   * left hand side of the join.
+   * Number of fields being projected. In the case where the projection is being pushed past a join,
+   * the number of fields being projected from the left hand side of the join.
    */
   int nProject;
 
   /**
-   * Number of fields being projected from the right hand side of a join, in
-   * the case where the projection is being pushed past a join. 0 otherwise.
+   * Number of fields being projected from the right hand side of a join, in the case where the
+   * projection is being pushed past a join. 0 otherwise.
    */
   int nRightProject;
 
-  /**
-   * Rex builder used to create new expressions.
-   */
+  /** Rex builder used to create new expressions. */
   final RexBuilder rexBuilder;
 
   //~ Constructors -----------------------------------------------------------
@@ -196,16 +184,12 @@ public class PushProjector {
   /**
    * Creates a PushProjector object for pushing projects past a RelNode.
    *
-   * @param origProj              the original projection that is being pushed;
-   *                              may be null if the projection is implied as a
-   *                              result of a projection having been trivially
-   *                              removed
-   * @param origFilter            the filter that the projection must also be
-   *                              pushed past, if applicable
-   * @param childRel              the RelNode that the projection is being
-   *                              pushed past
-   * @param preserveExprCondition condition for whether an expression should
-   *                              be preserved in the projection
+   * @param origProj the original projection that is being pushed; may be null if the projection is
+   *     implied as a result of a projection having been trivially removed
+   * @param origFilter the filter that the projection must also be pushed past, if applicable
+   * @param childRel the RelNode that the projection is being pushed past
+   * @param preserveExprCondition condition for whether an expression should be preserved in the
+   *     projection
    */
   public PushProjector(
       @Nullable Project origProj,
@@ -235,17 +219,13 @@ public class PushProjector {
     projRefs = new BitSet(nChildFields);
     if (childRel instanceof Join) {
       Join joinRel = (Join) childRel;
-      List<RelDataTypeField> leftFields =
-          joinRel.getLeft().getRowType().getFieldList();
-      List<RelDataTypeField> rightFields =
-          joinRel.getRight().getRowType().getFieldList();
+      List<RelDataTypeField> leftFields = joinRel.getLeft().getRowType().getFieldList();
+      List<RelDataTypeField> rightFields = joinRel.getRight().getRowType().getFieldList();
       nFields = leftFields.size();
       nFieldsRight = rightFields.size();
       nSysFields = joinRel.getSystemFieldList().size();
-      childBitmap =
-          ImmutableBitSet.range(nSysFields, nFields + nSysFields);
-      rightBitmap =
-          ImmutableBitSet.range(nFields + nSysFields, nChildFields);
+      childBitmap = ImmutableBitSet.range(nSysFields, nFields + nSysFields);
+      rightBitmap = ImmutableBitSet.range(nFields + nSysFields, nChildFields);
 
       switch (joinRel.getJoinType()) {
       case INNER:
@@ -264,10 +244,8 @@ public class PushProjector {
 
     } else if (childRel instanceof Correlate) {
       Correlate corrRel = (Correlate) childRel;
-      List<RelDataTypeField> leftFields =
-          corrRel.getLeft().getRowType().getFieldList();
-      List<RelDataTypeField> rightFields =
-          corrRel.getRight().getRowType().getFieldList();
+      List<RelDataTypeField> leftFields = corrRel.getLeft().getRowType().getFieldList();
+      List<RelDataTypeField> rightFields = corrRel.getRight().getRowType().getFieldList();
       nFields = leftFields.size();
       JoinRelType joinType = corrRel.getJoinType();
       switch (joinType) {
@@ -279,10 +257,8 @@ public class PushProjector {
         nFieldsRight = rightFields.size();
       }
       nSysFields = 0;
-      childBitmap =
-          ImmutableBitSet.range(0, nFields);
-      rightBitmap =
-          ImmutableBitSet.range(nFields, nChildFields);
+      childBitmap = ImmutableBitSet.range(0, nFields);
+      rightBitmap = ImmutableBitSet.range(nFields, nChildFields);
 
       // Required columns need to be included in project
       projRefs.or(BitSets.of(corrRel.getRequiredColumns()));
@@ -320,19 +296,17 @@ public class PushProjector {
   //~ Methods ----------------------------------------------------------------
 
   /**
-   * Decomposes a projection to the input references referenced by a
-   * projection and a filter, either of which is optional. If both are
-   * provided, the filter is underneath the project.
+   * Decomposes a projection to the input references referenced by a projection and a filter, either
+   * of which is optional. If both are provided, the filter is underneath the project.
    *
-   * <p>Creates a projection containing all input references as well as
-   * preserving any special expressions. Converts the original projection
-   * and/or filter to reference the new projection. Then, finally puts on top,
-   * a final projection corresponding to the original projection.
+   * <p>Creates a projection containing all input references as well as preserving any special
+   * expressions. Converts the original projection and/or filter to reference the new projection.
+   * Then, finally puts on top, a final projection corresponding to the original projection.
    *
-   * @param defaultExpr expression to be used in the projection if no fields
-   *                    or special columns are selected
-   * @return the converted projection if it makes sense to push elements of
-   * the projection; otherwise returns null
+   * @param defaultExpr expression to be used in the projection if no fields or special columns are
+   *     selected
+   * @return the converted projection if it makes sense to push elements of the projection;
+   *     otherwise returns null
    */
   public @Nullable RelNode convertProject(@Nullable RexNode defaultExpr) {
     // locate all fields referenced in the projection and filter
@@ -343,7 +317,7 @@ public class PushProjector {
     // special expressions to preserve in the projection; otherwise,
     // there's no point in proceeding any further
     if (origProj == null) {
-      if (childPreserveExprs.isEmpty()) {
+      if (childPreserveExprs.size() == 0) {
         return null;
       }
 
@@ -355,15 +329,14 @@ public class PushProjector {
         projRefs.set(0, nChildFields);
       }
       nProject = nChildFields;
-    } else if (projRefs.cardinality() == nChildFields
-        && childPreserveExprs.isEmpty()) {
+    } else if ((projRefs.cardinality() == nChildFields) && (childPreserveExprs.size() == 0)) {
       return null;
     }
 
     // if nothing is being selected from the underlying rel, just
     // project the default expression passed in as a parameter or the
     // first column if there is no default expression
-    if (projRefs.cardinality() == 0 && childPreserveExprs.isEmpty()) {
+    if ((projRefs.cardinality() == 0) && (childPreserveExprs.size() == 0)) {
       if (defaultExpr != null) {
         childPreserveExprs.add(defaultExpr);
       } else if (nChildFields == 1) {
@@ -385,10 +358,7 @@ public class PushProjector {
     RelNode projChild;
     if (origFilter != null) {
       RexNode newFilter =
-          convertRefsAndExprs(
-              origFilter,
-              newProject.getRowType().getFieldList(),
-              adjustments);
+          convertRefsAndExprs(origFilter, newProject.getRowType().getFieldList(), adjustments);
       relBuilder.push(newProject);
       relBuilder.filter(newFilter);
       projChild = relBuilder.build();
@@ -403,14 +373,13 @@ public class PushProjector {
   }
 
   /**
-   * Locates all references found in either the projection expressions a
-   * filter, as well as references to expressions that should be preserved.
-   * Based on that, determines whether pushing the projection makes sense.
+   * Locates all references found in either the projection expressions a filter, as well as
+   * references to expressions that should be preserved. Based on that, determines whether pushing
+   * the projection makes sense.
    *
-   * @return true if all inputs from the child that the projection is being
-   * pushed past are referenced in the projection/filter and no special
-   * preserve expressions are referenced; in that case, it does not make sense
-   * to push the projection
+   * @return true if all inputs from the child that the projection is being pushed past are
+   *     referenced in the projection/filter and no special preserve expressions are referenced; in
+   *     that case, it does not make sense to push the projection
    */
   public boolean locateAllRefs() {
     RexUtil.apply(
@@ -427,14 +396,8 @@ public class PushProjector {
 
     // The system fields of each child are always used by the join, even if
     // they are not projected out of it.
-    projRefs.set(
-        nSysFields,
-        nSysFields + nSysFields,
-        true);
-    projRefs.set(
-        nSysFields + nFields,
-        nSysFields + nFields + nSysFields,
-        true);
+    projRefs.set(nSysFields, nSysFields + nSysFields, true);
+    projRefs.set(nSysFields + nFields, nSysFields + nFields + nSysFields, true);
 
     // Count how many fields are projected.
     nSystemProject = 0;
@@ -450,20 +413,18 @@ public class PushProjector {
       }
     }
 
-    assert nSystemProject + nProject + nRightProject
-        == projRefs.cardinality();
+    assert nSystemProject + nProject + nRightProject == projRefs.cardinality();
 
-    if ((childRel instanceof Join)
-        || (childRel instanceof SetOp)) {
+    if ((childRel instanceof Join) || (childRel instanceof SetOp)) {
       // if nothing is projected from the children, arbitrarily project
       // the first columns; this is necessary since Fennel doesn't
       // handle 0-column projections
-      if (nProject == 0 && childPreserveExprs.isEmpty()) {
+      if ((nProject == 0) && (childPreserveExprs.size() == 0)) {
         projRefs.set(0);
         nProject = 1;
       }
       if (childRel instanceof Join) {
-        if (nRightProject == 0 && rightPreserveExprs.isEmpty()) {
+        if ((nRightProject == 0) && (rightPreserveExprs.size() == 0)) {
           projRefs.set(nFields);
           nRightProject = 1;
         }
@@ -474,29 +435,25 @@ public class PushProjector {
     // referenced and there are no special preserve expressions; note
     // that we need to do this check after we've handled the 0-column
     // project cases
-    boolean allFieldsReferenced =
-        IntStream.range(0, nChildFields).allMatch(projRefs::get);
-    return allFieldsReferenced
-        && childPreserveExprs.isEmpty()
-        && rightPreserveExprs.isEmpty();
+    boolean allFieldsReferenced = IntStream.range(0, nChildFields).allMatch(i -> projRefs.get(i));
+    if (allFieldsReferenced && childPreserveExprs.size() == 0 && rightPreserveExprs.size() == 0) {
+      return true;
+    }
+
+    return false;
   }
 
   /**
-   * Creates a projection based on the inputs specified in a bitmap and the
-   * expressions that need to be preserved. The expressions are appended after
-   * the input references.
+   * Creates a projection based on the inputs specified in a bitmap and the expressions that need to
+   * be preserved. The expressions are appended after the input references.
    *
    * @param projChild child that the projection will be created on top of
-   * @param adjust    if true, need to create new projection expressions;
-   *                  otherwise, the existing ones are reused
-   * @param rightSide if true, creating a projection for the right hand side
-   *                  of a join
+   * @param adjust if true, need to create new projection expressions; otherwise, the existing ones
+   *     are reused
+   * @param rightSide if true, creating a projection for the right hand side of a join
    * @return created projection
    */
-  public Project createProjectRefsAndExprs(
-      RelNode projChild,
-      boolean adjust,
-      boolean rightSide) {
+  public Project createProjectRefsAndExprs(RelNode projChild, boolean adjust, boolean rightSide) {
     List<RexNode> preserveExprs;
     int nInputRefs;
     int offset;
@@ -511,10 +468,8 @@ public class PushProjector {
       offset = nSysFields;
     }
     int refIdx = offset - 1;
-    List<Pair<RexNode, String>> newProjects =
-        new ArrayList<>();
-    List<RelDataTypeField> destFields =
-        projChild.getRowType().getFieldList();
+    List<Pair<RexNode, String>> newProjects = new ArrayList<>();
+    List<RelDataTypeField> destFields = projChild.getRowType().getFieldList();
 
     // add on the input references
     for (int i = 0; i < nInputRefs; i++) {
@@ -523,15 +478,13 @@ public class PushProjector {
       final RelDataTypeField destField = destFields.get(refIdx - offset);
       newProjects.add(
           Pair.of(
-              rexBuilder.makeInputRef(
-                  destField.getType(), refIdx - offset),
-              destField.getName()));
+              rexBuilder.makeInputRef(destField.getType(), refIdx - offset), destField.getName()));
     }
 
     // add on the expressions that need to be preserved, converting the
     // arguments to reference the projected columns (if necessary)
     int[] adjustments = {};
-    if (!preserveExprs.isEmpty() && adjust) {
+    if ((preserveExprs.size() > 0) && adjust) {
       adjustments = new int[childFields.size()];
       for (int idx = offset; idx < childFields.size(); idx++) {
         adjustments[idx] = -offset;
@@ -543,23 +496,17 @@ public class PushProjector {
       if (adjust) {
         newExpr =
             projExpr.accept(
-                new RelOptUtil.RexInputConverter(
-                    rexBuilder,
-                    childFields,
-                    destFields,
-                    adjustments));
+                new RelOptUtil.RexInputConverter(rexBuilder, childFields, destFields, adjustments));
       } else {
         newExpr = projExpr;
       }
 
       List<RelDataType> typeList =
-          projChild.getRowType().getFieldList()
-              .stream()
-              .map(RelDataTypeField::getType)
+          projChild.getRowType().getFieldList().stream()
+              .map(field -> field.getType())
               .collect(Collectors.toList());
       RexUtil.FixNullabilityShuttle fixer =
-          new RexUtil.FixNullabilityShuttle(
-              projChild.getCluster().getRexBuilder(), typeList);
+          new RexUtil.FixNullabilityShuttle(projChild.getCluster().getRexBuilder(), typeList);
       newExpr = newExpr.accept(fixer);
       final String originalFieldName = findOriginalFieldName(projExpr);
       final String newAlias;
@@ -572,7 +519,9 @@ public class PushProjector {
       preserveExpOrdinal++;
     }
 
-    return (Project) relBuilder.push(projChild)
+    return (Project)
+        relBuilder
+            .push(projChild)
         .projectNamed(Pair.left(newProjects), Pair.right(newProjects), true)
         .build();
   }
@@ -588,8 +537,7 @@ public class PushProjector {
     return origProj.getRowType().getFieldList().get(idx).getName();
   }
   /**
-   * Determines how much each input reference needs to be adjusted as a result
-   * of projection.
+   * Determines how much each input reference needs to be adjusted as a result of projection.
    *
    * @return array indicating how much each input needs to be adjusted by
    */
@@ -608,20 +556,16 @@ public class PushProjector {
   }
 
   /**
-   * Clones an expression tree and walks through it, adjusting each
-   * RexInputRef index by some amount, and converting expressions that need to
-   * be preserved to field references.
+   * Clones an expression tree and walks through it, adjusting each RexInputRef index by some
+   * amount, and converting expressions that need to be preserved to field references.
    *
    * @param rex         the expression
    * @param destFields  fields that the new expressions will be referencing
-   * @param adjustments the amount each input reference index needs to be
-   *                    adjusted by
+   * @param adjustments the amount each input reference index needs to be adjusted by
    * @return modified expression tree
    */
   public RexNode convertRefsAndExprs(
-      RexNode rex,
-      List<RelDataTypeField> destFields,
-      int[] adjustments) {
+      RexNode rex, List<RelDataTypeField> destFields, int[] adjustments) {
     return rex.accept(
         new RefAndExprConverter(
             rexBuilder,
@@ -635,16 +579,14 @@ public class PushProjector {
   }
 
   /**
-   * Creates a new projection based on the original projection, adjusting all
-   * input refs using an adjustment array passed in. If there was no original
-   * projection, create a new one that selects every field from the underlying
-   * rel.
+   * Creates a new projection based on the original projection, adjusting all input refs using an
+   * adjustment array passed in. If there was no original projection, create a new one that selects
+   * every field from the underlying rel.
    *
    * <p>If the resulting projection would be trivial, return the child.
    *
    * @param projChild   child of the new project
-   * @param adjustments array indicating how much each input reference should
-   *                    be adjusted by
+   * @param adjustments array indicating how much each input reference should be adjusted by
    * @return the created projection
    */
   public RelNode createNewProject(RelNode projChild, int[] adjustments) {
@@ -654,30 +596,23 @@ public class PushProjector {
       for (Pair<RexNode, String> p : origProj.getNamedProjects()) {
         projects.add(
             Pair.of(
-                convertRefsAndExprs(
-                    p.left,
-                    projChild.getRowType().getFieldList(),
-                    adjustments),
+                convertRefsAndExprs(p.left, projChild.getRowType().getFieldList(), adjustments),
                 p.right));
       }
     } else {
       for (Ord<RelDataTypeField> field : Ord.zip(childFields)) {
         projects.add(
-            Pair.of(
-                rexBuilder.makeInputRef(
-                    field.e.getType(), field.i), field.e.getName()));
+            Pair.of(rexBuilder.makeInputRef(field.e.getType(), field.i), field.e.getName()));
       }
     }
-    return relBuilder.push(projChild)
-        .project(Pair.left(projects), Pair.right(projects))
-        .build();
+    return relBuilder.push(projChild).project(Pair.left(projects), Pair.right(projects)).build();
   }
 
   //~ Inner Classes ----------------------------------------------------------
 
   /**
-   * Visitor which builds a bitmap of the inputs used by an expressions, as
-   * well as locating expressions corresponding to special operators.
+   * Visitor which builds a bitmap of the inputs used by an expressions, as well as locating
+   * expressions corresponding to special operators.
    */
   private static class InputSpecialOpFinder extends RexVisitorImpl<Void> {
     private final BitSet rexRefs;
@@ -741,7 +676,7 @@ public class PushProjector {
             return true;
           } else if (requireNonNull(rightFields, "rightFields").contains(exprArgs)
               && isStrong(exprArgs, call)) {
-            requireNonNull(preserveRight, "preserveRight");
+            assert preserveRight != null;
             if (!preserveRight.contains(call)) {
               preserveRight.add(call);
             }
@@ -760,12 +695,11 @@ public class PushProjector {
       rexRefs.set(inputRef.getIndex());
       return null;
     }
-
   }
 
   /**
-   * Walks an expression tree, replacing input refs with new values to reflect
-   * projection and converting special expressions to field references.
+   * Walks an expression tree, replacing input refs with new values to reflect projection and
+   * converting special expressions to field references.
    */
   private static class RefAndExprConverter extends RelOptUtil.RexInputConverter {
     private final List<RexNode> preserveLeft;
@@ -793,41 +727,28 @@ public class PushProjector {
       // if the expression corresponds to one that needs to be preserved,
       // convert it to a field reference; otherwise, convert the entire
       // expression
-      int match =
-          findExprInLists(
-              call,
-              preserveLeft,
-              firstLeftRef,
-              preserveRight,
-              firstRightRef);
+      int match = findExprInLists(call, preserveLeft, firstLeftRef, preserveRight, firstRightRef);
       if (match >= 0) {
         return rexBuilder.makeInputRef(
-            requireNonNull(destFields, "destFields").get(match).getType(),
-            match);
+            requireNonNull(destFields, "destFields").get(match).getType(), match);
       }
       return super.visitCall(call);
     }
 
     /**
-     * Looks for a matching RexNode from among two lists of RexNodes and
-     * returns the offset into the list corresponding to the match, adjusted
-     * by an amount, depending on whether the match was from the first or
-     * second list.
+     * Looks for a matching RexNode from among two lists of RexNodes and returns the offset into the
+     * list corresponding to the match, adjusted by an amount, depending on whether the match was
+     * from the first or second list.
      *
      * @param rex      RexNode that is being matched against
      * @param rexList1 first list of RexNodes
      * @param adjust1  adjustment if match occurred in first list
      * @param rexList2 second list of RexNodes
      * @param adjust2  adjustment if match occurred in the second list
-     * @return index in the list corresponding to the matching RexNode; -1
-     * if no match
+     * @return index in the list corresponding to the matching RexNode; -1 if no match
      */
     private static int findExprInLists(
-        RexNode rex,
-        List<RexNode> rexList1,
-        int adjust1,
-        List<RexNode> rexList2,
-        int adjust2) {
+        RexNode rex, List<RexNode> rexList1, int adjust1, List<RexNode> rexList2, int adjust2) {
       int match = rexList1.indexOf(rex);
       if (match >= 0) {
         return match + adjust1;
@@ -858,20 +779,16 @@ public class PushProjector {
      */
     @Override boolean test(RexNode expr);
 
-    /**
-     * Constant condition that replies {@code false} for all expressions.
-     */
+    /** Constant condition that replies {@code false} for all expressions. */
     ExprCondition FALSE = expr -> false;
 
-    /**
-     * Constant condition that replies {@code true} for all expressions.
-     */
+    /** Constant condition that replies {@code true} for all expressions. */
     ExprCondition TRUE = expr -> true;
   }
 
   /**
-   * An expression condition that evaluates to true if the expression is
-   * a call to one of a set of operators.
+   * An expression condition that evaluates to true if the expression is a call to one of a set of
+   * operators.
    */
   static class OperatorExprCondition implements ExprCondition {
     private final Set<SqlOperator> operatorSet;
@@ -886,8 +803,7 @@ public class PushProjector {
     }
 
     @Override public boolean test(RexNode expr) {
-      return expr instanceof RexCall
-          && operatorSet.contains(((RexCall) expr).getOperator());
+      return expr instanceof RexCall && operatorSet.contains(((RexCall) expr).getOperator());
     }
   }
 }

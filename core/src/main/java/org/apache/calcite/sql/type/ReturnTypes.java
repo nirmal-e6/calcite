@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.sql.type;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeField;
@@ -50,84 +51,82 @@ import static org.apache.calcite.util.Static.RESOURCE;
 
 import static java.util.Objects.requireNonNull;
 
-/**
- * A collection of return-type inference strategies.
+/*
+ * changed return type of PERCENTILE_DISC_CONT
+ * WARNING : DO NOT PUT CUSTOM RETURN TYPES HERE AS IT'S A COPY OF CALCITE'S CLASS
  */
-public abstract class ReturnTypes {
-  private ReturnTypes() {
-  }
 
-  /** Creates a return-type inference that applies a rule then a sequence of
-   * rules, returning the first non-null result.
+/** A collection of return-type inference strategies. */
+public abstract class ReturnTypes {
+
+  private ReturnTypes() {}
+
+/**
+   * Creates a return-type inference that applies a rule then a sequence of rules, returning the
+   * first non-null result.
    *
-   * @see SqlReturnTypeInference#orElse(SqlReturnTypeInference) */
-  public static SqlReturnTypeInferenceChain chain(
-      SqlReturnTypeInference... rules) {
+   * @see SqlReturnTypeInference#orElse(SqlReturnTypeInference)
+ */
+  public static SqlReturnTypeInferenceChain chain(SqlReturnTypeInference... rules) {
     return new SqlReturnTypeInferenceChain(rules);
   }
 
-  /** Creates a return-type inference that applies a rule then a sequence of
-   * transforms.
+  /**
+   * Creates a return-type inference that applies a rule then a sequence of transforms.
    *
-   * @see SqlReturnTypeInference#andThen(SqlTypeTransform) */
-  public static SqlTypeTransformCascade cascade(SqlReturnTypeInference rule,
-      SqlTypeTransform... transforms) {
+   * @see SqlReturnTypeInference#andThen(SqlTypeTransform)
+   */
+  public static SqlTypeTransformCascade cascade(
+      SqlReturnTypeInference rule, SqlTypeTransform... transforms) {
     return new SqlTypeTransformCascade(rule, transforms);
   }
 
-  public static ExplicitReturnTypeInference explicit(
-      RelProtoDataType protoType) {
+  public static ExplicitReturnTypeInference explicit(RelProtoDataType protoType) {
     return new ExplicitReturnTypeInference(protoType);
   }
 
-  /**
-   * Creates an inference rule which returns a copy of a given data type.
-   */
+  /** Creates an inference rule which returns a copy of a given data type. */
   public static ExplicitReturnTypeInference explicit(RelDataType type) {
     return explicit(RelDataTypeImpl.proto(type));
   }
 
   /**
-   * Creates an inference rule which returns a type with no precision or scale,
-   * such as {@code DATE}.
+   * Creates an inference rule which returns a type with no precision or scale, such as {@code
+   * DATE}.
    */
   public static ExplicitReturnTypeInference explicit(SqlTypeName typeName) {
     return explicit(RelDataTypeImpl.proto(typeName, false));
   }
 
   /**
-   * Creates an inference rule which returns a type with precision but no scale,
-   * such as {@code VARCHAR(100)}.
+   * Creates an inference rule which returns a type with precision but no scale, such as {@code
+   * VARCHAR(100)}.
    */
-  public static ExplicitReturnTypeInference explicit(SqlTypeName typeName,
-      int precision) {
+  public static ExplicitReturnTypeInference explicit(SqlTypeName typeName, int precision) {
     return explicit(RelDataTypeImpl.proto(typeName, precision, false));
   }
 
-  /** Returns a return-type inference that first transforms a binding and
-   * then applies an inference.
+  /**
+   * Returns a return-type inference that first transforms a binding and then applies an inference.
    *
-   * <p>{@link #stripOrderBy} is an example of {@code bindingTransform}. */
+   * <p>{@link #stripOrderBy} is an example of {@code bindingTransform}.
+   */
   public static SqlReturnTypeInference andThen(
-      UnaryOperator<SqlOperatorBinding> bindingTransform,
-      SqlReturnTypeInference typeInference) {
-    return opBinding ->
-        typeInference.inferReturnType(bindingTransform.apply(opBinding));
+      UnaryOperator<SqlOperatorBinding> bindingTransform, SqlReturnTypeInference typeInference) {
+    return opBinding -> typeInference.inferReturnType(bindingTransform.apply(opBinding));
   }
 
-  /** Converts a binding of {@code FOO(x, y ORDER BY z)}
-   * or {@code FOO(x, y ORDER BY z SEPARATOR s)}
-   * to a binding of {@code FOO(x, y)}.
-   * Used for {@code STRING_AGG} and {@code GROUP_CONCAT}. */
-  public static SqlOperatorBinding stripOrderBy(
-      SqlOperatorBinding operatorBinding) {
+  /**
+   * Converts a binding of {@code FOO(x, y ORDER BY z)} or {@code FOO(x, y ORDER BY z SEPARATOR s)}
+   * to a binding of {@code FOO(x, y)}. Used for {@code STRING_AGG} and {@code GROUP_CONCAT}.
+   */
+  public static SqlOperatorBinding stripOrderBy(SqlOperatorBinding operatorBinding) {
     if (operatorBinding instanceof SqlCallBinding) {
       final SqlCallBinding callBinding = (SqlCallBinding) operatorBinding;
       final SqlCall call2 = stripSeparator(callBinding.getCall());
       final SqlCall call3 = stripOrderBy(call2);
       if (call3 != callBinding.getCall()) {
-        return new SqlCallBinding(callBinding.getValidator(),
-            callBinding.getScope(), call3);
+        return new SqlCallBinding(callBinding.getValidator(), callBinding.getScope(), call3);
       }
     }
     return operatorBinding;
@@ -139,8 +138,11 @@ public abstract class ReturnTypes {
       // Remove the last argument if it is "ORDER BY". The parser stashes the
       // ORDER BY clause in the argument list but it does not take part in
       // type derivation.
-      return call.getOperator().createCall(call.getFunctionQuantifier(),
-          call.getParserPosition(), Util.skipLast(call.getOperandList()));
+      return call.getOperator()
+          .createCall(
+              call.getFunctionQuantifier(),
+              call.getParserPosition(),
+              Util.skipLast(call.getOperandList()));
     }
     return call;
   }
@@ -149,44 +151,45 @@ public abstract class ReturnTypes {
     if (!call.getOperandList().isEmpty()
         && Util.last(call.getOperandList()).getKind() == SqlKind.SEPARATOR) {
       // Remove the last argument if it is "SEPARATOR literal".
-      return call.getOperator().createCall(call.getFunctionQuantifier(),
-          call.getParserPosition(), Util.skipLast(call.getOperandList()));
+      return call.getOperator()
+          .createCall(
+              call.getFunctionQuantifier(),
+              call.getParserPosition(),
+              Util.skipLast(call.getOperandList()));
     }
     return call;
   }
 
   /**
-   * Type-inference strategy whereby the result type of a call is the type of
-   * the operand #0 (0-based).
+   * Type-inference strategy whereby the result type of a call is the type of the operand #0
+   * (0-based).
    */
-  public static final SqlReturnTypeInference ARG0 =
-      new OrdinalReturnTypeInference(0);
+  public static final SqlReturnTypeInference ARG0 = new OrdinalReturnTypeInference(0);
 
   /**
-   * Type-inference strategy whereby the result type of a call is VARYING the
-   * type of the first argument. The length returned is the same as length of
-   * the first argument. If any of the other operands are nullable the
-   * returned type will also be nullable. First Arg must be of string type.
+   * Type-inference strategy whereby the result type of a call is VARYING the type of the first
+   * argument. The length returned is the same as length of the first argument. If any of the other
+   * operands are nullable the returned type will also be nullable. First Arg must be of string
+   * type.
    */
   public static final SqlReturnTypeInference ARG0_NULLABLE_VARYING =
-      ARG0.andThen(SqlTypeTransforms.TO_NULLABLE)
-          .andThen(SqlTypeTransforms.TO_VARYING);
+      ARG0.andThen(SqlTypeTransforms.TO_NULLABLE).andThen(SqlTypeTransforms.TO_VARYING);
 
   /**
-   * Type-inference strategy whereby the result type of a call is the type of
-   * the operand #0 (0-based). If any of the other operands are nullable the
-   * returned type will also be nullable.
+   * Type-inference strategy whereby the result type of a call is the type of the operand #0
+   * (0-based). If any of the other operands are nullable the returned type will also be nullable.
    */
   public static final SqlReturnTypeInference ARG0_NULLABLE =
       ARG0.andThen(SqlTypeTransforms.TO_NULLABLE);
 
   /**
-   * Type-inference strategy that determines the return type based on the first argument.
-   * If the first argument is an array, the return type is consistent with {@link #ARG0_NULLABLE}.
-   * If the first argument is not an array,
-   * the return type is consistent with {@link #ARG0_NULLABLE_VARYING}.
+   * Type-inference strategy that determines the return type based on the first argument. If the
+   * first argument is an array, the return type is consistent with {@link #ARG0_NULLABLE}. If the
+   * first argument is not an array, the return type is consistent with {@link
+   * #ARG0_NULLABLE_VARYING}.
    */
-  public static final SqlReturnTypeInference ARG0_ARRAY_NULLABLE_VARYING = opBinding -> {
+  public static final SqlReturnTypeInference ARG0_ARRAY_NULLABLE_VARYING =
+      opBinding -> {
     SqlTypeName op = opBinding.getOperandType(0).getSqlTypeName();
     if (op == SqlTypeName.ARRAY) {
       return ARG0_NULLABLE.inferReturnType(opBinding);
@@ -195,41 +198,36 @@ public abstract class ReturnTypes {
   };
 
   /**
-   * Type-inference strategy whereby the result type of a call is the type of
-   * the operand #0 (0-based). If the operand #0 (0-based) is nullable, the
-   * returned type will also be nullable.
+   * Type-inference strategy whereby the result type of a call is the type of the operand #0
+   * (0-based). If the operand #0 (0-based) is nullable, the returned type will also be nullable.
    */
   public static final SqlReturnTypeInference ARG0_NULLABLE_IF_ARG0_NULLABLE =
       ARG0.andThen(SqlTypeTransforms.ARG0_NULLABLE);
 
   /**
-   * Type-inference strategy whereby the result type of a call is the type of
-   * the operand #0 (0-based), with nulls always allowed.
+   * Type-inference strategy whereby the result type of a call is the type of the operand #0
+   * (0-based), with nulls always allowed.
    */
   public static final SqlReturnTypeInference ARG0_FORCE_NULLABLE =
       ARG0.andThen(SqlTypeTransforms.FORCE_NULLABLE);
 
   public static final SqlReturnTypeInference ARG0_INTERVAL =
-      new MatchReturnTypeInference(0,
-          SqlTypeFamily.DATETIME_INTERVAL.getTypeNames());
+      new MatchReturnTypeInference(0, SqlTypeFamily.DATETIME_INTERVAL.getTypeNames());
 
   public static final SqlReturnTypeInference ARG0_INTERVAL_NULLABLE =
       ARG0_INTERVAL.andThen(SqlTypeTransforms.TO_NULLABLE);
 
   /**
-   * Type-inference strategy whereby the result type of a call is the type of
-   * the operand #0 (0-based), and nullable if the call occurs within a
-   * "GROUP BY ()" query. E.g. in "select sum(1) as s from empty", s may be
-   * null.
+   * Type-inference strategy whereby the result type of a call is the type of the operand #0
+   * (0-based), and nullable if the call occurs within a "GROUP BY ()" query. E.g. in "select sum(1)
+   * as s from empty", s may be null.
    */
   public static final SqlReturnTypeInference ARG0_NULLABLE_IF_EMPTY =
       new OrdinalReturnTypeInference(0) {
-        @Override public RelDataType
-        inferReturnType(SqlOperatorBinding opBinding) {
+        @Override public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
           final RelDataType type = super.inferReturnType(opBinding);
           if (opBinding.getGroupCount() == 0 || opBinding.hasFilter()) {
-            return opBinding.getTypeFactory()
-                .createTypeWithNullability(type, true);
+            return opBinding.getTypeFactory().createTypeWithNullability(type, true);
           } else {
             return type;
           }
@@ -237,59 +235,50 @@ public abstract class ReturnTypes {
       };
 
   /**
-   * Type-inference strategy whereby the result type of a call is the type of
-   * the operand #1 (0-based).
+   * Type-inference strategy whereby the result type of a call is the type of the operand #1
+   * (0-based).
    */
-  public static final SqlReturnTypeInference ARG1 =
-      new OrdinalReturnTypeInference(1);
+  public static final SqlReturnTypeInference ARG1 = new OrdinalReturnTypeInference(1);
 
   /**
-   * Type-inference strategy whereby the result type of a call is the type of
-   * the operand #1 (0-based). If any of the other operands are nullable the
-   * returned type will also be nullable.
+   * Type-inference strategy whereby the result type of a call is the type of the operand #1
+   * (0-based). If any of the other operands are nullable the returned type will also be nullable.
    */
   public static final SqlReturnTypeInference ARG1_NULLABLE =
       ARG1.andThen(SqlTypeTransforms.TO_NULLABLE);
 
   /**
-   * Type-inference strategy whereby the result type of a call is the type of
-   * operand #2 (0-based).
+   * Type-inference strategy whereby the result type of a call is the type of operand #2 (0-based).
    */
-  public static final SqlReturnTypeInference ARG2 =
-      new OrdinalReturnTypeInference(2);
+  public static final SqlReturnTypeInference ARG2 = new OrdinalReturnTypeInference(2);
 
   /**
-   * Type-inference strategy whereby the result type of a call is the type of
-   * operand #2 (0-based). If any of the other operands are nullable the
-   * returned type will also be nullable.
+   * Type-inference strategy whereby the result type of a call is the type of operand #2 (0-based).
+   * If any of the other operands are nullable the returned type will also be nullable.
    */
   public static final SqlReturnTypeInference ARG2_NULLABLE =
       ARG2.andThen(SqlTypeTransforms.TO_NULLABLE);
 
-  /**
-   * Type-inference strategy whereby the result type of a call is Boolean.
-   */
-  public static final SqlReturnTypeInference BOOLEAN =
-      explicit(SqlTypeName.BOOLEAN);
+  /** Type-inference strategy whereby the result type of a call is Boolean. */
+  public static final SqlReturnTypeInference BOOLEAN = explicit(SqlTypeName.BOOLEAN);
 
   /**
-   * Type-inference strategy whereby the result type of a call is Boolean,
-   * with nulls allowed if any of the operands allow nulls.
+   * Type-inference strategy whereby the result type of a call is Boolean, with nulls allowed if any
+   * of the operands allow nulls.
    */
   public static final SqlReturnTypeInference BOOLEAN_NULLABLE =
       BOOLEAN.andThen(SqlTypeTransforms.TO_NULLABLE);
 
   /**
-   * Type-inference strategy whereby the result type of a call is Boolean,
-   * with nulls allowed if the type of the operand #0 (0-based) is nullable.
+   * Type-inference strategy whereby the result type of a call is Boolean, with nulls allowed if the
+   * type of the operand #0 (0-based) is nullable.
    */
   public static final SqlReturnTypeInference BOOLEAN_NULLABLE_IF_ARG0_NULLABLE =
       BOOLEAN.andThen(SqlTypeTransforms.ARG0_NULLABLE);
 
   /**
-   * Type-inference strategy with similar effect to {@link #BOOLEAN_NULLABLE},
-   * which is more efficient, but can only be used if all arguments are
-   * BOOLEAN.
+   * Type-inference strategy with similar effect to {@link #BOOLEAN_NULLABLE}, which is more
+   * efficient, but can only be used if all arguments are BOOLEAN.
    */
   public static final SqlReturnTypeInference BOOLEAN_NULLABLE_OPTIMIZED =
       opBinding -> {
@@ -308,40 +297,28 @@ public abstract class ReturnTypes {
         return type1;
       };
 
-  /**
-   * Type-inference strategy whereby the result type of a call is a nullable
-   * Boolean.
-   */
+  /** Type-inference strategy whereby the result type of a call is a nullable Boolean. */
   public static final SqlReturnTypeInference BOOLEAN_FORCE_NULLABLE =
       BOOLEAN.andThen(SqlTypeTransforms.FORCE_NULLABLE);
 
-  /**
-   * Type-inference strategy whereby the result type of a call is BOOLEAN
-   * NOT NULL.
-   */
+  /** Type-inference strategy whereby the result type of a call is BOOLEAN NOT NULL. */
   public static final SqlReturnTypeInference BOOLEAN_NOT_NULL =
       BOOLEAN.andThen(SqlTypeTransforms.TO_NOT_NULLABLE);
 
-  /**
-   * Type-inference strategy whereby the result type of a call is DATE.
-   */
-  public static final SqlReturnTypeInference DATE =
-      explicit(SqlTypeName.DATE);
+  /** Type-inference strategy whereby the result type of a call is DATE. */
+  public static final SqlReturnTypeInference DATE = explicit(SqlTypeName.DATE);
 
-  /**
-   * Type-inference strategy whereby the result type of a call is nullable
-   * DATE.
-   */
+  /** Type-inference strategy whereby the result type of a call is nullable DATE. */
   public static final SqlReturnTypeInference DATE_NULLABLE =
       DATE.andThen(SqlTypeTransforms.TO_NULLABLE);
 
   /**
-   * Type-inference strategy that returns the type of the first operand,
-   * unless it is a DATE, in which case the return type is TIMESTAMP. Supports
-   * cases such as <a href="https://issues.apache.org/jira/browse/CALCITE-5757">[CALCITE-5757]
-   * Incorrect return type for BigQuery TRUNC functions </a>.
+   * Type-inference strategy that returns the type of the first operand, unless it is a DATE, in
+   * which case the return type is TIMESTAMP. Supports cases such as <a href="https://issues.apache.org/jira/browse/CALCITE-5757">[CALCITE-5757] Incorrect return type
+   * for BigQuery TRUNC functions </a>.
    */
-  public static final SqlReturnTypeInference ARG0_EXCEPT_DATE = opBinding -> {
+  public static final SqlReturnTypeInference ARG0_EXCEPT_DATE =
+      opBinding -> {
     RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
     SqlTypeName op = opBinding.getOperandType(0).getSqlTypeName();
     switch (op) {
@@ -353,275 +330,322 @@ public abstract class ReturnTypes {
   };
 
   /**
-   * Same as {@link #ARG0_EXCEPT_DATE} but returns with nullability if any of
-   * the operands is nullable by using
-   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NULLABLE}.
+   * Same as {@link #ARG0_EXCEPT_DATE} but returns with nullability if any of the operands is
+   * nullable by using {@link SqlTypeTransforms#TO_NULLABLE}.
    */
   public static final SqlReturnTypeInference ARG0_EXCEPT_DATE_NULLABLE =
       ARG0_EXCEPT_DATE.andThen(SqlTypeTransforms.TO_NULLABLE);
 
-  /**
-   * Type-inference strategy whereby the result type of a call is TIME(0).
-   */
-  public static final SqlReturnTypeInference TIME =
-      explicit(SqlTypeName.TIME, 0);
+  /** Type-inference strategy whereby the result type of a call is TIME(0). */
+  public static final SqlReturnTypeInference TIME = explicit(SqlTypeName.TIME, 0);
 
-  /**
-   * Type-inference strategy whereby the result type of a call is nullable
-   * TIME(0).
-   */
+  /** Type-inference strategy whereby the result type of a call is nullable TIME(0). */
   public static final SqlReturnTypeInference TIME_NULLABLE =
       TIME.andThen(SqlTypeTransforms.TO_NULLABLE);
 
-  /**
-   * Type-inference strategy whereby the result type of a call is TIMESTAMP.
-   */
-  public static final SqlReturnTypeInference TIMESTAMP =
-      explicit(SqlTypeName.TIMESTAMP);
+  /** Type-inference strategy whereby the result type of a call is TIMESTAMP. */
+  public static final SqlReturnTypeInference TIMESTAMP = explicit(SqlTypeName.TIMESTAMP);
 
-  /**
-   * Type-inference strategy whereby the result type of a call is nullable
-   * TIMESTAMP.
-   */
+  /** Type-inference strategy whereby the result type of a call is nullable TIMESTAMP. */
   public static final SqlReturnTypeInference TIMESTAMP_NULLABLE =
       TIMESTAMP.andThen(SqlTypeTransforms.TO_NULLABLE);
 
   /**
-   * Type-inference strategy whereby the result type of a call is TIMESTAMP
-   * WITH LOCAL TIME ZONE.
+   * Type-inference strategy whereby the result type of a call is TIMESTAMP WITH LOCAL TIME ZONE.
    */
   public static final SqlReturnTypeInference TIMESTAMP_LTZ =
       explicit(SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE);
 
-  /**
-   * Type-inference strategy whereby the result type of a call is TIMESTAMP
-   * WITH TIME ZONE.
-   */
-  public static final SqlReturnTypeInference TIMESTAMP_TZ =
-      explicit(SqlTypeName.TIMESTAMP_TZ);
+  /** Type-inference strategy whereby the result type of a call is TIMESTAMP WITH TIME ZONE. */
+  public static final SqlReturnTypeInference TIMESTAMP_TZ = explicit(SqlTypeName.TIMESTAMP_TZ);
 
   /**
-   * Type-inference strategy whereby the result type of a call is nullable
-   * TIMESTAMP WITH LOCAL TIME ZONE.
+   * Type-inference strategy whereby the result type of a call is nullable TIMESTAMP WITH LOCAL TIME
+   * ZONE.
    */
   public static final SqlReturnTypeInference TIMESTAMP_LTZ_NULLABLE =
       TIMESTAMP_LTZ.andThen(SqlTypeTransforms.TO_NULLABLE);
 
   /**
-   * Type-inference strategy whereby the result type of a call is nullable
-   * TIMESTAMP WITH TIME ZONE.
+   * Type-inference strategy whereby the result type of a call is nullable TIMESTAMP WITH TIME ZONE.
    */
   public static final SqlReturnTypeInference TIMESTAMP_TZ_NULLABLE =
       TIMESTAMP_TZ.andThen(SqlTypeTransforms.TO_NULLABLE);
 
-  /**
-   * Type-inference strategy whereby the result type of a call is Double.
-   */
-  public static final SqlReturnTypeInference DOUBLE =
-      explicit(SqlTypeName.DOUBLE);
+  /** Type-inference strategy whereby the result type of a call is Double. */
+  public static final SqlReturnTypeInference DOUBLE = explicit(SqlTypeName.DOUBLE);
 
   /**
-   * Type-inference strategy whereby the result type of a call is Double with
-   * nulls allowed if any of the operands allow nulls.
+   * Type-inference strategy whereby the result type of a call is Double with nulls allowed if any
+   * of the operands allow nulls.
    */
   public static final SqlReturnTypeInference DOUBLE_NULLABLE =
       DOUBLE.andThen(SqlTypeTransforms.TO_NULLABLE);
 
-  /**
-   * Type-inference strategy whereby the result type of a call is a nullable
-   * Double.
-   */
+  /** Type-inference strategy whereby the result type of a call is a nullable Double. */
   public static final SqlReturnTypeInference DOUBLE_FORCE_NULLABLE =
       DOUBLE.andThen(SqlTypeTransforms.FORCE_NULLABLE);
 
-  /**
-   * Type-inference strategy whereby the result type of a call is a Char.
-   */
-  public static final SqlReturnTypeInference CHAR =
-          explicit(SqlTypeName.CHAR);
+  /** Type-inference strategy whereby the result type of a call is a Char. */
+  public static final SqlReturnTypeInference CHAR = explicit(SqlTypeName.CHAR);
 
-  /**
-   * Type-inference strategy whereby the result type of a call is a nullable
-   * CHAR(1).
-   */
+  /** Type-inference strategy whereby the result type of a call is a nullable CHAR(1). */
   public static final SqlReturnTypeInference CHAR_FORCE_NULLABLE =
       CHAR.andThen(SqlTypeTransforms.FORCE_NULLABLE);
 
   /**
-   * Type-inference strategy whereby the result type of a call is
-   * CHAR(1), nullable if any argument is nullable.
+   * Type-inference strategy whereby the result type of a call is CHAR(1), nullable if any argument
+   * is nullable.
    */
   public static final SqlReturnTypeInference CHAR_NULLABLE_IF_ARGS_NULLABLE =
       CHAR.andThen(SqlTypeTransforms.TO_NULLABLE);
 
-  /**
-   * Type-inference strategy whereby the result type of a call is a TINYINT.
-   */
-  public static final SqlReturnTypeInference TINYINT =
-          explicit(SqlTypeName.TINYINT);
+  /** Type-inference strategy whereby the result type of a call is a TINYINT. */
+  public static final SqlReturnTypeInference TINYINT = explicit(SqlTypeName.TINYINT);
 
   /**
-   * Type-inference strategy whereby the result type of a call is a TINYINT
-   * with nulls allowed if any of the operands allow nulls.
+   * Type-inference strategy whereby the result type of a call is a TINYINT with nulls allowed if
+   * any of the operands allow nulls.
    */
   public static final SqlReturnTypeInference TINYINT_NULLABLE =
           TINYINT.andThen(SqlTypeTransforms.TO_NULLABLE);
 
-  /**
-   * Type-inference strategy whereby the result type of a call is an Integer.
-   */
-  public static final SqlReturnTypeInference INTEGER =
-      explicit(SqlTypeName.INTEGER);
+  /** Type-inference strategy whereby the result type of a call is an Integer. */
+  public static final SqlReturnTypeInference INTEGER = explicit(SqlTypeName.INTEGER);
 
   /**
-   * Type-inference strategy whereby the result type of a call is an Integer
-   * with nulls allowed if any of the operands allow nulls.
+   * Type-inference strategy whereby the result type of a call is an Integer with nulls allowed if
+   * any of the operands allow nulls.
    */
   public static final SqlReturnTypeInference INTEGER_NULLABLE =
       INTEGER.andThen(SqlTypeTransforms.TO_NULLABLE);
 
-  /**
-   * Type-inference strategy whereby the result type of a call is a BIGINT.
-   */
-  public static final SqlReturnTypeInference BIGINT =
-      explicit(SqlTypeName.BIGINT);
+  /** Type-inference strategy whereby the result type of a call is a BIGINT. */
+  public static final SqlReturnTypeInference BIGINT = explicit(SqlTypeName.BIGINT);
 
-  /**
-   * Type-inference strategy whereby the result type of a call is a nullable
-   * BIGINT.
-   */
+  /** Type-inference strategy whereby the result type of a call is a nullable BIGINT. */
   public static final SqlReturnTypeInference BIGINT_FORCE_NULLABLE =
       BIGINT.andThen(SqlTypeTransforms.FORCE_NULLABLE);
 
   /**
-   * Type-inference strategy whereby the result type of a call is a BIGINT
-   * with nulls allowed if any of the operands allow nulls.
+   * Type-inference strategy whereby the result type of a call is a BIGINT with nulls allowed if any
+   * of the operands allow nulls.
    */
   public static final SqlReturnTypeInference BIGINT_NULLABLE =
       BIGINT.andThen(SqlTypeTransforms.TO_NULLABLE);
 
-  /**
-   * Type-inference strategy that always returns "VARCHAR(4)".
-   */
-  public static final SqlReturnTypeInference VARCHAR_4 =
-      explicit(SqlTypeName.VARCHAR, 4);
+  /** Type-inference strategy that always returns "VARCHAR(4)". */
+  public static final SqlReturnTypeInference VARCHAR_4 = explicit(SqlTypeName.VARCHAR, 4);
 
   /**
-   * Type-inference strategy that always returns "VARCHAR(4)" with nulls
-   * allowed if any of the operands allow nulls.
+   * Type-inference strategy that always returns "VARCHAR(4)" with nulls allowed if any of the
+   * operands allow nulls.
    */
   public static final SqlReturnTypeInference VARCHAR_4_NULLABLE =
       VARCHAR_4.andThen(SqlTypeTransforms.TO_NULLABLE);
 
-  /**
-   * Type-inference strategy that always returns "VARCHAR(2000)".
-   */
-  public static final SqlReturnTypeInference VARCHAR_2000 =
-      explicit(SqlTypeName.VARCHAR, 2000);
+  /** Type-inference strategy that always returns "VARCHAR(2000)". */
+  public static final SqlReturnTypeInference VARCHAR_2000 = explicit(SqlTypeName.VARCHAR, 2000);
 
   /**
-   * Type-inference strategy that always returns "VARCHAR(2000)" with nulls
-   * allowed if any of the operands allow nulls.
+   * Type-inference strategy that always returns "VARCHAR(2000)" with nulls allowed if any of the
+   * operands allow nulls.
    */
   public static final SqlReturnTypeInference VARCHAR_2000_NULLABLE =
       VARCHAR_2000.andThen(SqlTypeTransforms.TO_NULLABLE);
 
-  /**
-   * Type-inference strategy that always returns "VARCHAR".
-   */
-  public static final SqlReturnTypeInference VARCHAR =
-      ReturnTypes.explicit(SqlTypeName.VARCHAR);
+  /** Type-inference strategy that always returns "VARCHAR". */
+  public static final SqlReturnTypeInference VARCHAR = ReturnTypes.explicit(SqlTypeName.VARCHAR);
+
+  /** Type-inference strategy that always returns "VARIANT". */
+  public static final SqlReturnTypeInference VARIANT = ReturnTypes.explicit(SqlTypeName.VARIANT);
 
   /**
-   * Type-inference strategy that always returns "VARIANT".
-   */
-  public static final SqlReturnTypeInference VARIANT =
-      ReturnTypes.explicit(SqlTypeName.VARIANT);
-
-  /**
-   * Type-inference strategy that always returns "VARCHAR" with nulls
-   * allowed if any of the operands allow nulls.
+   * Type-inference strategy that always returns "VARCHAR" with nulls allowed if any of the operands
+   * allow nulls.
    */
   public static final SqlReturnTypeInference VARCHAR_NULLABLE =
       VARCHAR.andThen(SqlTypeTransforms.TO_NULLABLE);
 
-  /**
-   * Type-inference strategy whereby the result type of a call is a nullable
-   * VARCHAR.
-   */
+  /** Type-inference strategy whereby the result type of a call is a nullable VARCHAR. */
   public static final SqlReturnTypeInference VARCHAR_FORCE_NULLABLE =
       VARCHAR.andThen(SqlTypeTransforms.FORCE_NULLABLE);
 
-  /**
-   * Type-inference strategy that always returns "VARBINARY".
-   */
+  /** Type-inference strategy that always returns "VARBINARY". */
   public static final SqlReturnTypeInference VARBINARY =
       ReturnTypes.explicit(SqlTypeName.VARBINARY);
 
   /**
-   * Type-inference strategy that always returns "VARBINARY" with nulls
-   * allowed if any of the operands allow nulls.
+   * Type-inference strategy that always returns "VARBINARY" with nulls allowed if any of the
+   * operands allow nulls.
    */
   public static final SqlReturnTypeInference VARBINARY_NULLABLE =
       VARBINARY.andThen(SqlTypeTransforms.TO_NULLABLE);
 
-  /**
-   * Type-inference strategy whereby the result type of a call is a nullable
-   * VARBINARY.
-   */
+  /** Type-inference strategy whereby the result type of a call is a nullable VARBINARY. */
   public static final SqlReturnTypeInference VARBINARY_FORCE_NULLABLE =
       VARBINARY.andThen(SqlTypeTransforms.FORCE_NULLABLE);
 
-  /**
-   * Type-inference strategy for Histogram agg support.
-   */
-  public static final SqlReturnTypeInference HISTOGRAM =
-      explicit(SqlTypeName.VARBINARY, 8);
+  /** Type-inference strategy for Histogram agg support. */
+  public static final SqlReturnTypeInference HISTOGRAM = explicit(SqlTypeName.VARBINARY, 8);
+
+  /** Type-inference strategy that always returns "CURSOR". */
+  public static final SqlReturnTypeInference CURSOR = explicit(SqlTypeName.CURSOR);
+
+  /** Type-inference strategy that always returns "COLUMN_LIST". */
+  public static final SqlReturnTypeInference COLUMN_LIST = explicit(SqlTypeName.COLUMN_LIST);
 
   /**
-   * Type-inference strategy that always returns "CURSOR".
-   */
-  public static final SqlReturnTypeInference CURSOR =
-      explicit(SqlTypeName.CURSOR);
-
-  /**
-   * Type-inference strategy that always returns "COLUMN_LIST".
-   */
-  public static final SqlReturnTypeInference COLUMN_LIST =
-      explicit(SqlTypeName.COLUMN_LIST);
-
-  /**
-   * Type-inference strategy whereby the result type of a call is using its
-   * operands biggest type, using the SQL:1999 rules described in "Data types
-   * of results of aggregations". These rules are used in union, except,
-   * intersect, case and other places.
+   * Type-inference strategy whereby the result type of a call is using its operands biggest type,
+   * using the SQL:1999 rules described in "Data types of results of aggregations". These rules are
+   * used in union, except, intersect, case and other places.
    *
    * @see Glossary#SQL99 SQL:1999 Part 2 Section 9.3
    */
   public static final SqlReturnTypeInference LEAST_RESTRICTIVE =
-      andThen(SqlTypeTransforms.FROM_MEASURE_IF::apply,
-          ReturnTypes::leastRestrictive);
+      andThen(SqlTypeTransforms.FROM_MEASURE_IF::apply, ReturnTypes::leastRestrictive);
 
-  private static @Nullable RelDataType leastRestrictive(
-      SqlOperatorBinding opBinding) {
-    return opBinding.getTypeFactory()
-        .leastRestrictive(opBinding.collectOperandTypes());
+  public static final SqlReturnTypeInference LEAST_RESTRICTIVE_NVL =
+      andThen(
+          SqlTypeTransforms.FROM_MEASURE_IF::apply,
+          (opBinding) -> {
+            List<RelDataType> types = opBinding.collectOperandTypes();
+            return leastRestrictive(opBinding, types, SqlTypeMappingRules.instance(false));
+          });
+
+  public static @Nullable RelDataType leastRestrictive(
+      SqlOperatorBinding opBinding, List<RelDataType> types, SqlTypeMappingRule mappingRule) {
+    requireNonNull(types, "types");
+    requireNonNull(mappingRule, "mappingRule");
+    checkArgument(types.size() >= 1, "types.size >= 1");
+
+    RelDataType type0 = types.get(0);
+    if (type0.getSqlTypeName() != null) {
+      RelDataType resultType = opBinding.getTypeFactory().leastRestrictive(types);
+      if (resultType != null) {
+        return resultType;
+      }
+      return leastRestrictiveByCast(opBinding, types, mappingRule);
+    }
+
+    return leastRestrictive(opBinding, types, mappingRule);
+  }
+
+  private static @Nullable RelDataType leastRestrictiveByCast(
+      SqlOperatorBinding opBinding, List<RelDataType> types, SqlTypeMappingRule mappingRule) {
+    RelDataType resultType = types.get(0);
+    boolean anyNullable = resultType.isNullable();
+    for (int i = 1; i < types.size(); i++) {
+      RelDataType type = types.get(i);
+      if (type.getSqlTypeName() == SqlTypeName.NULL) {
+        anyNullable = true;
+        continue;
+      }
+
+      if (type.isNullable()) {
+        anyNullable = true;
+      }
+
+      if (SqlTypeUtil.canCastFrom(type, resultType, mappingRule)) {
+        resultType = type;
+      } else {
+        if (CalciteForkSettings.databricks()) {
+          // Apply custom rules for incompatible types according to databricks
+          // Rule 1: VARCHAR and NUMERIC -> NUMERIC
+          // Rule 2: VARCHAR and DATE -> DATE
+          // Rule 3: DATE and TIMESTAMP -> TIMESTAMP
+
+          boolean hasVarchar = false;
+          boolean hasNumeric = false;
+          boolean hasDate = false;
+          boolean hasTimestamp = false;
+          RelDataType numericType = null;
+          RelDataType dateType = null;
+          RelDataType timestampType = null;
+
+          for (RelDataType t : types) {
+            if (t.getSqlTypeName() == SqlTypeName.NULL) {
+              continue;
+            }
+
+            if (SqlTypeUtil.isCharacter(t)) {
+              hasVarchar = true;
+            } else if (SqlTypeUtil.isNumeric(t)) {
+              hasNumeric = true;
+              numericType = t;
+            } else if (SqlTypeUtil.isDate(t)) {
+              hasDate = true;
+              dateType = t;
+            } else if (SqlTypeUtil.isTimestamp(t)) {
+              hasTimestamp = true;
+              timestampType = t;
+            }
+          }
+
+          if (hasVarchar && hasNumeric) {
+            resultType =
+                numericType != null
+                    ? numericType
+                    : opBinding.getTypeFactory().createSqlType(SqlTypeName.DOUBLE);
+            anyNullable = true;
+            break;
+          } else if (hasVarchar && hasDate) {
+            resultType =
+                dateType != null
+                    ? dateType
+                    : opBinding.getTypeFactory().createSqlType(SqlTypeName.DATE);
+            anyNullable = true;
+            break;
+          } else if (hasDate && hasTimestamp) {
+            resultType =
+                timestampType != null
+                    ? timestampType
+                    : opBinding.getTypeFactory().createSqlType(SqlTypeName.TIMESTAMP);
+            anyNullable = true;
+            break;
+          } else if (hasVarchar && hasTimestamp) {
+            resultType =
+                timestampType != null
+                    ? timestampType
+                    : opBinding.getTypeFactory().createSqlType(SqlTypeName.TIMESTAMP);
+            anyNullable = true;
+            break;
+          } else {
+            return null;
+          }
+        }
+      }
+    }
+    if (anyNullable) {
+      return opBinding.getTypeFactory().createTypeWithNullability(resultType, true);
+    } else {
+      return resultType;
+    }
+  }
+
+  private static @Nullable RelDataType leastRestrictive(SqlOperatorBinding opBinding) {
+
+    List<RelDataType> types = opBinding.collectOperandTypes();
+    return opBinding.getTypeFactory().leastRestrictive(types);
   }
 
   /**
-   * Type-inference strategy for NVL2 function. It returns the least restrictive type
-   * between the second and third operands.
+   * Type-inference strategy for NVL2 function. It returns the least restrictive type between the
+   * second and third operands.
    */
-  public static final SqlReturnTypeInference NVL2_RESTRICTIVE = opBinding ->
-      opBinding.getTypeFactory().leastRestrictive(
-          Arrays.asList(opBinding.getOperandType(1),
-              opBinding.getOperandType(2)));
+  public static final SqlReturnTypeInference NVL2_RESTRICTIVE =
+      opBinding ->
+          opBinding
+              .getTypeFactory()
+              .leastRestrictive(
+                  Arrays.asList(opBinding.getOperandType(1), opBinding.getOperandType(2)));
 
   /**
-   * Type-inference strategy that returns the type of the first operand, unless it
-   * is an integer type, in which case the return type is DOUBLE.
+   * Type-inference strategy that returns the type of the first operand, unless it is an integer
+   * type, in which case the return type is DOUBLE.
    */
-  public static final SqlReturnTypeInference ARG0_EXCEPT_INTEGER = opBinding ->  {
+  public static final SqlReturnTypeInference ARG0_EXCEPT_INTEGER =
+      opBinding -> {
     RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
     RelDataType opType = opBinding.getOperandType(0);
     if (SqlTypeName.INT_TYPES.contains(opType.getSqlTypeName())) {
@@ -633,9 +657,8 @@ public abstract class ReturnTypes {
   };
 
   /**
-   * Same as {@link #ARG0_EXCEPT_INTEGER} but returns with nullability if any of
-   * the operands is nullable by using
-   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NULLABLE}.
+   * Same as {@link #ARG0_EXCEPT_INTEGER} but returns with nullability if any of the operands is
+   * nullable by using {@link SqlTypeTransforms#TO_NULLABLE}.
    */
   public static final SqlReturnTypeInference ARG0_EXCEPT_INTEGER_NULLABLE =
       ARG0_EXCEPT_INTEGER.andThen(SqlTypeTransforms.TO_NULLABLE);
@@ -651,11 +674,9 @@ public abstract class ReturnTypes {
       };
 
   /**
-   * Chooses a type to return.
-   * If all arguments are null, return nullable integer type.
-   * If all arguments are integer types, choose the largest integer type. Nullable
-   * if any argument is nullable.
-   * As a fallback, choose the type of the first argument that is not of the NULL type.
+   * Chooses a type to return. If all arguments are null, return nullable integer type. If all
+   * arguments are integer types, choose the largest integer type. Nullable if any argument is
+   * nullable. As a fallback, choose the type of the first argument that is not of the NULL type.
    * Nullable if at least one argument is nullable.
    */
   public static final SqlReturnTypeInference LARGEST_INT_OR_FIRST_NON_NULL =
@@ -684,45 +705,47 @@ public abstract class ReturnTypes {
           return typeFactory.createTypeWithNullability(firstNonNullType, nullable);
         }
         throw opBinding.newError(
-            RESOURCE.atLeastOneArgumentMustNotBeNull(
-                opBinding.getOperator().getName()));
+            RESOURCE.atLeastOneArgumentMustNotBeNull(opBinding.getOperator().getName()));
       };
 
   /**
-   * Returns the same type as the multiset carries. The multiset type returned
-   * is the least restrictive of the call's multiset operands
+   * Returns the same type as the multiset carries. The multiset type returned is the least
+   * restrictive of the call's multiset operands
    */
-  public static final SqlReturnTypeInference MULTISET = opBinding -> {
+  public static final SqlReturnTypeInference MULTISET =
+      opBinding -> {
     ExplicitOperatorBinding newBinding =
         new ExplicitOperatorBinding(
             opBinding,
             new AbstractList<RelDataType>() {
               // CHECKSTYLE: IGNORE 12
               @Override public RelDataType get(int index) {
-                RelDataType type =
-                    opBinding.getOperandType(index)
-                        .getComponentType();
+                    RelDataType type = opBinding.getOperandType(index).getComponentType();
                 if (type == null) {
                   return opBinding.getTypeFactory().createSqlType(SqlTypeName.NULL);
                 }
                 return type;
               }
 
-              @Override public int size() { return opBinding.getOperandCount(); }
+                  @Override public int size() {
+                    return opBinding.getOperandCount();
+                  }
             });
-    RelDataType biggestElementType =
-        LEAST_RESTRICTIVE.inferReturnType(newBinding);
-    return opBinding.getTypeFactory().createMultisetType(
-        requireNonNull(biggestElementType,
-            () -> "can't infer element type for multiset of " + newBinding),
+        RelDataType biggestElementType = LEAST_RESTRICTIVE.inferReturnType(newBinding);
+        return opBinding
+            .getTypeFactory()
+            .createMultisetType(
+                requireNonNull(
+                    biggestElementType,
+                    () -> "can't infer element type for multiset of " + newBinding),
         -1);
   };
 
   /**
    * Returns the element type of an ARRAY or MULTISET.
    *
-   * <p>For example, given <code>INTEGER ARRAY or MULTISET ARRAY</code>, returns
-   * <code>INTEGER</code>.
+   * <p>For example, given <code>INTEGER ARRAY or MULTISET ARRAY</code>, returns <code>INTEGER
+   * </code>.
    */
   public static final SqlReturnTypeInference TO_COLLECTION_ELEMENT =
       ARG0.andThen(SqlTypeTransforms.TO_COLLECTION_ELEMENT_TYPE);
@@ -736,31 +759,26 @@ public abstract class ReturnTypes {
   /**
    * Returns a MULTISET type.
    *
-   * <p>For example, given <code>INTEGER</code>, returns
-   * <code>INTEGER MULTISET</code>.
+   * <p>For example, given <code>INTEGER</code>, returns <code>INTEGER MULTISET</code>.
    */
   public static final SqlReturnTypeInference TO_MULTISET =
       ARG0.andThen(SqlTypeTransforms.TO_MULTISET);
 
-  /**
-   * Returns the element type of a MULTISET, with nullability enforced.
-   */
+  /** Returns the element type of a MULTISET, with nullability enforced. */
   public static final SqlReturnTypeInference MULTISET_ELEMENT_FORCE_NULLABLE =
-      MULTISET.andThen(SqlTypeTransforms.TO_COLLECTION_ELEMENT_TYPE)
+      MULTISET
+          .andThen(SqlTypeTransforms.TO_COLLECTION_ELEMENT_TYPE)
           .andThen(SqlTypeTransforms.FORCE_NULLABLE);
 
-  /**
-   * Same as {@link #MULTISET} but returns with nullability if any of the
-   * operands is nullable.
-   */
+  /** Same as {@link #MULTISET} but returns with nullability if any of the operands is nullable. */
   public static final SqlReturnTypeInference MULTISET_NULLABLE =
       MULTISET.andThen(SqlTypeTransforms.TO_NULLABLE);
 
   /**
    * Returns the type of the only column of a multiset.
    *
-   * <p>For example, given <code>RECORD(x INTEGER) MULTISET</code>, returns
-   * <code>INTEGER MULTISET</code>.
+   * <p>For example, given <code>RECORD(x INTEGER) MULTISET</code>, returns <code>INTEGER MULTISET
+   * </code>.
    */
   public static final SqlReturnTypeInference MULTISET_PROJECT_ONLY =
       MULTISET.andThen(SqlTypeTransforms.ONLY_COLUMN);
@@ -768,40 +786,33 @@ public abstract class ReturnTypes {
   /**
    * Returns an ARRAY type.
    *
-   * <p>For example, given <code>INTEGER</code>, returns
-   * <code>INTEGER ARRAY</code>.
+   * <p>For example, given <code>INTEGER</code>, returns <code>INTEGER ARRAY</code>.
    */
-  public static final SqlReturnTypeInference TO_ARRAY =
-      ARG0.andThen(SqlTypeTransforms.TO_ARRAY);
+  public static final SqlReturnTypeInference TO_ARRAY = ARG0.andThen(SqlTypeTransforms.TO_ARRAY);
 
-  /**
-   * Type-inference strategy whereby the result type of a call is nullable
-   * <code>ARRAY</code>.
-   */
+  /** Type-inference strategy whereby the result type of a call is nullable <code>ARRAY</code>. */
   public static final SqlReturnTypeInference TO_ARRAY_NULLABLE =
       TO_ARRAY.andThen(SqlTypeTransforms.TO_NULLABLE);
 
   /**
    * Returns a MAP type.
    *
-   * <p>For example, given {@code Record(f0: INTEGER, f1: DATE)}, returns
-   * {@code (INTEGER, DATE) MAP}.
+   * <p>For example, given {@code Record(f0: INTEGER, f1: DATE)}, returns {@code (INTEGER, DATE)
+   * MAP}.
    */
-  public static final SqlReturnTypeInference TO_MAP =
-      ARG0.andThen(SqlTypeTransforms.TO_MAP);
+  public static final SqlReturnTypeInference TO_MAP = ARG0.andThen(SqlTypeTransforms.TO_MAP);
 
   /**
    * Returns a MAP type.
    *
-   * <p>For example, given {@code STRING}, returns
-   * {@code (STRING, STRING) MAP}.
+   * <p>For example, given {@code STRING}, returns {@code (STRING, STRING) MAP}.
    */
   public static final SqlReturnTypeInference IDENTITY_TO_MAP =
       ARG0.andThen(SqlTypeTransforms.IDENTITY_TO_MAP);
 
   /**
-   * Same as {@link #IDENTITY_TO_MAP} but returns with nullability if any of the
-   * operands is nullable.
+   * Same as {@link #IDENTITY_TO_MAP} but returns with nullability if any of the operands is
+   * nullable.
    */
   public static final SqlReturnTypeInference IDENTITY_TO_MAP_NULLABLE =
       IDENTITY_TO_MAP.andThen(SqlTypeTransforms.TO_NULLABLE);
@@ -809,17 +820,16 @@ public abstract class ReturnTypes {
   /**
    * Returns a ROW type.
    *
-   * <p>For example, given {@code (INTEGER, DATE) MAP}, returns
-   * {@code Record(f0: INTEGER, f1: DATE)}.
+   * <p>For example, given {@code (INTEGER, DATE) MAP}, returns {@code Record(f0: INTEGER, f1:
+   * DATE)}.
    */
-  public static final SqlReturnTypeInference TO_ROW =
-      ARG0.andThen(SqlTypeTransforms.TO_ROW);
+  public static final SqlReturnTypeInference TO_ROW = ARG0.andThen(SqlTypeTransforms.TO_ROW);
 
   /**
    * Returns a ARRAY type.
    *
-   * <p>For example, given {@code (INTEGER, DATE) MAP}, returns
-   * {@code Record(f0: INTEGER, f1: DATE) ARRAY}.
+   * <p>For example, given {@code (INTEGER, DATE) MAP}, returns {@code Record(f0: INTEGER, f1: DATE)
+   * ARRAY}.
    */
   public static final SqlReturnTypeInference TO_MAP_ENTRIES =
       TO_ROW.andThen(SqlTypeTransforms.TO_ARRAY);
@@ -830,8 +840,7 @@ public abstract class ReturnTypes {
   /**
    * Returns a ARRAY type.
    *
-   * <p>For example, given {@code (INTEGER, DATE) MAP}, returns
-   * {@code INTEGER ARRAY}.
+   * <p>For example, given {@code (INTEGER, DATE) MAP}, returns {@code INTEGER ARRAY}.
    */
   public static final SqlReturnTypeInference TO_MAP_KEYS =
       ARG0.andThen(SqlTypeTransforms.TO_MAP_KEYS);
@@ -842,8 +851,7 @@ public abstract class ReturnTypes {
   /**
    * Returns a ARRAY type.
    *
-   * <p>For example, given {@code (INTEGER, DATE) MAP}, returns
-   * {@code DATE ARRAY}.
+   * <p>For example, given {@code (INTEGER, DATE) MAP}, returns {@code DATE ARRAY}.
    */
   public static final SqlReturnTypeInference TO_MAP_VALUES =
       ARG0.andThen(SqlTypeTransforms.TO_MAP_VALUES);
@@ -851,26 +859,23 @@ public abstract class ReturnTypes {
   public static final SqlReturnTypeInference TO_MAP_VALUES_NULLABLE =
       TO_MAP_VALUES.andThen(SqlTypeTransforms.TO_NULLABLE);
 
-  /**
-   * Type-inference strategy that always returns GEOMETRY.
-   */
-  public static final SqlReturnTypeInference GEOMETRY =
-      explicit(SqlTypeName.GEOMETRY);
+  /** Type-inference strategy that always returns GEOMETRY. */
+  public static final SqlReturnTypeInference GEOMETRY = explicit(SqlTypeName.GEOMETRY);
 
   /**
-   * Type-inference strategy whereby the result type of a call is
-   * {@link #ARG0_INTERVAL_NULLABLE} and {@link #LEAST_RESTRICTIVE}. These rules
-   * are used for integer division.
+   * Type-inference strategy whereby the result type of a call is {@link #ARG0_INTERVAL_NULLABLE}
+   * and {@link #LEAST_RESTRICTIVE}. These rules are used for integer division.
    */
   public static final SqlReturnTypeInference INTEGER_QUOTIENT_NULLABLE =
       ARG0_INTERVAL_NULLABLE.orElse(LEAST_RESTRICTIVE);
 
   /**
-   * Type-inference strategy for a call where the first argument is a decimal.
-   * The result type of a call is a decimal with a scale of 0, and the same
-   * precision and nullability as the first argument.
+   * Type-inference strategy for a call where the first argument is a decimal. The result type of a
+   * call is a decimal with a scale of 0, and the same precision and nullability as the first
+   * argument.
    */
-  public static final SqlReturnTypeInference DECIMAL_SCALE0 = opBinding -> {
+  public static final SqlReturnTypeInference DECIMAL_SCALE0 =
+      opBinding -> {
     RelDataType type1 = opBinding.getOperandType(0);
     if (SqlTypeUtil.isDecimal(type1)) {
       if (type1.getScale() == 0) {
@@ -878,15 +883,9 @@ public abstract class ReturnTypes {
       } else {
         int p = type1.getPrecision();
         RelDataType ret;
-        ret =
-            opBinding.getTypeFactory().createSqlType(
-                SqlTypeName.DECIMAL,
-                p,
-                0);
+            ret = opBinding.getTypeFactory().createSqlType(SqlTypeName.DECIMAL, p, 0);
         if (type1.isNullable()) {
-          ret =
-              opBinding.getTypeFactory()
-                  .createTypeWithNullability(ret, true);
+              ret = opBinding.getTypeFactory().createTypeWithNullability(ret, true);
         }
         return ret;
       }
@@ -895,10 +894,11 @@ public abstract class ReturnTypes {
   };
 
   /**
-   * Type-inference strategy that returns DECIMAL if any of the arguments are DECIMAL. It
-   * will return DOUBLE in all other cases.
+   * Type-inference strategy that returns DECIMAL if any of the arguments are DECIMAL. It will
+   * return DOUBLE in all other cases.
    */
-  public static final SqlReturnTypeInference DECIMAL_OR_DOUBLE = opBinding -> {
+  public static final SqlReturnTypeInference DECIMAL_OR_DOUBLE =
+      opBinding -> {
     boolean haveDecimal = false;
     for (int i = 0; i < opBinding.getOperandCount(); i++) {
       if (SqlTypeUtil.isDecimal(opBinding.getOperandType(i))) {
@@ -908,12 +908,9 @@ public abstract class ReturnTypes {
     }
 
     if (haveDecimal) {
-      return opBinding.getTypeFactory().createSqlType(
-          SqlTypeName.DECIMAL,
-          17);
+          return opBinding.getTypeFactory().createSqlType(SqlTypeName.DECIMAL, 17);
     } else {
-      return RelDataTypeImpl.proto(SqlTypeName.DOUBLE, false)
-          .apply(opBinding.getTypeFactory());
+          return RelDataTypeImpl.proto(SqlTypeName.DOUBLE, false).apply(opBinding.getTypeFactory());
     }
   };
 
@@ -921,19 +918,17 @@ public abstract class ReturnTypes {
       DECIMAL_OR_DOUBLE.andThen(SqlTypeTransforms.TO_NULLABLE);
 
   /**
-   * Type-inference strategy whereby the result type of a call is
-   * {@link #DECIMAL_SCALE0} with a fallback to {@link #ARG0} This rule
-   * is used for floor, ceiling.
+   * Type-inference strategy whereby the result type of a call is {@link #DECIMAL_SCALE0} with a
+   * fallback to {@link #ARG0} This rule is used for floor, ceiling.
    */
-  public static final SqlReturnTypeInference ARG0_OR_EXACT_NO_SCALE =
-      DECIMAL_SCALE0.orElse(ARG0);
+  public static final SqlReturnTypeInference ARG0_OR_EXACT_NO_SCALE = DECIMAL_SCALE0.orElse(ARG0);
 
   /**
-   * Type-inference strategy whereby the result type of a call is the decimal
-   * product of two exact numeric operands where at least one of the operands
-   * is a decimal.
+   * Type-inference strategy whereby the result type of a call is the decimal product of two exact
+   * numeric operands where at least one of the operands is a decimal.
    */
-  public static final SqlReturnTypeInference DECIMAL_PRODUCT = opBinding -> {
+  public static final SqlReturnTypeInference DECIMAL_PRODUCT =
+      opBinding -> {
     RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
     RelDataType type1 = opBinding.getOperandType(0);
     RelDataType type2 = opBinding.getOperandType(1);
@@ -941,39 +936,34 @@ public abstract class ReturnTypes {
   };
 
   /**
-   * Same as {@link #DECIMAL_PRODUCT} but returns with nullability if any of
-   * the operands is nullable by using
-   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NULLABLE}.
+   * Same as {@link #DECIMAL_PRODUCT} but returns with nullability if any of the operands is
+   * nullable by using {@link SqlTypeTransforms#TO_NULLABLE}.
    */
   public static final SqlReturnTypeInference DECIMAL_PRODUCT_NULLABLE =
       DECIMAL_PRODUCT.andThen(SqlTypeTransforms.TO_NULLABLE);
 
   /**
-   * Same as {@link #DECIMAL_PRODUCT_NULLABLE} but returns with nullability if any of
-   * the operands is nullable or the operation results in overflow by using
-   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#FORCE_NULLABLE}. Also handles
-   * multiplication for integers, not just decimals.
+   * Same as {@link #DECIMAL_PRODUCT_NULLABLE} but returns with nullability if any of the operands
+   * is nullable or the operation results in overflow by using {@link
+   * SqlTypeTransforms#FORCE_NULLABLE}. Also handles multiplication for integers, not just decimals.
    */
   public static final SqlReturnTypeInference PRODUCT_FORCE_NULLABLE =
       DECIMAL_PRODUCT_NULLABLE.orElse(LEAST_RESTRICTIVE).andThen(SqlTypeTransforms.FORCE_NULLABLE);
 
   /**
-   * Type-inference strategy whereby the result type of a call is
-   * {@link #DECIMAL_PRODUCT_NULLABLE} with a fallback to
-   * {@link #ARG0_INTERVAL_NULLABLE}
-   * and {@link #LEAST_RESTRICTIVE}.
-   * These rules are used for multiplication.
+   * Type-inference strategy whereby the result type of a call is {@link #DECIMAL_PRODUCT_NULLABLE}
+   * with a fallback to {@link #ARG0_INTERVAL_NULLABLE} and {@link #LEAST_RESTRICTIVE}. These rules
+   * are used for multiplication.
    */
   public static final SqlReturnTypeInference PRODUCT_NULLABLE =
-      DECIMAL_PRODUCT_NULLABLE.orElse(ARG0_INTERVAL_NULLABLE)
-          .orElse(LEAST_RESTRICTIVE);
+      DECIMAL_PRODUCT_NULLABLE.orElse(ARG0_INTERVAL_NULLABLE).orElse(LEAST_RESTRICTIVE);
 
   /**
-   * Type-inference strategy whereby the result type of a call is the decimal
-   * quotient of two exact numeric operands where at least one of the operands
-   * is a decimal.
+   * Type-inference strategy whereby the result type of a call is the decimal quotient of two exact
+   * numeric operands where at least one of the operands is a decimal.
    */
-  public static final SqlReturnTypeInference DECIMAL_QUOTIENT = opBinding -> {
+  public static final SqlReturnTypeInference DECIMAL_QUOTIENT =
+      opBinding -> {
     RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
     RelDataType type1 = opBinding.getOperandType(0);
     RelDataType type2 = opBinding.getOperandType(1);
@@ -981,51 +971,51 @@ public abstract class ReturnTypes {
   };
 
   /**
-   * Same as {@link #DECIMAL_QUOTIENT} but returns with nullability if any of
-   * the operands is nullable by using
-   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NULLABLE}.
+   * Same as {@link #DECIMAL_QUOTIENT} but returns with nullability if any of the operands is
+   * nullable by using {@link SqlTypeTransforms#TO_NULLABLE}.
    */
   public static final SqlReturnTypeInference DECIMAL_QUOTIENT_NULLABLE =
       DECIMAL_QUOTIENT.andThen(SqlTypeTransforms.TO_NULLABLE);
 
   /**
-  * Type-inference strategy whereby the result type of a call is
-  * {@link #DOUBLE} if both operands are integer types.
+   * Type-inference strategy whereby the result type of a call is {@link #DOUBLE} if both operands
+   * are integer types.
   */
-  public static final SqlReturnTypeInference DOUBLE_IF_INTEGERS = opBinding -> {
+  public static final SqlReturnTypeInference DOUBLE_IF_INTEGERS =
+      opBinding -> {
     RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
     SqlTypeName type1 = opBinding.getOperandType(0).getSqlTypeName();
     SqlTypeName type2 = opBinding.getOperandType(1).getSqlTypeName();
-    boolean isInts = SqlTypeName.INT_TYPES.contains(type1) && SqlTypeName.INT_TYPES.contains(type2);
-    return isInts ? typeFactory.createTypeWithNullability(
-        typeFactory.createSqlType(SqlTypeName.DOUBLE), true) : null;
+        boolean isInts =
+            SqlTypeName.INT_TYPES.contains(type1) && SqlTypeName.INT_TYPES.contains(type2);
+        return isInts
+            ? typeFactory.createTypeWithNullability(
+                typeFactory.createSqlType(SqlTypeName.DOUBLE), true)
+            : null;
   };
 
   /**
-   * Same as {@link #DECIMAL_QUOTIENT_NULLABLE} but returns with nullability if any of
-   * the operands is nullable or the operation results in overflow by using
-   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#FORCE_NULLABLE}. Also handles
-   * multiplication for integers, not just decimals.
+   * Same as {@link #DECIMAL_QUOTIENT_NULLABLE} but returns with nullability if any of the operands
+   * is nullable or the operation results in overflow by using {@link
+   * SqlTypeTransforms#FORCE_NULLABLE}. Also handles multiplication for integers, not just decimals.
    */
   public static final SqlReturnTypeInference QUOTIENT_FORCE_NULLABLE =
       DECIMAL_QUOTIENT_NULLABLE.orElse(LEAST_RESTRICTIVE).andThen(SqlTypeTransforms.FORCE_NULLABLE);
 
   /**
-   * Type-inference strategy whereby the result type of a call is
-   * {@link #DECIMAL_QUOTIENT_NULLABLE} with a fallback to
-   * {@link #ARG0_INTERVAL_NULLABLE} and {@link #LEAST_RESTRICTIVE}. These rules
+   * Type-inference strategy whereby the result type of a call is {@link #DECIMAL_QUOTIENT_NULLABLE}
+   * with a fallback to {@link #ARG0_INTERVAL_NULLABLE} and {@link #LEAST_RESTRICTIVE}. These rules
    * are used for division.
    */
   public static final SqlReturnTypeInference QUOTIENT_NULLABLE =
-      DECIMAL_QUOTIENT_NULLABLE.orElse(ARG0_INTERVAL_NULLABLE)
-          .orElse(LEAST_RESTRICTIVE);
+      DECIMAL_QUOTIENT_NULLABLE.orElse(ARG0_INTERVAL_NULLABLE).orElse(LEAST_RESTRICTIVE);
 
   /**
-   * Type-inference strategy whereby the result type of a call is the decimal
-   * sum of two exact numeric operands where at least one of the operands is a
-   * decimal.
+   * Type-inference strategy whereby the result type of a call is the decimal sum of two exact
+   * numeric operands where at least one of the operands is a decimal.
    */
-  public static final SqlReturnTypeInference DECIMAL_SUM = opBinding -> {
+  public static final SqlReturnTypeInference DECIMAL_SUM =
+      opBinding -> {
     RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
     RelDataType type1 = opBinding.getOperandType(0);
     RelDataType type2 = opBinding.getOperandType(1);
@@ -1033,31 +1023,29 @@ public abstract class ReturnTypes {
   };
 
   /**
-   * Same as {@link #DECIMAL_SUM} but returns with nullability if any
-   * of the operands is nullable by using
-   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NULLABLE}.
+   * Same as {@link #DECIMAL_SUM} but returns with nullability if any of the operands is nullable by
+   * using {@link SqlTypeTransforms#TO_NULLABLE}.
    */
   public static final SqlReturnTypeInference DECIMAL_SUM_NULLABLE =
       DECIMAL_SUM.andThen(SqlTypeTransforms.TO_NULLABLE);
 
   /**
-   * Same as {@link #DECIMAL_SUM_NULLABLE} but returns with nullability if any of
-   * the operands is nullable or the operation results in overflow by using
-   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#FORCE_NULLABLE}. Also handles
-   * addition for integers, not just decimals.
+   * Same as {@link #DECIMAL_SUM_NULLABLE} but returns with nullability if any of the operands is
+   * nullable or the operation results in overflow by using {@link
+   * SqlTypeTransforms#FORCE_NULLABLE}. Also handles addition for integers, not just decimals.
    */
   public static final SqlReturnTypeInference SUM_FORCE_NULLABLE =
       DECIMAL_SUM_NULLABLE.orElse(LEAST_RESTRICTIVE).andThen(SqlTypeTransforms.FORCE_NULLABLE);
 
   /**
-   * Type-inference strategy whereby the result type of a call is
-   * {@link #DECIMAL_SUM_NULLABLE} with a fallback to {@link #LEAST_RESTRICTIVE}
-   * These rules are used for addition and subtraction.
+   * Type-inference strategy whereby the result type of a call is {@link #DECIMAL_SUM_NULLABLE} with
+   * a fallback to {@link #LEAST_RESTRICTIVE} These rules are used for addition and subtraction.
    */
   public static final SqlReturnTypeInference NULLABLE_SUM =
       new SqlReturnTypeInferenceChain(DECIMAL_SUM_NULLABLE, LEAST_RESTRICTIVE);
 
-  public static final SqlReturnTypeInference DECIMAL_MOD = opBinding -> {
+  public static final SqlReturnTypeInference DECIMAL_MOD =
+      opBinding -> {
     RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
     RelDataType type1 = opBinding.getOperandType(0);
     RelDataType type2 = opBinding.getOperandType(1);
@@ -1065,30 +1053,25 @@ public abstract class ReturnTypes {
   };
 
   /**
-   * Type-inference strategy whereby the result type of a call is the decimal
-   * modulus of two exact numeric operands where at least one of the operands is a
-   * decimal.
+   * Type-inference strategy whereby the result type of a call is the decimal modulus of two exact
+   * numeric operands where at least one of the operands is a decimal.
    */
   public static final SqlReturnTypeInference DECIMAL_MOD_NULLABLE =
       DECIMAL_MOD.andThen(SqlTypeTransforms.TO_NULLABLE);
 
   /**
-   * Type-inference strategy whereby the result type of a call is
-   * {@link #DECIMAL_MOD_NULLABLE} with a fallback to {@link #ARG1_NULLABLE}
-   * These rules are used for modulus.
+   * Type-inference strategy whereby the result type of a call is {@link #DECIMAL_MOD_NULLABLE} with
+   * a fallback to {@link #ARG1_NULLABLE} These rules are used for modulus.
    */
   public static final SqlReturnTypeInference NULLABLE_MOD =
       DECIMAL_MOD_NULLABLE.orElse(ARG1_NULLABLE);
 
   /**
-   * Type-inference strategy for concatenating two string arguments. The result
-   * type of a call is:
+   * Type-inference strategy for concatenating two string arguments. The result type of a call is:
    *
    * <ul>
-   * <li>the same type as the input types but with the combined length of the
-   * two first types</li>
-   * <li>if types are of char type the type with the highest coercibility will
-   * be used</li>
+   *   <li>the same type as the input types but with the combined length of the two first types
+   *   <li>if types are of char type the type with the highest coercibility will be used
    * <li>result is varying if either input is; otherwise fixed
    * </ul>
    *
@@ -1119,36 +1102,30 @@ public abstract class ReturnTypes {
           checkArgument(SqlTypeUtil.sameNamedType(argType0, argType1));
         }
         SqlCollation pickedCollation = null;
-        if (!containsAnyType
-            && !containsNullType
-            && SqlTypeUtil.inCharFamily(argType0)) {
-          if (!SqlTypeUtil.isCharTypeComparable(
-              opBinding.collectOperandTypes().subList(0, 2))) {
+        if (!containsAnyType && !containsNullType && SqlTypeUtil.inCharFamily(argType0)) {
+          if (!SqlTypeUtil.isCharTypeComparable(opBinding.collectOperandTypes().subList(0, 2))) {
             throw opBinding.newError(
                 RESOURCE.typeNotComparable(
-                    argType0.getFullTypeString(),
-                    argType1.getFullTypeString()));
+                    argType0.getFullTypeString(), argType1.getFullTypeString()));
           }
 
           pickedCollation =
               requireNonNull(
                   SqlCollation.getCoercibilityDyadicOperator(
                       getCollation(argType0), getCollation(argType1)),
-                  () -> "getCoercibilityDyadicOperator is null for " + argType0
-                      + " and " + argType1);
+                  () ->
+                      "getCoercibilityDyadicOperator is null for " + argType0 + " and " + argType1);
         }
 
         // Determine whether result is variable-length
-        SqlTypeName typeName =
-            argType0.getSqlTypeName();
+        SqlTypeName typeName = argType0.getSqlTypeName();
         if (SqlTypeUtil.isBoundedVariableWidth(argType1)) {
           typeName = argType1.getSqlTypeName();
         }
 
         RelDataType ret;
         int typePrecision;
-        final long x =
-            (long) argType0.getPrecision() + (long) argType1.getPrecision();
+        final long x = (long) argType0.getPrecision() + (long) argType1.getPrecision();
         final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
         final RelDataTypeSystem typeSystem = typeFactory.getTypeSystem();
         if (argType0.getPrecision() == RelDataType.PRECISION_NOT_SPECIFIED
@@ -1167,12 +1144,12 @@ public abstract class ReturnTypes {
           } else if (getCollation(argType1).equals(pickedCollation)) {
             pickedType = argType1;
           } else {
-            throw new AssertionError("should never come here, "
-                + "argType0=" + argType0 + ", argType1=" + argType1);
+            throw new AssertionError(
+                "should never come here, " + "argType0=" + argType0 + ", argType1=" + argType1);
           }
           ret =
-              typeFactory.createTypeWithCharsetAndCollation(ret,
-                  getCharset(pickedType), getCollation(pickedType));
+              typeFactory.createTypeWithCharsetAndCollation(
+                  ret, getCharset(pickedType), getCollation(pickedType));
         }
         if (ret.getSqlTypeName() == SqlTypeName.NULL) {
           ret =
@@ -1183,15 +1160,14 @@ public abstract class ReturnTypes {
       };
 
   /**
-   * Type-inference strategy for String concatenation.
-   * Result is varying if either input is; otherwise fixed.
-   * For example,
+   * Type-inference strategy for String concatenation. Result is varying if either input is;
+   * otherwise fixed. For example,
    *
-   * <p>concat(cast('a' as varchar(2)), cast('b' as varchar(3)),cast('c' as varchar(2)))
-   * returns varchar(7).
+   * <p>concat(cast('a' as varchar(2)), cast('b' as varchar(3)),cast('c' as varchar(2))) returns
+   * varchar(7).
    *
-   * <p>concat(cast('a' as varchar), cast('b' as varchar(2)), cast('c' as varchar(2)))
-   * returns varchar.
+   * <p>concat(cast('a' as varchar), cast('b' as varchar(2)), cast('c' as varchar(2))) returns
+   * varchar.
    *
    * <p>concat(cast('a' as varchar(65535)), cast('b' as varchar(2)), cast('c' as varchar(2)))
    * returns varchar.
@@ -1223,36 +1199,28 @@ public abstract class ReturnTypes {
           typePrecision = (int) amount;
         }
 
-        return opBinding.getTypeFactory()
-            .createSqlType(SqlTypeName.VARCHAR, typePrecision);
+        return opBinding.getTypeFactory().createSqlType(SqlTypeName.VARCHAR, typePrecision);
       };
 
   /**
-   * Type-inference strategy for String concatenation with separator.
-   * The precision of separator should be calculated during combining.
-   * Result is varying if either input is; otherwise fixed.
+   * Type-inference strategy for String concatenation with separator. The precision of separator
+   * should be calculated during combining. Result is varying if either input is; otherwise fixed.
    *
    * <p>For example:
    *
    * <ul>
-   * <li>{@code concat_ws(',', cast('a' as varchar(2), cast('b' as
-   * varchar(3)), cast('c' as varchar(2)))}
-   * returns {@code varchar(9)};
-   *
-   * <li>{@code concat_ws(',', cast('a' as varchar), cast('b' as
-   * varchar(2)), cast('c' as varchar(2)))}
-   * returns {@code varchar};
-   *
-   * <li>{@code concat_ws(',', cast('a' as varchar(65535)), cast('b'
-   * as varchar(2)), cast('c' as varchar(2)))}
-   * returns {@code varchar}.
+   *   <li>{@code concat_ws(',', cast('a' as varchar(2), cast('b' as varchar(3)), cast('c' as
+   *       varchar(2)))} returns {@code varchar(9)};
+   *   <li>{@code concat_ws(',', cast('a' as varchar), cast('b' as varchar(2)), cast('c' as
+   *       varchar(2)))} returns {@code varchar};
+   *   <li>{@code concat_ws(',', cast('a' as varchar(65535)), cast('b' as varchar(2)), cast('c' as
+   *       varchar(2)))} returns {@code varchar}.
    * </ul>
    */
   public static final SqlReturnTypeInference MULTIVALENT_STRING_WITH_SEP_SUM_PRECISION =
       ReturnTypes::multivalentStringWithSepSumPrecision;
 
-  private static RelDataType multivalentStringWithSepSumPrecision(
-      SqlOperatorBinding opBinding) {
+  private static RelDataType multivalentStringWithSepSumPrecision(SqlOperatorBinding opBinding) {
     boolean hasPrecisionNotSpecifiedOperand = false;
     boolean precisionOverflow = false;
     int typePrecision = RelDataType.PRECISION_NOT_SPECIFIED;
@@ -1290,86 +1258,81 @@ public abstract class ReturnTypes {
   }
 
   /**
-   * Same as {@link #MULTIVALENT_STRING_SUM_PRECISION} and using
-   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NULLABLE}.
+   * Same as {@link #MULTIVALENT_STRING_SUM_PRECISION} and using {@link
+   * SqlTypeTransforms#TO_NULLABLE}.
    */
   public static final SqlReturnTypeInference MULTIVALENT_STRING_SUM_PRECISION_NULLABLE =
       MULTIVALENT_STRING_SUM_PRECISION.andThen(SqlTypeTransforms.TO_NULLABLE);
 
   /**
-   * Same as {@link #MULTIVALENT_STRING_SUM_PRECISION} and using
-   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NOT_NULLABLE}.
+   * Same as {@link #MULTIVALENT_STRING_SUM_PRECISION} and using {@link
+   * SqlTypeTransforms#TO_NOT_NULLABLE}.
    */
   public static final SqlReturnTypeInference MULTIVALENT_STRING_SUM_PRECISION_NOT_NULLABLE =
-      MULTIVALENT_STRING_SUM_PRECISION
-          .andThen(SqlTypeTransforms.TO_NOT_NULLABLE);
+      MULTIVALENT_STRING_SUM_PRECISION.andThen(SqlTypeTransforms.TO_NOT_NULLABLE);
 
   /**
-   * Same as {@link #MULTIVALENT_STRING_WITH_SEP_SUM_PRECISION} and using
-   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NOT_NULLABLE}.
+   * Same as {@link #MULTIVALENT_STRING_WITH_SEP_SUM_PRECISION} and using {@link
+   * SqlTypeTransforms#TO_NOT_NULLABLE}.
    */
   public static final SqlReturnTypeInference
       MULTIVALENT_STRING_WITH_SEP_SUM_PRECISION_NOT_NULLABLE =
-          MULTIVALENT_STRING_WITH_SEP_SUM_PRECISION
-              .andThen(SqlTypeTransforms.TO_NOT_NULLABLE);
+          MULTIVALENT_STRING_WITH_SEP_SUM_PRECISION.andThen(SqlTypeTransforms.TO_NOT_NULLABLE);
 
   /**
-   * Same as {@link #MULTIVALENT_STRING_WITH_SEP_SUM_PRECISION} and using
-   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NULLABLE_ALL}.
+   * Same as {@link #MULTIVALENT_STRING_WITH_SEP_SUM_PRECISION} and using {@link
+   * SqlTypeTransforms#TO_NULLABLE_ALL}.
    */
   public static final SqlReturnTypeInference
       MULTIVALENT_STRING_WITH_SEP_SUM_PRECISION_ARG0_NULLABLE =
-          MULTIVALENT_STRING_WITH_SEP_SUM_PRECISION
-              .andThen(SqlTypeTransforms.ARG0_NULLABLE);
+          MULTIVALENT_STRING_WITH_SEP_SUM_PRECISION.andThen(SqlTypeTransforms.ARG0_NULLABLE);
 
   /**
-   * Same as {@link #MULTIVALENT_STRING_SUM_PRECISION} and using
-   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NULLABLE_ALL}.
+   * Same as {@link #MULTIVALENT_STRING_SUM_PRECISION} and using {@link
+   * SqlTypeTransforms#TO_NULLABLE_ALL}.
    */
   public static final SqlReturnTypeInference MULTIVALENT_STRING_SUM_PRECISION_NULLABLE_ALL =
-      MULTIVALENT_STRING_SUM_PRECISION
-          .andThen(SqlTypeTransforms.TO_NULLABLE_ALL);
+      MULTIVALENT_STRING_SUM_PRECISION.andThen(SqlTypeTransforms.TO_NULLABLE_ALL);
 
   /**
-   * Same as {@link #DYADIC_STRING_SUM_PRECISION} and using
-   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NULLABLE},
-   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_VARYING}.
+   * Same as {@link #DYADIC_STRING_SUM_PRECISION} and using {@link SqlTypeTransforms#TO_NULLABLE},
+   * {@link SqlTypeTransforms#TO_VARYING}.
    */
   public static final SqlReturnTypeInference DYADIC_STRING_SUM_PRECISION_NULLABLE_VARYING =
-      DYADIC_STRING_SUM_PRECISION.andThen(SqlTypeTransforms.TO_NULLABLE)
+      DYADIC_STRING_SUM_PRECISION
+          .andThen(SqlTypeTransforms.TO_NULLABLE)
           .andThen(SqlTypeTransforms.TO_VARYING);
 
   /**
-   * Same as {@link #DYADIC_STRING_SUM_PRECISION} and using
-   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NULLABLE}.
+   * Same as {@link #DYADIC_STRING_SUM_PRECISION} and using {@link SqlTypeTransforms#TO_NULLABLE}.
    */
   public static final SqlReturnTypeInference DYADIC_STRING_SUM_PRECISION_NULLABLE =
       DYADIC_STRING_SUM_PRECISION.andThen(SqlTypeTransforms.TO_NULLABLE);
 
   /**
-   * Type-inference strategy where the expression is assumed to be registered
-   * as a {@link org.apache.calcite.sql.validate.SqlValidatorNamespace}, and
-   * therefore the result type of the call is the type of that namespace.
+   * Type-inference strategy where the expression is assumed to be registered as a {@link
+   * SqlValidatorNamespace}, and therefore the result type of the call is the type of that
+   * namespace.
    */
-  public static final SqlReturnTypeInference SCOPE = opBinding -> {
+  public static final SqlReturnTypeInference SCOPE =
+      opBinding -> {
     SqlCallBinding callBinding = (SqlCallBinding) opBinding;
     SqlValidatorNamespace ns = getNamespace(callBinding);
     return ns.getRowType();
   };
 
   /**
-   * Returns a multiset of column #0 of a multiset. For example, given
-   * <code>RECORD(x INTEGER, y DATE) MULTISET</code>, returns <code>INTEGER
+   * Returns a multiset of column #0 of a multiset. For example, given <code>
+   * RECORD(x INTEGER, y DATE) MULTISET</code>, returns <code>INTEGER
    * MULTISET</code>.
    */
-  public static final SqlReturnTypeInference MULTISET_PROJECT0 = opBinding -> {
+  public static final SqlReturnTypeInference MULTISET_PROJECT0 =
+      opBinding -> {
     assert opBinding.getOperandCount() == 1;
-    final RelDataType recordMultisetType =
-        opBinding.getOperandType(0);
+        final RelDataType recordMultisetType = opBinding.getOperandType(0);
     final RelDataType multisetType = recordMultisetType.getComponentType();
     if (multisetType == null) {
-      throw new AssertionError("expected a multiset type: "
-          + recordMultisetType);
+          throw new AssertionError("expected a multiset type: " + recordMultisetType);
     }
     final List<RelDataTypeField> fields = multisetType.getFieldList();
     assert !fields.isEmpty();
@@ -1378,29 +1341,30 @@ public abstract class ReturnTypes {
   };
 
   /**
-   * Returns a multiset of the first column of a multiset. For example, given
-   * <code>INTEGER MULTISET</code>, returns <code>RECORD(x INTEGER)
+   * Returns a multiset of the first column of a multiset. For example, given <code>INTEGER MULTISET
+   * </code>, returns <code>RECORD(x INTEGER)
    * MULTISET</code>.
    */
-  public static final SqlReturnTypeInference MULTISET_RECORD = opBinding -> {
+  public static final SqlReturnTypeInference MULTISET_RECORD =
+      opBinding -> {
     assert opBinding.getOperandCount() == 1;
     final RelDataType multisetType = opBinding.getOperandType(0);
     RelDataType componentType = multisetType.getComponentType();
     if (componentType == null) {
-      throw new AssertionError("expected a multiset type: "
-          + multisetType);
+          throw new AssertionError("expected a multiset type: " + multisetType);
     }
     final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-    final RelDataType type = typeFactory.builder()
-        .add(SqlUtil.deriveAliasFromOrdinal(0), componentType).build();
+        final RelDataType type =
+            typeFactory.builder().add(SqlUtil.deriveAliasFromOrdinal(0), componentType).build();
     return typeFactory.createMultisetType(type, -1);
   };
 
   /**
-   * Returns the field type of a structured type which has only one field. For
-   * example, given {@code RECORD(x INTEGER)} returns {@code INTEGER}.
+   * Returns the field type of a structured type which has only one field. For example, given {@code
+   * RECORD(x INTEGER)} returns {@code INTEGER}.
    */
-  public static final SqlReturnTypeInference RECORD_TO_SCALAR = opBinding -> {
+  public static final SqlReturnTypeInference RECORD_TO_SCALAR =
+      opBinding -> {
     assert opBinding.getOperandCount() == 1;
 
     final RelDataType recordType = opBinding.getOperandType(0);
@@ -1412,8 +1376,7 @@ public abstract class ReturnTypes {
 
     RelDataTypeField fieldType = recordType.getFieldList().get(0);
     if (fieldType == null) {
-      throw new AssertionError("expected a record type with one field: "
-          + recordType);
+          throw new AssertionError("expected a record type with one field: " + recordType);
     }
     final RelDataType firstColType = fieldType.getType();
     final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
@@ -1421,16 +1384,16 @@ public abstract class ReturnTypes {
   };
 
   /**
-   * Type-inference strategy for SUM aggregate function inferred from the
-   * operand type, and nullable if the call occurs within a "GROUP BY ()"
-   * query. E.g. in "select sum(x) as s from empty", s may be null. Also,
-   * with the default implementation of RelDataTypeSystem, s has the same
-   * type name as x.
+   * Type-inference strategy for SUM aggregate function inferred from the operand type, and nullable
+   * if the call occurs within a "GROUP BY ()" query. E.g. in "select sum(x) as s from empty", s may
+   * be null. Also, with the default implementation of RelDataTypeSystem, s has the same type name
+   * as x.
    */
-  public static final SqlReturnTypeInference AGG_SUM = opBinding -> {
+  public static final SqlReturnTypeInference AGG_SUM =
+      opBinding -> {
     final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-    final RelDataType type = typeFactory.getTypeSystem()
-        .deriveSumType(typeFactory, opBinding.getOperandType(0));
+        final RelDataType type =
+            typeFactory.getTypeSystem().deriveSumType(typeFactory, opBinding.getOperandType(0));
     if (opBinding.getGroupCount() == 0 || opBinding.hasFilter()) {
       return typeFactory.createTypeWithNullability(type, true);
     } else {
@@ -1439,44 +1402,45 @@ public abstract class ReturnTypes {
   };
 
   /**
-   * Type-inference strategy for $SUM0 aggregate function inferred from the
-   * operand type. By default the inferred type is identical to the operand
-   * type. E.g. in "select $sum0(x) as s from empty", s has the same type as
-   * x.
+   * Type-inference strategy for $SUM0 aggregate function inferred from the operand type. By default
+   * the inferred type is identical to the operand type. E.g. in "select $sum0(x) as s from empty",
+   * s has the same type as x.
    */
   public static final SqlReturnTypeInference AGG_SUM_EMPTY_IS_ZERO =
       opBinding -> {
         final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-        final RelDataType sumType = typeFactory.getTypeSystem()
-            .deriveSumType(typeFactory, opBinding.getOperandType(0));
+        final RelDataType sumType =
+            typeFactory.getTypeSystem().deriveSumType(typeFactory, opBinding.getOperandType(0));
         // SUM0 should not return null.
         return typeFactory.createTypeWithNullability(sumType, false);
       };
 
   /**
-   * Type-inference strategy for the {@code CUME_DIST} and {@code PERCENT_RANK}
-   * aggregate functions.
+   * Type-inference strategy for the {@code CUME_DIST} and {@code PERCENT_RANK} aggregate functions.
    */
-  public static final SqlReturnTypeInference FRACTIONAL_RANK = opBinding -> {
+  public static final SqlReturnTypeInference FRACTIONAL_RANK =
+      opBinding -> {
     final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
     return typeFactory.getTypeSystem().deriveFractionalRankType(typeFactory);
   };
 
   /**
-   * Type-inference strategy for the {@code NTILE}, {@code RANK},
-   * {@code DENSE_RANK}, and {@code ROW_NUMBER} aggregate functions.
+   * Type-inference strategy for the {@code NTILE}, {@code RANK}, {@code DENSE_RANK}, and {@code
+   * ROW_NUMBER} aggregate functions.
    */
-  public static final SqlReturnTypeInference RANK = opBinding -> {
+  public static final SqlReturnTypeInference RANK =
+      opBinding -> {
     final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
     return typeFactory.getTypeSystem().deriveRankType(typeFactory);
   };
 
-  public static final SqlReturnTypeInference AVG_AGG_FUNCTION = opBinding -> {
+  public static final SqlReturnTypeInference AVG_AGG_FUNCTION =
+      opBinding -> {
     final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
     final RelDataType relDataType =
-        typeFactory.getTypeSystem().deriveAvgAggType(typeFactory,
-            opBinding.getOperandType(0));
-    if (opBinding.getGroupCount() == 0 || opBinding.hasFilter()
+            typeFactory.getTypeSystem().deriveAvgAggType(typeFactory, opBinding.getOperandType(0));
+        if (opBinding.getGroupCount() == 0
+            || opBinding.hasFilter()
         || opBinding.getOperator().kind == SqlKind.STDDEV_SAMP) {
       return typeFactory.createTypeWithNullability(relDataType, true);
     } else {
@@ -1484,11 +1448,14 @@ public abstract class ReturnTypes {
     }
   };
 
-  public static final SqlReturnTypeInference COVAR_REGR_FUNCTION = opBinding -> {
+  public static final SqlReturnTypeInference COVAR_REGR_FUNCTION =
+      opBinding -> {
     final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
     final RelDataType relDataType =
-        typeFactory.getTypeSystem().deriveCovarType(typeFactory,
-            opBinding.getOperandType(0), opBinding.getOperandType(1));
+            typeFactory
+                .getTypeSystem()
+                .deriveCovarType(
+                    typeFactory, opBinding.getOperandType(0), opBinding.getOperandType(1));
     if (opBinding.getGroupCount() == 0 || opBinding.hasFilter()) {
       return typeFactory.createTypeWithNullability(relDataType, true);
     } else {
@@ -1496,6 +1463,8 @@ public abstract class ReturnTypes {
     }
   };
 
-  public static final SqlReturnTypeInference PERCENTILE_DISC_CONT =
-      SqlOperatorBinding::getCollationType;
+  // E6data change
+  // public static final SqlReturnTypeInference PERCENTILE_DISC_CONT = opBinding ->
+  //    opBinding.getCollationType();
+  public static final SqlReturnTypeInference PERCENTILE_DISC_CONT = DOUBLE;
 }

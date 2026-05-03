@@ -44,12 +44,11 @@ import java.util.Map;
 /**
  * Planner rule that pulls up constants through a Union operator.
  *
- * @see CoreRules#UNION_PULL_UP_CONSTANTS
+ * <p>Shaded to match latest Calcite rule
  */
 @Value.Enclosing
-public class UnionPullUpConstantsRule
-    extends RelRule<UnionPullUpConstantsRule.Config>
-    implements SubstitutionRule {
+public class UnionPullUpConstantsRule extends RelRule<UnionPullUpConstantsRule.Config>
+    implements TransformationRule {
 
   /** Creates a UnionPullUpConstantsRule. */
   protected UnionPullUpConstantsRule(Config config) {
@@ -57,13 +56,16 @@ public class UnionPullUpConstantsRule
   }
 
   @Deprecated // to be removed before 2.0
-  public UnionPullUpConstantsRule(Class<? extends Union> unionClass,
-      RelBuilderFactory relBuilderFactory) {
-    this(Config.DEFAULT.withRelBuilderFactory(relBuilderFactory)
+  public UnionPullUpConstantsRule(
+      Class<? extends Union> unionClass, RelBuilderFactory relBuilderFactory) {
+    this(
+        Config.DEFAULT
+            .withRelBuilderFactory(relBuilderFactory)
         .as(Config.class)
         .withOperandFor(unionClass));
   }
 
+  @SuppressWarnings("deprecation")
   @Override public void onMatch(RelOptRuleCall call) {
     final Union union = call.rel(0);
 
@@ -98,7 +100,7 @@ public class UnionPullUpConstantsRule
         if (constant.getType().equals(field.getType())) {
           topChildExprs.add(constant);
         } else {
-          topChildExprs.add(rexBuilder.makeCast(field.getType(), constant, true, false));
+          topChildExprs.add(rexBuilder.makeCast(field.getType(), constant, true));
         }
         topChildExprsFields.add(field.getName());
       } else {
@@ -122,13 +124,13 @@ public class UnionPullUpConstantsRule
       List<Pair<RexNode, String>> newChildExprs = new ArrayList<>();
       for (int j : refsIndex) {
         newChildExprs.add(
-            Pair.of(rexBuilder.makeInputRef(input, j),
+            Pair.of(
+                rexBuilder.makeInputRef(input, j),
                 input.getRowType().getFieldList().get(j).getName()));
       }
       if (newChildExprs.isEmpty()) {
         // At least a single item in project is required.
-        newChildExprs.add(
-            Pair.of(topChildExprs.get(0), topChildExprsFields.get(0)));
+        newChildExprs.add(Pair.of(topChildExprs.get(0), topChildExprsFields.get(0)));
       }
       // Add the input with project on top
       relBuilder.push(input);
@@ -140,14 +142,12 @@ public class UnionPullUpConstantsRule
     relBuilder.convert(union.getRowType(), false);
 
     call.transformTo(relBuilder.build());
-    call.getPlanner().prune(union);
   }
 
   /** Rule configuration. */
   @Value.Immutable
   public interface Config extends RelRule.Config {
-    Config DEFAULT = ImmutableUnionPullUpConstantsRule.Config.of()
-        .withOperandFor(Union.class);
+    Config DEFAULT = ImmutableUnionPullUpConstantsRule.Config.of().withOperandFor(Union.class);
 
     @Override default UnionPullUpConstantsRule toRule() {
       return new UnionPullUpConstantsRule(this);
@@ -155,7 +155,8 @@ public class UnionPullUpConstantsRule
 
     /** Defines an operand tree for the given classes. */
     default Config withOperandFor(Class<? extends Union> unionClass) {
-      return withOperandSupplier(b ->
+      return withOperandSupplier(
+          b ->
           b.operand(unionClass)
               // If field count is 1, then there's no room for
               // optimization since we cannot create an empty Project

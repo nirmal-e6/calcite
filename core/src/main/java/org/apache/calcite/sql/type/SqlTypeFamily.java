@@ -34,6 +34,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
+// Shaded for INTEGER_EXCLUDING_BIG_INT type
 /**
  * SqlTypeFamily provides SQL type categorization.
  *
@@ -66,6 +67,7 @@ public enum SqlTypeFamily implements RelDataTypeFamily {
   APPROXIMATE_NUMERIC,
   EXACT_NUMERIC,
   DECIMAL,
+  INTEGER_EXCLUDING_BIG_INT,
   INTEGER,
   DATETIME,
   DATETIME_INTERVAL,
@@ -201,6 +203,8 @@ public enum SqlTypeFamily implements RelDataTypeFamily {
       return SqlTypeName.APPROX_TYPES;
     case EXACT_NUMERIC:
       return SqlTypeName.EXACT_TYPES;
+    case INTEGER_EXCLUDING_BIG_INT:
+      return SqlTypeName.INTEGER_EXCLDUING_BIG_INT;
     case INTEGER:
       return SqlTypeName.INT_TYPES;
     case DATETIME:
@@ -259,6 +263,8 @@ public enum SqlTypeFamily implements RelDataTypeFamily {
       return SqlTypeUtil.getMaxPrecisionScaleDecimal(factory);
     case INTEGER:
       return factory.createSqlType(SqlTypeName.BIGINT);
+    case INTEGER_EXCLUDING_BIG_INT:
+      return factory.createSqlType(SqlTypeName.INTEGER);
     case DECIMAL:
       return factory.createSqlType(SqlTypeName.DECIMAL);
     case DATETIME:

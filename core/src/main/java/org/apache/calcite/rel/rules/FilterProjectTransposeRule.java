@@ -175,8 +175,7 @@ public class FilterProjectTransposeRule
       final RelNode input = project.getInput();
       final RelTraitSet traitSet = filter.getTraitSet()
           .replaceIfs(RelCollationTraitDef.INSTANCE,
-              () -> Collections.singletonList(
-                      input.getTraitSet().getTrait(RelCollationTraitDef.INSTANCE)))
+              () -> input.getTraitSet().getTraits(RelCollationTraitDef.INSTANCE))
           .replaceIfs(RelDistributionTraitDef.INSTANCE,
               () -> Collections.singletonList(
                       input.getTraitSet().getTrait(RelDistributionTraitDef.INSTANCE)));

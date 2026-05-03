@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.sql2rel;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.linq4j.Ord;
 import org.apache.calcite.rel.RelCollation;
 import org.apache.calcite.rel.RelCollations;
@@ -29,6 +30,7 @@ import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.runtime.PairList;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlCall;
+import org.apache.calcite.sql.SqlCharStringLiteral;
 import org.apache.calcite.sql.SqlDataTypeSpec;
 import org.apache.calcite.sql.SqlDynamicParam;
 import org.apache.calcite.sql.SqlIdentifier;
@@ -37,12 +39,15 @@ import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlLiteral;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlNodeList;
+import org.apache.calcite.sql.SqlNumericLiteral;
 import org.apache.calcite.sql.SqlSelectKeyword;
 import org.apache.calcite.sql.SqlUtil;
 import org.apache.calcite.sql.fun.SqlInternalOperators;
 import org.apache.calcite.sql.fun.SqlLibraryOperators;
+import org.apache.calcite.sql.fun.SqlListaggAggFunction;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParserPos;
+import org.apache.calcite.sql.type.ReturnTypes;
 import org.apache.calcite.sql.util.SqlVisitor;
 import org.apache.calcite.sql.validate.AggregatingSelectScope;
 import org.apache.calcite.sql.validate.SqlValidator;
@@ -56,6 +61,7 @@ import com.google.common.collect.ImmutableMap;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -65,75 +71,65 @@ import java.util.stream.Collectors;
 import static org.apache.calcite.linq4j.Nullness.castNonNull;
 import static org.apache.calcite.sql.type.SqlTypeUtil.fromMeasure;
 
+import static java.util.Objects.requireNonNull;
+
+// shaded for STRING_AGG & LISTAGG bug fixes
+
 /**
  * Converts expressions to aggregates.
  *
  * <p>Consider the expression
  *
  * <blockquote>
+ *
  * {@code SELECT deptno, SUM(2 * sal) FROM emp GROUP BY deptno}
+ *
  * </blockquote>
  *
  * <p>Then:
  *
  * <ul>
- * <li>groupExprs = {SqlIdentifier(deptno)}</li>
- * <li>convertedInputExprs = {RexInputRef(deptno), 2 *
- * RefInputRef(sal)}</li>
- * <li>inputRefs = {RefInputRef(#0), RexInputRef(#1)}</li>
- * <li>aggCalls = {AggCall(SUM, {1})}</li>
+ *   <li>groupExprs = {SqlIdentifier(deptno)}
+ *   <li>convertedInputExprs = {RexInputRef(deptno), 2 * RefInputRef(sal)}
+ *   <li>inputRefs = {RefInputRef(#0), RexInputRef(#1)}
+ *   <li>aggCalls = {AggCall(SUM, {1})}
  * </ul>
  */
 class AggConverter implements SqlVisitor<Void> {
   private final SqlToRelConverter.Blackboard bb;
   private final Map<String, String> nameMap;
 
-  /**
-   * The group-by expressions, in {@link SqlNode} format.
-   */
-  final SqlNodeList groupExprs =
-      new SqlNodeList(SqlParserPos.ZERO);
+  /** The group-by expressions, in {@link SqlNode} format. */
+  final SqlNodeList groupExprs = new SqlNodeList(SqlParserPos.ZERO);
 
-  /**
-   * The auxiliary group-by expressions.
-   */
-  private final Map<SqlNode, Ord<AuxiliaryConverter>> auxiliaryGroupExprs =
-      new HashMap<>();
+  /** The auxiliary group-by expressions. */
+  private final Map<SqlNode, Ord<AuxiliaryConverter>> auxiliaryGroupExprs = new HashMap<>();
 
-  /**
-   * Measure expressions, in {@link SqlNode} format.
-   */
+  /** Measure expressions, in {@link SqlNode} format. */
   private final SqlNodeList measureExprs = new SqlNodeList(SqlParserPos.ZERO);
 
   /**
-   * Input expressions for the group columns and aggregates, in
-   * {@link RexNode} format. The first elements of the list correspond to the
-   * elements in {@link #groupExprs}; the remaining elements are for
-   * aggregates. The right field of each pair is the name of the expression,
-   * where the expressions are simple mappings to input fields.
+   * Input expressions for the group columns and aggregates, in {@link RexNode} format. The first
+   * elements of the list correspond to the elements in {@link #groupExprs}; the remaining elements
+   * are for aggregates. The right field of each pair is the name of the expression, where the
+   * expressions are simple mappings to input fields.
    */
-  final PairList<RexNode, @Nullable String> convertedInputExprs =
-      PairList.of();
+  final PairList<RexNode, @Nullable String> convertedInputExprs = PairList.of();
 
   /**
-   * Expressions to be evaluated as rows are being placed into the
-   * aggregate's hash table. This is when group functions such as TUMBLE
-   * cause rows to be expanded.
+   * Expressions to be evaluated as rows are being placed into the aggregate's hash table. This is
+   * when group functions such as TUMBLE cause rows to be expanded.
    */
-
   final List<AggregateCall> aggCalls = new ArrayList<>();
-  private final Map<SqlNode, RexNode> aggMapping = new HashMap<>();
-  private final Map<AggregateCall, RexNode> aggCallMapping =
-      new HashMap<>();
 
-  /**
-   * Whether we are directly inside a windowed aggregate.
-   */
+  private final Map<SqlNode, RexNode> aggMapping = new HashMap<>();
+  private final Map<AggregateCall, RexNode> aggCallMapping = new HashMap<>();
+
+  /** Whether we are directly inside a windowed aggregate. */
   boolean inOver = false;
 
   /** Creates an AggConverter. */
-  private AggConverter(SqlToRelConverter.Blackboard bb,
-      ImmutableMap<String, String> nameMap) {
+  private AggConverter(SqlToRelConverter.Blackboard bb, ImmutableMap<String, String> nameMap) {
     this.bb = bb;
     this.nameMap = nameMap;
   }
@@ -150,18 +146,19 @@ class AggConverter implements SqlVisitor<Void> {
   /**
    * Creates an AggConverter.
    *
-   * <p>The {@code aggregatingSelectScope} parameter provides enough context to
-   * name aggregate calls which are top-level select list items.
+   * <p>The {@code aggregatingSelectScope} parameter provides enough context to name aggregate calls
+   * which are top-level select list items.
    *
    * @param bb     Blackboard
    * @param scope Scope of a SELECT that has a GROUP BY
    */
-  static AggConverter create(SqlToRelConverter.Blackboard bb,
-      AggregatingSelectScope scope) {
+  static AggConverter create(SqlToRelConverter.Blackboard bb, AggregatingSelectScope scope) {
     // Collect all expressions used in the select list so that aggregate
     // calls can be named correctly.
     final Map<String, String> nameMap = new HashMap<>();
-    Ord.forEach(scope.getNode().getSelectList(), (selectItem, i) -> {
+    Ord.forEach(
+        scope.getNode().getSelectList(),
+        (selectItem, i) -> {
       final String name;
       if (SqlUtil.isCallTo(selectItem, SqlStdOperatorTable.AS)) {
         final SqlCall call = (SqlCall) selectItem;
@@ -194,15 +191,14 @@ class AggConverter implements SqlVisitor<Void> {
 
     if (expr instanceof SqlCall) {
       SqlCall call = (SqlCall) expr;
-      SqlStdOperatorTable.convertGroupToAuxiliaryCalls(call,
-          (node, converter) -> addAuxiliaryGroupExpr(node, index, converter));
+      SqlStdOperatorTable.convertGroupToAuxiliaryCalls(
+          call, (node, converter) -> addAuxiliaryGroupExpr(node, index, converter));
     }
 
     return index;
   }
 
-  void addAuxiliaryGroupExpr(SqlNode node, int index,
-      AuxiliaryConverter converter) {
+  void addAuxiliaryGroupExpr(SqlNode node, int index, AuxiliaryConverter converter) {
     for (SqlNode node2 : auxiliaryGroupExprs.keySet()) {
       if (node2.equalsDeep(node, Litmus.IGNORE)) {
         return;
@@ -243,8 +239,7 @@ class AggConverter implements SqlVisitor<Void> {
 
   @Override public Void visit(SqlIdentifier id) {
     if (isMeasureExpr(id)) {
-      final SqlCall call =
-          SqlInternalOperators.AGG_M2V.createCall(SqlParserPos.ZERO, id);
+      final SqlCall call = SqlInternalOperators.AGG_M2V.createCall(SqlParserPos.ZERO, id);
       final SqlValidator validator = bb.getValidator();
       final RelDataType measureType = validator.getValidatedNodeType(id);
       final RelDataTypeFactory typeFactory = bb.getTypeFactory();
@@ -338,84 +333,87 @@ class AggConverter implements SqlVisitor<Void> {
     translateAgg(call, null, null, null, false, call);
   }
 
-  private void translateAgg(SqlCall call, @Nullable SqlNode filter,
-      @Nullable SqlNodeList distinctList, @Nullable SqlNodeList orderList,
-      boolean ignoreNulls, SqlCall outerCall) {
+  private void translateAgg(
+      SqlCall call,
+      @Nullable SqlNode filter,
+      @Nullable SqlNodeList distinctList,
+      @Nullable SqlNodeList orderList,
+      boolean ignoreNulls,
+      SqlCall outerCall) {
     assert bb.agg == this;
     final RexBuilder rexBuilder = bb.getRexBuilder();
     final List<SqlNode> operands = call.getOperandList();
     final SqlParserPos pos = call.getParserPosition();
     final SqlCall call2;
-    final List<SqlNode> operands2;
+    List<SqlNode> operands2; // E6data change, removed final keyword
     switch (call.getKind()) {
     case FILTER:
       assert filter == null;
-      translateAgg(call.operand(0), call.operand(1), distinctList, orderList,
-          ignoreNulls, outerCall);
+      translateAgg(
+            call.operand(0), call.operand(1), distinctList, orderList, ignoreNulls, outerCall);
       return;
     case WITHIN_DISTINCT:
       assert orderList == null;
-      translateAgg(call.operand(0), filter, call.operand(1), orderList,
-          ignoreNulls, outerCall);
+      translateAgg(call.operand(0), filter, call.operand(1), orderList, ignoreNulls, outerCall);
       return;
     case WITHIN_GROUP:
       assert orderList == null;
-      translateAgg(call.operand(0), filter, distinctList, call.operand(1),
-          ignoreNulls, outerCall);
+      translateAgg(
+            call.operand(0), filter, distinctList, call.operand(1), ignoreNulls, outerCall);
       return;
     case IGNORE_NULLS:
       ignoreNulls = true;
       // fall through
     case RESPECT_NULLS:
-      translateAgg(call.operand(0), filter, distinctList, orderList,
-          ignoreNulls, outerCall);
+      translateAgg(call.operand(0), filter, distinctList, orderList, ignoreNulls, outerCall);
       return;
 
     case COUNTIF:
       // COUNTIF(b)  ==> COUNT(*) FILTER (WHERE b)
       // COUNTIF(b) FILTER (WHERE b2)  ==> COUNT(*) FILTER (WHERE b2 AND b)
-      call2 =
-          SqlStdOperatorTable.COUNT.createCall(pos, SqlIdentifier.star(pos));
+      call2 = SqlStdOperatorTable.COUNT.createCall(pos, SqlIdentifier.star(pos));
       final SqlNode filter2 = SqlUtil.andExpressions(filter, call.operand(0));
-      translateAgg(call2, filter2, distinctList, orderList, ignoreNulls,
-          outerCall);
+      translateAgg(call2, filter2, distinctList, orderList, ignoreNulls, outerCall);
       return;
 
     case STRING_AGG:
-      // Translate "STRING_AGG(s, sep ORDER BY x, y)"
-      // as if it were "LISTAGG(s, sep) WITHIN GROUP (ORDER BY x, y)";
-      // and "STRING_AGG(s, sep)" as "LISTAGG(s, sep)".
-      if (!operands.isEmpty()
-          && Util.last(operands) instanceof SqlNodeList) {
+        // Translate "STRING_AGG(s, sep ORDER BY x, y)"
+        // as if it were "LISTAGG(s, sep) WITHIN GROUP (ORDER BY x, y)";
+        // and "STRING_AGG(s, sep)" as "LISTAGG(s, sep)".
+      if (!operands.isEmpty() && Util.last(operands) instanceof SqlNodeList) {
         orderList = (SqlNodeList) Util.last(operands);
         operands2 = Util.skipLast(operands);
       } else {
         operands2 = operands;
       }
+
+        // E6data fix for STRING_AGG
+      String sSeparator = getSeparatorValueFromOperands(operands2);
+      int nLimit = getLimitValueFromOperands(operands2);
+      if (nLimit != -1) {
+        operands2 = Util.skipLast(operands2);
+      }
       call2 =
-          SqlStdOperatorTable.LISTAGG.createCall(
-              call.getFunctionQuantifier(), pos, operands2);
-      translateAgg(call2, filter, distinctList, orderList, ignoreNulls,
-          outerCall);
+            new SqlListaggAggFunction(
+                    SqlKind.LISTAGG, ReturnTypes.ARG0_NULLABLE, sSeparator, nLimit)
+                .createCall(call.getFunctionQuantifier(), pos, operands2);
+      translateAgg(call2, filter, distinctList, orderList, ignoreNulls, outerCall);
       return;
 
     case GROUP_CONCAT:
-      // Translate "GROUP_CONCAT(s ORDER BY x, y SEPARATOR ',')"
-      // as if it were "LISTAGG(s, ',') WITHIN GROUP (ORDER BY x, y)".
+        // Translate "GROUP_CONCAT(s ORDER BY x, y SEPARATOR ',')"
+        // as if it were "LISTAGG(s, ',') WITHIN GROUP (ORDER BY x, y)".
       // To do this, build a list of operands without ORDER BY with with sep.
       operands2 = new ArrayList<>(operands);
       final SqlNode separator;
-      if (!operands2.isEmpty()
-          && Util.last(operands2).getKind() == SqlKind.SEPARATOR) {
-        final SqlCall sepCall =
-            (SqlCall) operands2.remove(operands.size() - 1);
+      if (!operands2.isEmpty() && Util.last(operands2).getKind() == SqlKind.SEPARATOR) {
+        final SqlCall sepCall = (SqlCall) operands2.remove(operands.size() - 1);
         separator = sepCall.operand(0);
       } else {
         separator = null;
       }
 
-      if (!operands2.isEmpty()
-          && Util.last(operands2) instanceof SqlNodeList) {
+      if (!operands2.isEmpty() && Util.last(operands2) instanceof SqlNodeList) {
         orderList = (SqlNodeList) operands2.remove(operands2.size() - 1);
       }
 
@@ -424,29 +422,66 @@ class AggConverter implements SqlVisitor<Void> {
       }
 
       call2 =
-          SqlStdOperatorTable.LISTAGG.createCall(
-              call.getFunctionQuantifier(), pos, operands2);
-      translateAgg(call2, filter, distinctList, orderList, ignoreNulls,
-          outerCall);
+            SqlStdOperatorTable.LISTAGG.createCall(call.getFunctionQuantifier(), pos, operands2);
+      translateAgg(call2, filter, distinctList, orderList, ignoreNulls, outerCall);
       return;
 
     case ARRAY_AGG:
     case ARRAY_CONCAT_AGG:
-      // Translate "ARRAY_AGG(s ORDER BY x, y)"
-      // as if it were "ARRAY_AGG(s) WITHIN GROUP (ORDER BY x, y)";
-      // similarly "ARRAY_CONCAT_AGG".
-      if (!operands.isEmpty()
-          && Util.last(operands) instanceof SqlNodeList) {
+        // Translate "ARRAY_AGG(s ORDER BY x, y)"
+        // as if it were "ARRAY_AGG(s) WITHIN GROUP (ORDER BY x, y)";
+        // similarly "ARRAY_CONCAT_AGG".
+      if (!operands.isEmpty() && Util.last(operands) instanceof SqlNodeList) {
         orderList = (SqlNodeList) Util.last(operands);
         call2 =
-            call.getOperator().createCall(
-                call.getFunctionQuantifier(), pos, Util.skipLast(operands));
-        translateAgg(call2, filter, distinctList, orderList, ignoreNulls,
-            outerCall);
+              call.getOperator()
+                  .createCall(call.getFunctionQuantifier(), pos, Util.skipLast(operands));
+        translateAgg(call2, filter, distinctList, orderList, ignoreNulls, outerCall);
         return;
       }
-      // "ARRAY_AGG" and "ARRAY_CONCAT_AGG" without "ORDER BY"
+      break;
+        // "ARRAY_AGG" and "ARRAY_CONCAT_AGG" without "ORDER BY"
       // are handled normally; fall through.
+
+        // E6data Impl for LISTAGG
+    case LISTAGG:
+        // Translate "STRING_AGG(s, sep ORDER BY x, y)"
+        // as if it were "LISTAGG(s, sep) WITHIN GROUP (ORDER BY x, y)";
+        // and "STRING_AGG(s, sep)" as "LISTAGG(s, sep)".
+      if (!operands.isEmpty() && Util.last(operands) instanceof SqlNodeList) {
+        orderList = (SqlNodeList) Util.last(operands);
+        operands2 = Util.skipLast(operands);
+      } else {
+        operands2 = operands;
+      }
+
+      sSeparator = getSeparatorValueFromOperands(operands2);
+      if (outerCall.getOperator().getKind() == SqlKind.STRING_AGG) {
+          // We do this because STRING_AGG converges to LISTAGG flow
+        List<SqlNode> stringAggOperands = outerCall.getOperandList();
+        if (!stringAggOperands.isEmpty() && Util.last(stringAggOperands) instanceof SqlNodeList) {
+          operands2 = Util.skipLast(stringAggOperands);
+        } else {
+          operands2 = stringAggOperands;
+        }
+        nLimit = getLimitValueFromOperands(operands2);
+        if (nLimit != -1) {
+          operands2 = Util.skipLast(operands2);
+        }
+      } else {
+        nLimit = -1; // Since LISTAGG does not have the concept of LIMIT
+      }
+
+        // INTENT: Had to set the values manually to the call because assigning it to a new instance
+        // would not reflect when this method is exited
+      ((SqlListaggAggFunction) call.getOperator()).setSeparator(sSeparator);
+      ((SqlListaggAggFunction) call.getOperator()).setLimit(nLimit);
+
+      call =
+            new SqlListaggAggFunction(
+                    SqlKind.LISTAGG, ReturnTypes.ARG0_NULLABLE, sSeparator, nLimit)
+                .createCall(call.getFunctionQuantifier(), pos, operands2);
+      break;
 
     default:
       break;
@@ -475,9 +510,7 @@ class AggConverter implements SqlVisitor<Void> {
       if (filter != null) {
         RexNode convertedExpr = bb.convertExpression(filter);
         if (convertedExpr.getType().isNullable()) {
-          convertedExpr =
-              rexBuilder.makeCall(SqlStdOperatorTable.IS_TRUE,
-                  convertedExpr);
+          convertedExpr = rexBuilder.makeCall(SqlStdOperatorTable.IS_TRUE, convertedExpr);
         }
         filterArg = lookupOrCreateGroupExpr(convertedExpr);
       }
@@ -485,8 +518,7 @@ class AggConverter implements SqlVisitor<Void> {
       if (distinctList == null) {
         distinctKeys = null;
       } else {
-        final ImmutableBitSet.Builder distinctBuilder =
-            ImmutableBitSet.builder();
+        final ImmutableBitSet.Builder distinctBuilder = ImmutableBitSet.builder();
         for (SqlNode distinct : distinctList) {
           RexNode e = bb.convertExpression(distinct);
           distinctBuilder.set(lookupOrCreateGroupExpr(e));
@@ -498,16 +530,14 @@ class AggConverter implements SqlVisitor<Void> {
       bb.agg = this;
     }
 
-    SqlAggFunction aggFunction =
-        (SqlAggFunction) call.getOperator();
+    SqlAggFunction aggFunction = (SqlAggFunction) call.getOperator();
     if (aggFunction == SqlLibraryOperators.AGGREGATE) {
       aggFunction = SqlInternalOperators.AGG_M2V;
     }
     final RelDataType type = bb.getValidator().deriveType(bb.scope, call);
     boolean distinct = false;
     SqlLiteral quantifier = call.getFunctionQuantifier();
-    if ((null != quantifier)
-        && (quantifier.getValue() == SqlSelectKeyword.DISTINCT)) {
+    if ((null != quantifier) && (quantifier.getValue() == SqlSelectKeyword.DISTINCT)) {
       distinct = true;
     }
     boolean approximate = false;
@@ -526,8 +556,10 @@ class AggConverter implements SqlVisitor<Void> {
         collation =
             RelCollations.of(
                 orderList.stream()
-                    .map(order ->
-                        bb.convertSortExpression(order,
+                    .map(
+                        order ->
+                            bb.convertSortExpression(
+                                order,
                             RelFieldCollation.Direction.ASCENDING,
                             RelFieldCollation.NullDirection.UNSPECIFIED,
                             this::sortToFieldCollation))
@@ -537,6 +569,8 @@ class AggConverter implements SqlVisitor<Void> {
         bb.agg = this;
       }
     }
+    // changes by E6data for better identification of agg call in E6CountDistinctRewriteRule
+    String aggCallName = nameMap.get(outerCall.toString());
     final AggregateCall aggCall =
         AggregateCall.create(
             call.getParserPosition(),
@@ -550,7 +584,7 @@ class AggConverter implements SqlVisitor<Void> {
             distinctKeys,
             collation,
             type,
-            nameMap.get(outerCall.toString()));
+            aggCallName);
     RexNode rex =
         rexBuilder.addAggCall(
             aggCall,
@@ -569,7 +603,42 @@ class AggConverter implements SqlVisitor<Void> {
     }
   }
 
-  private RelFieldCollation sortToFieldCollation(SqlNode expr,
+  /** E6data function to support Hack for bug fix of STRING_AGG/LISTAGG function */
+  private String getSeparatorValueFromOperands(List<SqlNode> operands2) {
+    String sDefaultSeparatorValue = CalciteForkSettings.defaultListaggSeparator();
+    int nSize = operands2.size();
+    if (nSize == 1) {
+      return sDefaultSeparatorValue;
+    } else {
+      if (operands2.get(1) instanceof SqlCharStringLiteral) {
+        SqlCharStringLiteral sqlCharStringLiteral = (SqlCharStringLiteral) operands2.get(1);
+        String sSeparator = sqlCharStringLiteral.toValue();
+        return sSeparator == null ? sDefaultSeparatorValue : sSeparator;
+      }
+    }
+    return sDefaultSeparatorValue;
+  }
+
+  /** E6data function to support Hack for bug fix of STRING_AGG/LISTAGG function */
+  private int getLimitValueFromOperands(List<SqlNode> operands2) {
+    int nDefaultLimitValue = -1;
+    int nSize = operands2.size();
+    if (nSize == 1) {
+      return nDefaultLimitValue;
+    } else {
+      if (Util.last(operands2) instanceof SqlNumericLiteral) {
+        SqlNumericLiteral sqlNumericLiteral = (SqlNumericLiteral) Util.last(operands2);
+        if (sqlNumericLiteral.getValue() != null) {
+          BigDecimal bd = requireNonNull((BigDecimal) sqlNumericLiteral.getValue());
+          return bd.intValue();
+        }
+      }
+    }
+    return nDefaultLimitValue;
+  }
+
+  private RelFieldCollation sortToFieldCollation(
+      SqlNode expr,
       RelFieldCollation.Direction direction,
       RelFieldCollation.NullDirection nullDirection) {
     final RexNode node = bb.convertExpression(expr);
@@ -595,9 +664,8 @@ class AggConverter implements SqlVisitor<Void> {
   }
 
   /**
-   * If an expression is structurally identical to one of the group-by
-   * expressions, returns a reference to the expression, otherwise returns
-   * -1.
+   * If an expression is structurally identical to one of the group-by expressions, returns a
+   * reference to the expression, otherwise returns -1.
    */
   int lookupGroupExpr(SqlNode expr) {
     return SqlUtil.indexOfDeep(groupExprs, expr, Litmus.IGNORE);
@@ -607,21 +675,23 @@ class AggConverter implements SqlVisitor<Void> {
     return SqlUtil.indexOfDeep(getResolved().measureExprList, expr, Litmus.IGNORE) >= 0;
   }
 
-  @Nullable RexNode lookupMeasure(SqlNode expr) {
+  @Nullable
+  RexNode lookupMeasure(SqlNode expr) {
     return aggMapping.get(expr);
   }
 
-  @Nullable RexNode lookupAggregates(SqlCall call) {
+  @Nullable
+  RexNode lookupAggregates(SqlCall call) {
     // assert call.getOperator().isAggregator();
     assert bb.agg == this;
 
-    for (Map.Entry<SqlNode, Ord<AuxiliaryConverter>> e
-        : auxiliaryGroupExprs.entrySet()) {
+    for (Map.Entry<SqlNode, Ord<AuxiliaryConverter>> e : auxiliaryGroupExprs.entrySet()) {
       if (call.equalsDeep(e.getKey(), Litmus.IGNORE)) {
         AuxiliaryConverter converter = e.getValue().e;
         final RexBuilder rexBuilder = bb.getRexBuilder();
         final int groupOrdinal = e.getValue().i;
-        return converter.convert(rexBuilder,
+        return converter.convert(
+            rexBuilder,
             convertedInputExprs.left(groupOrdinal),
             rexBuilder.makeInputRef(castNonNull(bb.root), groupOrdinal));
       }
@@ -630,8 +700,10 @@ class AggConverter implements SqlVisitor<Void> {
     return aggMapping.get(call);
   }
 
-  /** Returns the resolved. Valid only if this AggConverter was created via
-   * {@link #create(SqlToRelConverter.Blackboard, AggregatingSelectScope)}. */
+  /**
+   * Returns the resolved. Valid only if this AggConverter was created via {@link
+   * #create(SqlToRelConverter.Blackboard, AggregatingSelectScope)}.
+   */
   AggregatingSelectScope.Resolved getResolved() {
     throw new UnsupportedOperationException();
   }

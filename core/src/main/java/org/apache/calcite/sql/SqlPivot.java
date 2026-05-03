@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.sql;
 
+import org.apache.calcite.sql.fun.SqlAbstractGroupFunction;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.sql.util.SqlBasicVisitor;
@@ -32,18 +33,23 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.requireNonNull;
 
+// E6 shade - shaded to update usedColumnNames to not cast to SqlCall
+// to support constants as measures
+
 /**
- * Parse tree node that represents a PIVOT applied to a table reference
- * (or sub-query).
+ * Parse tree node that represents a PIVOT applied to a table reference (or sub-query).
  *
  * <p>Syntax:
- * <blockquote>{@code
- * SELECT *
- * FROM query PIVOT (agg, ... FOR axis, ... IN (in, ...)) AS alias}
+ *
+ * <blockquote>
+ *
+ * {@code SELECT * FROM query PIVOT (agg, ... FOR axis, ... IN (in, ...)) AS alias}
+ *
  * </blockquote>
  */
 public class SqlPivot extends SqlCall {
@@ -57,8 +63,12 @@ public class SqlPivot extends SqlCall {
 
   //~ Constructors -----------------------------------------------------------
 
-  public SqlPivot(SqlParserPos pos, SqlNode query, SqlNodeList aggList,
-      SqlNodeList axisList, SqlNodeList inList) {
+  public SqlPivot(
+      SqlParserPos pos,
+      SqlNode query,
+      SqlNodeList aggList,
+      SqlNodeList axisList,
+      SqlNodeList inList) {
     super(pos);
     this.query = requireNonNull(query, "query");
     this.aggList = requireNonNull(aggList, "aggList");
@@ -98,28 +108,24 @@ public class SqlPivot extends SqlCall {
     final int leftPrec1 = axisList.size() > 1 ? 1 : 0;
     axisList.unparse(writer, leftPrec1, 0);
     writer.sep("IN");
-    writer.list(SqlWriter.FrameTypeEnum.PARENTHESES, SqlWriter.COMMA,
-        stripList(inList));
+    writer.list(SqlWriter.FrameTypeEnum.PARENTHESES, SqlWriter.COMMA, stripList(inList));
     writer.endList(frame);
   }
 
   static SqlNodeList stripList(SqlNodeList list) {
-    return list.stream().map(SqlPivot::strip)
-        .collect(SqlNode.toList(list.pos));
+    return list.stream().map(SqlPivot::strip).collect(SqlNode.toList(list.pos));
   }
 
-  /** Converts a single-element SqlNodeList to its constituent node.
-   * For example, "(1)" becomes "1";
-   * "(2) as a" becomes "2 as a";
-   * "(3, 4)" remains "(3, 4)";
-   * "(5, 6) as b" remains "(5, 6) as b". */
+  /**
+   * Converts a single-element SqlNodeList to its constituent node. For example, "(1)" becomes "1";
+   * "(2) as a" becomes "2 as a"; "(3, 4)" remains "(3, 4)"; "(5, 6) as b" remains "(5, 6) as b".
+   */
   private static SqlNode strip(SqlNode e) {
     switch (e.getKind()) {
     case AS:
       final SqlCall call = (SqlCall) e;
       final List<SqlNode> operands = call.getOperandList();
-      return SqlStdOperatorTable.AS.createCall(e.pos,
-          strip(operands.get(0)), operands.get(1));
+      return SqlStdOperatorTable.AS.createCall(e.pos, strip(operands.get(0)), operands.get(1));
     default:
       if (e instanceof SqlNodeList && ((SqlNodeList) e).size() == 1) {
         return ((SqlNodeList) e).get(0);
@@ -128,8 +134,7 @@ public class SqlPivot extends SqlCall {
     }
   }
 
-  /** Returns the aggregate list as (alias, call) pairs.
-   * If there is no 'AS', alias is null. */
+  /** Returns the aggregate list as (alias, call) pairs. If there is no 'AS', alias is null. */
   public void forEachAgg(BiConsumer<@Nullable String, SqlNode> consumer) {
     for (SqlNode agg : aggList) {
       final SqlNode call = SqlUtil.stripAs(agg);
@@ -155,8 +160,14 @@ public class SqlPivot extends SqlCall {
 
   static String pivotAlias(SqlNode node) {
     if (node instanceof SqlNodeList) {
-      return ((SqlNodeList) node).stream()
-          .map(SqlPivot::pivotAlias).collect(Collectors.joining("_"));
+      return ((SqlNodeList) node)
+          .stream().map(SqlPivot::pivotAlias).collect(Collectors.joining("_"));
+    }
+    // e6data change, for string literals like 'CUSTOMER' derive CUSTOMER
+    // instead of 'CUSTOMER'
+    if (node instanceof SqlLiteral) {
+      String value = ((SqlLiteral) node).toValue();
+      return value != null ? value : node.toString();
     }
     return node.toString();
   }
@@ -170,25 +181,100 @@ public class SqlPivot extends SqlCall {
     }
   }
 
-  /** Returns the set of columns that are referenced as an argument to an
-   * aggregate function or in a column in the {@code FOR} clause. All columns
-   * that are not used will become "GROUP BY" columns. */
+  /**
+   * Returns the set of columns that are referenced as an argument to an aggregate function or in a
+   * column in the {@code FOR} clause. All columns that are not used will become "GROUP BY" columns.
+   */
   public Set<String> usedColumnNames() {
     final Set<String> columnNames = new HashSet<>();
-    final SqlVisitor<Void> nameCollector = new SqlBasicVisitor<Void>() {
+    final SqlVisitor<Void> nameCollector =
+        new SqlBasicVisitor<Void>() {
       @Override public Void visit(SqlIdentifier id) {
         columnNames.add(Util.last(id.names));
         return super.visit(id);
       }
     };
     for (SqlNode agg : aggList) {
-      final SqlCall call = (SqlCall) SqlUtil.stripAs(agg);
-      call.accept(nameCollector);
+      // e6data change - dont cast to SqlCall and use collectUsedNames
+      // for Spark style PIVOT semantics
+      collectUsedColumnNames(SqlUtil.stripAs(agg), nameCollector);
     }
     for (SqlNode axis : axisList) {
       axis.accept(nameCollector);
     }
     return columnNames;
+  }
+
+  /**
+   * Returns whether a node is structurally an aggregate term inside a PIVOT measure expression.
+   *
+   * <p>This method is used for PIVOT bookkeeping, such as finding the input columns consumed by
+   * measures and extracting aggregate sub-expressions for {@code sql2rel}. Validator conformance
+   * rules still decide which measure forms are legal.
+   */
+  public static boolean isAggregateTerm(SqlNode node) {
+    if (!(node instanceof SqlCall)) {
+      return false;
+    }
+    final SqlCall call = (SqlCall) node;
+    switch (call.getKind()) {
+    case OVER:
+      return false;
+    default:
+      return call.getOperator().isAggregator()
+            && !(call.getOperator() instanceof SqlAbstractGroupFunction)
+            && !call.getOperator().requiresOver();
+    }
+  }
+
+  /**
+   * Visits each aggregate term inside a PIVOT measure expression. For example, {@code SUM(x) /
+   * SUM(y)} visits {@code SUM(x)} and {@code SUM(y)} as separate terms.
+   *
+   * <p>This is a structural traversal helper. It does not imply that every visited aggregate form
+   * is valid in every conformance mode.
+   */
+  public static void forEachAggregateTerm(SqlNode node, Consumer<SqlCall> consumer) {
+    node.accept(
+        new SqlBasicVisitor<Void>() {
+          @Override public Void visit(SqlCall call) {
+            if (isAggregateTerm(call)) {
+              consumer.accept(call);
+              return null;
+            }
+            return super.visit(call);
+          }
+        });
+  }
+
+  /**
+   * Collects input columns consumed by PIVOT measures.
+   *
+   * <p>Columns referenced inside aggregate terms are treated as consumed by the measure and
+   * therefore removed from the implicit group key. Naked column references remain a validator
+   * concern.
+   */
+  private static void collectUsedColumnNames(SqlNode node, SqlVisitor<Void> nameCollector) {
+    if (node == null) {
+      return;
+    }
+    if (node instanceof SqlIdentifier) {
+      return;
+    }
+    if (node instanceof SqlCall) {
+      final SqlCall call = (SqlCall) node;
+      if (isAggregateTerm(call)) {
+        call.accept(nameCollector);
+        return;
+      }
+      for (SqlNode operand : call.getOperandList()) {
+        collectUsedColumnNames(operand, nameCollector);
+      }
+      return;
+    }
+    if (node instanceof SqlNodeList) {
+      ((SqlNodeList) node).forEach(operand -> collectUsedColumnNames(operand, nameCollector));
+    }
   }
 
   /** Pivot operator. */
@@ -198,11 +284,11 @@ public class SqlPivot extends SqlCall {
     }
 
     @Override public SqlCall createCall(
-        @Nullable SqlLiteral functionQualifier,
-        SqlParserPos pos,
-        @Nullable SqlNode... operands) {
+        @Nullable SqlLiteral functionQualifier, SqlParserPos pos, @Nullable SqlNode... operands) {
       assert operands.length == 4;
-      return new SqlPivot(pos, requireNonNull(operands[0], "query"),
+      return new SqlPivot(
+          pos,
+          requireNonNull(operands[0], "query"),
           requireNonNull((SqlNodeList) operands[1], "aggList"),
           requireNonNull((SqlNodeList) operands[2], "axisList"),
           requireNonNull((SqlNodeList) operands[3], "inList"));
