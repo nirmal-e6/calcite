@@ -18,6 +18,15 @@
  * Default is FALSE. If it is set to true, then CAST with NOT NULL is not
  * considered as a preserved expression.
  */
+
+/*
+ * This rule is a copy of ProjectJoinTransposeRule to include a new property, AllowCastWithNULL.
+ * Default is FALSE. If it is set to true, then CAST with NOT NULL is not
+ * considered as a preserved expression.
+ *
+ * this class is in calcite package to use package private class/methods used inside rule
+ */
+
 package org.apache.calcite.rel.rules;
 
 import org.apache.calcite.plan.RelOptRuleCall;
@@ -28,6 +37,7 @@ import org.apache.calcite.rel.core.Join;
 import org.apache.calcite.rel.core.Project;
 import org.apache.calcite.rel.logical.LogicalJoin;
 import org.apache.calcite.rel.logical.LogicalProject;
+import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexNode;
@@ -35,7 +45,6 @@ import org.apache.calcite.rex.RexOver;
 import org.apache.calcite.rex.RexShuttle;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.tools.RelBuilderFactory;
-
 import org.immutables.value.Value;
 
 import java.util.ArrayList;
@@ -44,25 +53,26 @@ import java.util.List;
 import static java.util.Objects.requireNonNull;
 
 /**
- * Planner rule that pushes a {@link org.apache.calcite.rel.core.Project}
- * past a {@link org.apache.calcite.rel.core.Join}
+ * Planner rule that pushes a {@link Project}
+ * past a {@link Join}
  * by splitting the projection into a projection on top of each child of
  * the join.
  *
  * @see CoreRules#PROJECT_JOIN_TRANSPOSE
  */
 @Value.Enclosing
-public class ProjectJoinTransposeRule
-    extends RelRule<ProjectJoinTransposeRule.Config>
-    implements TransformationRule {
+public class E6ProjectJoinTransposeRule
+    extends RelRule<E6ProjectJoinTransposeRule.Config>
+    implements TransformationRule
+{
 
 /** Creates a ProjectJoinTransposeRule. */
-protected ProjectJoinTransposeRule(Config config) {
+protected E6ProjectJoinTransposeRule(Config config) {
     super(config);
 }
 
 @Deprecated // to be removed before 2.0
-public ProjectJoinTransposeRule(
+public E6ProjectJoinTransposeRule(
     Class<? extends Project> projectClass,
     Class<? extends Join> joinClass,
     PushProjector.ExprCondition preserveExprCondition,
@@ -136,7 +146,8 @@ public ProjectJoinTransposeRule(
                             }
                         }
 
-                        pushProjector.rightPreserveExprs = updatedRightPreserveExprs;
+                        pushProjector.rightPreserveExprs.clear();
+                        pushProjector.rightPreserveExprs.addAll(updatedRightPreserveExprs);
                     }
                 }
             }
@@ -196,14 +207,34 @@ public ProjectJoinTransposeRule(
 /** Rule configuration. */
 @Value.Immutable(singleton = false)
 public interface Config extends RelRule.Config {
-    Config DEFAULT = ImmutableProjectJoinTransposeRule.Config.builder()
-        .withPreserveExprCondition(expr -> !(expr instanceof RexOver))
+    Config DEFAULT = ImmutableE6ProjectJoinTransposeRule.Config.builder()
+        .withPreserveExprCondition(expr -> {
+            // Do not push down over's expression by default
+            if (expr instanceof RexOver) {
+                return false;
+            }
+            if (SqlKind.CAST == expr.getKind()) {
+                final RelDataType relType = expr.getType();
+                final RexCall castCall = (RexCall) expr;
+                final RelDataType operand0Type = castCall.getOperands().get(0).getType();
+                if (operand0Type.isNullable() && !relType.isNullable()) {
+                    // Do not push down any CAST that changes nullability (nullable source -> NOT NULL target).
+                    // When pushed through a LEFT/RIGHT/FULL JOIN, the column becomes nullable again,
+                    // causing a type mismatch in verifyTypeEquivalence. This applies regardless of
+                    // whether the source and target SqlTypeNames match (e.g. INTEGER -> DECIMAL).
+                    // eg: CAST($1):VARCHAR(10) NOT NULL, and type of $1 is nullable VARCHAR(10)
+                    // eg: CAST($1):DECIMAL(11, 1) NOT NULL, and type of $1 is nullable INTEGER
+                    return false;
+                }
+            }
+            return true;
+        })
         .withAllowCastWithNULL(false)
         .build()
         .withOperandFor(LogicalProject.class, LogicalJoin.class);
 
-    @Override default ProjectJoinTransposeRule toRule() {
-        return new ProjectJoinTransposeRule(this);
+    @Override default E6ProjectJoinTransposeRule toRule() {
+        return new E6ProjectJoinTransposeRule(this);
     }
 
     /** Defines when an expression should not be pushed. */
@@ -227,3 +258,4 @@ public interface Config extends RelRule.Config {
     Config withAllowCastWithNULL(boolean allowCastWithNull);
 }
 }
+

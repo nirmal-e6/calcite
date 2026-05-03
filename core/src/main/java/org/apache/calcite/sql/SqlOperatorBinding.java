@@ -33,6 +33,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.AbstractList;
 import java.util.List;
 
+// Shaded from calcite commit - e810d8becb3544d141e7d4bf4fe65de24d0595c7 to port fixes to decorrelation
+// Remove when upgraded to 1.42
+
 /**
  * <code>SqlOperatorBinding</code> represents the binding of an
  * {@link SqlOperator} to actual operands, along with any additional information
@@ -73,6 +76,21 @@ public abstract class SqlOperatorBinding {
    */
   public int getGroupCount() {
     return -1;
+  }
+
+  /**
+   * If the operator call occurs in an aggregate query, returns whether there are
+   * empty groups in the GROUP BY clause. For example,
+   *
+   * <pre>
+   * SELECT count(*) FROM emp GROUP BY deptno, gender;            returns false
+   * SELECT count(*) FROM emp;                                    returns true
+   * SELECT count(*) FROM emp GROUP BY ROLLUP(deptno, gender);    returns true
+   * </pre>
+   * Returns false if the query is not an aggregate query.
+   */
+  public boolean hasEmptyGroup() {
+    return false;
   }
 
   /**

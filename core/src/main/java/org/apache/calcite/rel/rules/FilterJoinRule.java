@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.rel.rules;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Sets;
 import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.plan.RelRule;
@@ -24,30 +26,23 @@ import org.apache.calcite.rel.core.Filter;
 import org.apache.calcite.rel.core.Join;
 import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.rel.core.RelFactories;
+import org.apache.calcite.rel.metadata.RelMetadataQuery;
 import org.apache.calcite.rel.type.RelDataType;
-import org.apache.calcite.rex.RexBuilder;
-import org.apache.calcite.rex.RexCall;
-import org.apache.calcite.rex.RexInputRef;
-import org.apache.calcite.rex.RexNode;
-import org.apache.calcite.rex.RexUtil;
+import org.apache.calcite.rex.*;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.tools.RelBuilder;
 import org.apache.calcite.tools.RelBuilderFactory;
-
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Sets;
-
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.immutables.value.Value;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+import java.util.function.BooleanSupplier;
 
+import static java.util.Objects.requireNonNull;
 import static org.apache.calcite.plan.RelOptUtil.conjunctions;
+
+// shaded to add rewrite at line no. 97
 
 /**
  * Planner rule that pushes filters above and
@@ -58,20 +53,22 @@ import static org.apache.calcite.plan.RelOptUtil.conjunctions;
 public abstract class FilterJoinRule<C extends FilterJoinRule.Config>
     extends RelRule<C>
     implements TransformationRule {
-  /** Predicate that always returns true. With this predicate, every filter
-   * will be pushed into the ON clause. */
-  @Deprecated // to be removed before 2.0
-  public static final Predicate TRUE_PREDICATE = (join, joinType, exp) -> true;
+/** Predicate that always returns true. With this predicate, every filter
+ * will be pushed into the ON clause. */
+@Deprecated // to be removed before 2.0
+public static final Predicate TRUE_PREDICATE = (join, joinType, exp) -> true;
 
-  /** Creates a FilterJoinRule. */
-  protected FilterJoinRule(C config) {
+private static BooleanSupplier optimizeFilterWithOrSupplier = () -> false;
+
+/** Creates a FilterJoinRule. */
+protected FilterJoinRule(C config) {
     super(config);
-  }
+}
 
-  //~ Methods ----------------------------------------------------------------
+//~ Methods ----------------------------------------------------------------
 
-  protected void perform(RelOptRuleCall call, @Nullable Filter filter,
-      Join join) {
+protected void perform(RelOptRuleCall call, @Nullable Filter filter,
+    Join join) {
     List<RexNode> joinFilters =
         RelOptUtil.conjunctions(join.getCondition());
     final List<RexNode> origJoinFilters = ImmutableList.copyOf(joinFilters);
@@ -81,13 +78,28 @@ public abstract class FilterJoinRule<C extends FilterJoinRule.Config>
     // (with "true" condition), otherwise this rule will be applied
     // again on the new cartesian product joinRel.
     if (filter == null && joinFilters.isEmpty()) {
-      return;
+        return;
+    }
+
+    // Placing this optimization temporarily under flag, as it results in stack overflow in CB query
+    // (t1.a = 1 AND t2.a = 2) OR (t1.b = 3 AND t2.b = 4), you can
+    // derive table filters:
+    // (t1.a = 1 OR t1.b = 3)
+    // (t2.a = 2 OR t2.b = 4)
+
+    if (optimizeFilterWithOrSupplier.getAsBoolean() && filter != null)
+    {
+        Filter newFilter = optimizeFilterWithOR(filter, call.getMetadataQuery());
+        if(newFilter != null)
+        {
+            filter = newFilter;
+        }
     }
 
     final List<RexNode> aboveFilters =
         filter != null
-            ? getConjunctions(filter)
-            : new ArrayList<>();
+        ? getConjunctions(filter)
+        : new ArrayList<>();
     final ImmutableList<RexNode> origAboveFilters =
         ImmutableList.copyOf(aboveFilters);
 
@@ -96,7 +108,7 @@ public abstract class FilterJoinRule<C extends FilterJoinRule.Config>
     if (config.isSmart()
         && !origAboveFilters.isEmpty()
         && join.getJoinType() != JoinRelType.INNER) {
-      joinType = RelOptUtil.simplifyJoin(join, origAboveFilters, joinType);
+        joinType = RelOptUtil.simplifyJoin(join, origAboveFilters, joinType);
     }
 
     final List<RexNode> leftFilters = new ArrayList<>();
@@ -129,14 +141,14 @@ public abstract class FilterJoinRule<C extends FilterJoinRule.Config>
         && rightFilters.isEmpty()
         && joinFilters.size() == origJoinFilters.size()
         && aboveFilters.size() == origAboveFilters.size()) {
-      if (Sets.newHashSet(joinFilters)
-          .equals(Sets.newHashSet(origJoinFilters))) {
-        filterPushed = false;
-      }
+        if (Sets.newHashSet(joinFilters)
+            .equals(Sets.newHashSet(origJoinFilters))) {
+            filterPushed = false;
+        }
     }
 
     if (joinType != JoinRelType.FULL) {
-      joinFilters = inferJoinEqualConditions(joinFilters, join);
+        joinFilters = inferJoinEqualConditions(joinFilters, join);
     }
 
     // Try to push down filters in ON clause. A ON clause filter can only be
@@ -161,17 +173,17 @@ public abstract class FilterJoinRule<C extends FilterJoinRule.Config>
         joinFilters,
         leftFilters,
         rightFilters)) {
-      filterPushed = true;
+        filterPushed = true;
     }
 
     // if nothing actually got pushed and there is nothing leftover,
     // then this rule is a no-op
     if ((!filterPushed
-            && joinType == join.getJoinType())
+        && joinType == join.getJoinType())
         || (joinFilters.isEmpty()
-            && leftFilters.isEmpty()
-            && rightFilters.isEmpty())) {
-      return;
+        && leftFilters.isEmpty()
+        && rightFilters.isEmpty())) {
+        return;
     }
 
     // create Filters on top of the children if any filters were
@@ -199,7 +211,7 @@ public abstract class FilterJoinRule<C extends FilterJoinRule.Config>
         && leftFilters.isEmpty()
         && rightFilters.isEmpty()
         && joinType == join.getJoinType()) {
-      return;
+        return;
     }
 
     RelNode newJoinRel =
@@ -212,10 +224,10 @@ public abstract class FilterJoinRule<C extends FilterJoinRule.Config>
             join.isSemiJoinDone());
     call.getPlanner().onCopy(join, newJoinRel);
     if (!leftFilters.isEmpty() && filter != null) {
-      call.getPlanner().onCopy(filter, leftRel);
+        call.getPlanner().onCopy(filter, leftRel);
     }
     if (!rightFilters.isEmpty() && filter != null) {
-      call.getPlanner().onCopy(filter, rightRel);
+        call.getPlanner().onCopy(filter, rightRel);
     }
 
     relBuilder.push(newJoinRel);
@@ -229,255 +241,434 @@ public abstract class FilterJoinRule<C extends FilterJoinRule.Config>
         RexUtil.fixUp(rexBuilder, aboveFilters,
             RelOptUtil.getFieldTypeList(relBuilder.peek().getRowType())));
     call.transformTo(relBuilder.build());
-  }
+}
 
-  /**
-   * Infers more equal conditions for the join condition.
-   *
-   * <p>For example, in {@code SELECT * FROM T1, T2, T3 WHERE T1.id = T3.id AND T2.id = T3.id},
-   * we can infer {@code T1.id = T2.id} for the first Join node from second Join node's condition:
-   * {@code T1.id = T3.id AND T2.id = T3.id}.
-   *
-   * <p>For the above SQL, the second Join's condition is {@code T1.id = T3.id AND T2.id = T3.id}.
-   * After inference, the final condition would be: {@code T1.id = T2.id AND T1.id = T3.id}, the
-   * {@code T1.id = T2.id} can be further pushed into LHS.
-   *
-   * @param rexNodes the Join condition
-   * @param join the Join node
-   * @return the newly inferred conditions
-   */
-  protected List<RexNode> inferJoinEqualConditions(List<RexNode> rexNodes, Join join) {
+public static void setOptimizeFilterWithOrSupplier(BooleanSupplier supplier)
+{
+    optimizeFilterWithOrSupplier = requireNonNull(supplier, "supplier");
+}
+
+private static Filter optimizeFilterWithOR(Filter filter, RelMetadataQuery mq)
+{
+    Filter filterCopy = filter.copy(filter.getTraitSet(), filter.getInput(), filter.getCondition());
+    Set<RexTableInputRef.RelTableRef> tableSet = mq.getTableReferences(filterCopy);
+    if (tableSet == null)
+    {
+        return null;
+    }
+    Set<String> tableNames = getTableNames(tableSet);
+    List<RexNode> newExpressions = new ArrayList<>();
+    if (filter.getCondition().isA(SqlKind.OR))
+    {
+        RexNode orClause = filter.getCondition();
+        if (orClause.isA(SqlKind.OR))
+        {
+            for (String tableName : tableNames)
+            {
+                if (tableName == null)
+                {
+                    continue;
+                }
+                RexNode newExpression = extractOrClause(filter, orClause, tableName, mq);
+                if (newExpression != null)
+                {
+                    newExpressions.add(newExpression);
+                }
+            }
+        }
+    }
+    else if (filter.getCondition().isA(SqlKind.AND))
+    {
+        List<RexNode> conjuncts = RelOptUtil.conjunctions(filter.getCondition());
+        for (RexNode conjunct : conjuncts)
+        {
+            if (conjunct.isA(SqlKind.OR))
+            {
+                for (String tableName : tableNames)
+                {
+                    if (tableName == null)
+                    {
+                        continue;
+                    }
+                    RexNode newExpression = extractOrClause(filter, conjunct, tableName, mq);
+                    if (newExpression != null)
+                    {
+                        newExpressions.add(newExpression);
+                    }
+                }
+            }
+        }
+    }
+
+    // Don't create a new Filter node if newExpressions is a singleton expression
+    if (!newExpressions.isEmpty() && newExpressions.size() > 1)
+    {
+        List<RexNode> finalRexNodeList = new ArrayList<>();
+        finalRexNodeList.add(filter.getCondition());
+        finalRexNodeList.addAll(newExpressions);
+        RexNode newRexNode = RexUtil.composeConjunction(filter.getCluster().getRexBuilder(), finalRexNodeList, true);
+        // Create a new filter with the rewritten condition
+        Filter newFilter = filter.copy(filter.getTraitSet(), filter.getInput(), newRexNode);
+        // Replace the original filter with the new filter
+        return newFilter;
+    }
+    return null;
+}
+
+private static RexNode extractOrClause(Filter filter, RexNode orClause, String table, RelMetadataQuery mq)
+{
+    List<RexNode> orArgs = RelOptUtil.disjunctions(orClause);
+    List<RexNode> clauselist = new ArrayList<>();
+    for (RexNode orArg : orArgs)
+    {
+        List<RexNode> subClauses = new ArrayList<>();
+        RexNode subclause = null;
+        /* OR arguments should be ANDs or expression from same table*/
+        if (orArg.isA(SqlKind.AND))
+        {
+            List<RexNode> andArgs = RelOptUtil.conjunctions(orArg);
+            for (RexNode andArg : andArgs)
+            {
+                Filter filterCopy = filter.copy(filter.getTraitSet(), filter.getInput(), andArg);
+                Set<RexNode> expressionWithTableNames = mq.getExpressionLineage(filterCopy, filterCopy.getCondition());
+                if (expressionWithTableNames == null)
+                {
+                    continue;
+                }
+                Set<String> namesOfTablesInvolved = getTablesInvolved(expressionWithTableNames);
+                if (namesOfTablesInvolved.size() == 1 && namesOfTablesInvolved.iterator().next().equals(table))
+                {
+                    subClauses.add(andArg);
+                }
+            }
+        }
+        else
+        {
+            Filter filterCopy = filter.copy(filter.getTraitSet(), filter.getInput(), orArg);
+            Set<RexNode> expressionWithTableNames = mq.getExpressionLineage(filterCopy, filterCopy.getCondition());
+            if (expressionWithTableNames == null)
+            {
+                continue;
+            }
+            Set<String> namesOfTablesInvolved = getTablesInvolved(expressionWithTableNames);
+            if (namesOfTablesInvolved.size() == 1 && namesOfTablesInvolved.iterator().next().equals(table))
+            {
+                subClauses.add(orArg);
+            }
+        }
+        if (subClauses.isEmpty())
+        {
+            return null;
+        }
+        /*
+         * OK, add subclause(s) to the result OR.  If we found more than one,
+         * we need an AND node.  But if we found only one, and it is itself an
+         * OR node, add its subclauses to the result instead; this is needed
+         * to preserve AND/OR flatness (ie, no OR directly underneath OR).
+         */
+        subclause = RexUtil.composeConjunction(filter.getCluster().getRexBuilder(), subClauses, true);
+        if (subclause.isA(SqlKind.OR))
+        {
+            clauselist.add(subclause);
+        }
+        else
+        {
+            clauselist.add(subclause);
+        }
+    }
+    /*
+     * If we got a restriction clause from every arm, wrap them up in an OR
+     * node.  (In theory the OR node might be unnecessary, if there was only
+     * one arm --- but then the input OR node was also redundant.)
+     */
+
+    if (!clauselist.isEmpty())
+    {
+        return RexUtil.composeDisjunction(filter.getCluster().getRexBuilder(), clauselist, true);
+    }
+    else
+    {
+        return null;
+    }
+}
+
+private static Set<String> getTableNames(Set<RexTableInputRef.RelTableRef> tableSet)
+{
+    Set<String> tableNames = new HashSet<>();
+    for (RexTableInputRef.RelTableRef table : tableSet)
+    {
+        tableNames.add(table.toString());
+    }
+    return tableNames;
+}
+
+private static Set<String> getTablesInvolved(Set<RexNode> expressionWithTableNames)
+{
+    Set<String> namesOfTablesInvolved = new HashSet<>();
+    for (RexNode ex : expressionWithTableNames)
+    {
+        if (ex instanceof RexCall)
+        {
+            List<RexNode> operands = ((RexCall) ex).getOperands();
+            for (RexNode component : operands)
+            {
+                if (component instanceof RexTableInputRef)
+                {
+                    namesOfTablesInvolved.add(((RexTableInputRef) component).getTableRef().toString());
+                }
+            }
+        }
+    }
+    return namesOfTablesInvolved;
+}
+
+/**
+ * Infers more equal conditions for the join condition.
+ *
+ * <p>For example, in {@code SELECT * FROM T1, T2, T3 WHERE T1.id = T3.id AND T2.id = T3.id},
+ * we can infer {@code T1.id = T2.id} for the first Join node from second Join node's condition:
+ * {@code T1.id = T3.id AND T2.id = T3.id}.
+ *
+ * <p>For the above SQL, the second Join's condition is {@code T1.id = T3.id AND T2.id = T3.id}.
+ * After inference, the final condition would be: {@code T1.id = T2.id AND T1.id = T3.id}, the
+ * {@code T1.id = T2.id} can be further pushed into LHS.
+ *
+ * @param rexNodes the Join condition
+ * @param join the Join node
+ * @return the newly inferred conditions
+ */
+protected List<RexNode> inferJoinEqualConditions(List<RexNode> rexNodes, Join join) {
     final List<RexNode> result = new ArrayList<>(rexNodes.size());
     final List<Set<RexInputRef>> equalSets = splitEqualSets(rexNodes, result);
 
     boolean needOptimize = false;
     for (Set<RexInputRef> set : equalSets) {
-      if (set.size() > 2) {
-        needOptimize = true;
-        break;
-      }
+        if (set.size() > 2) {
+            needOptimize = true;
+            break;
+        }
     }
     if (!needOptimize) {
-      // Keep the conditions unchanged.
-      return rexNodes;
+        // Keep the conditions unchanged.
+        return rexNodes;
     }
 
     result.addAll(constructConditionFromEqualSets(join, equalSets));
     return result;
-  }
+}
 
-  /**
-   * Splits out the equal sets.
-   *
-   * @param rexNodes the original conditions
-   * @param leftNodes where the conditions not feasible for equal sets are put
-   * @return the equal sets
-   */
-  private static List<Set<RexInputRef>> splitEqualSets(List<RexNode> rexNodes,
-      List<RexNode> leftNodes) {
+/**
+ * Splits out the equal sets.
+ *
+ * @param rexNodes the original conditions
+ * @param leftNodes where the conditions not feasible for equal sets are put
+ * @return the equal sets
+ */
+private static List<Set<RexInputRef>> splitEqualSets(List<RexNode> rexNodes,
+    List<RexNode> leftNodes) {
     final List<Set<RexInputRef>> equalSets = new ArrayList<>();
     for (RexNode rexNode : rexNodes) {
-      if (rexNode.isA(SqlKind.EQUALS)) {
-        final RexNode op1 = ((RexCall) rexNode).getOperands().get(0);
-        final RexNode op2 = ((RexCall) rexNode).getOperands().get(1);
-        if (op1 instanceof RexInputRef && op2 instanceof RexInputRef) {
-          final RexInputRef in1 = (RexInputRef) op1;
-          final RexInputRef in2 = (RexInputRef) op2;
-          Set<RexInputRef> set = null;
-          for (Set<RexInputRef> s : equalSets) {
-            if (s.contains(in1) || s.contains(in2)) {
-              set = s;
-              break;
+        if (rexNode.isA(SqlKind.EQUALS)) {
+            final RexNode op1 = ((RexCall) rexNode).getOperands().get(0);
+            final RexNode op2 = ((RexCall) rexNode).getOperands().get(1);
+            if (op1 instanceof RexInputRef && op2 instanceof RexInputRef) {
+                final RexInputRef in1 = (RexInputRef) op1;
+                final RexInputRef in2 = (RexInputRef) op2;
+                Set<RexInputRef> set = null;
+                for (Set<RexInputRef> s : equalSets) {
+                    if (s.contains(in1) || s.contains(in2)) {
+                        set = s;
+                        break;
+                    }
+                }
+                if (set == null) {
+                    // To make the result deterministic.
+                    set = new LinkedHashSet<>();
+                    equalSets.add(set);
+                }
+                set.add(in1);
+                set.add(in2);
+            } else {
+                leftNodes.add(rexNode);
             }
-          }
-          if (set == null) {
-            // To make the result deterministic.
-            set = new LinkedHashSet<>();
-            equalSets.add(set);
-          }
-          set.add(in1);
-          set.add(in2);
         } else {
-          leftNodes.add(rexNode);
+            leftNodes.add(rexNode);
         }
-      } else {
-        leftNodes.add(rexNode);
-      }
     }
 
     return equalSets;
-  }
+}
 
-  /**
-   * Constructs new equal conditions from the equal sets.
-   *
-   * @param join the original {@link Join} node
-   * @param equalSets the equal sets
-   * @return the newly constructed conditions from equal sets
-   */
-  private static List<RexNode> constructConditionFromEqualSets(Join join,
-      List<Set<RexInputRef>> equalSets) {
+/**
+ * Constructs new equal conditions from the equal sets.
+ *
+ * @param join the original {@link Join} node
+ * @param equalSets the equal sets
+ * @return the newly constructed conditions from equal sets
+ */
+private static List<RexNode> constructConditionFromEqualSets(Join join,
+    List<Set<RexInputRef>> equalSets) {
     final RexBuilder rexBuilder = join.getCluster().getRexBuilder();
     final List<RexNode> result = new ArrayList<>();
     final int leftFieldCount = join.getLeft().getRowType().getFieldCount();
     for (Set<RexInputRef> set : equalSets) {
-      final List<RexInputRef> leftSet = new ArrayList<>();
-      final List<RexInputRef> rightSet = new ArrayList<>();
-      for (RexInputRef ref : set) {
-        if (ref.getIndex() < leftFieldCount) {
-          leftSet.add(ref);
-        } else {
-          rightSet.add(ref);
+        final List<RexInputRef> leftSet = new ArrayList<>();
+        final List<RexInputRef> rightSet = new ArrayList<>();
+        for (RexInputRef ref : set) {
+            if (ref.getIndex() < leftFieldCount) {
+                leftSet.add(ref);
+            } else {
+                rightSet.add(ref);
+            }
         }
-      }
-      // Add left side conditions.
-      if (leftSet.size() > 1) {
-        for (int i = 1; i < leftSet.size(); ++i) {
-          result.add(
-              rexBuilder.makeCall(SqlStdOperatorTable.EQUALS,
-                  leftSet.get(0),
-                  leftSet.get(i)));
+        // Add left side conditions.
+        if (leftSet.size() > 1) {
+            for (int i = 1; i < leftSet.size(); ++i) {
+                result.add(
+                    rexBuilder.makeCall(SqlStdOperatorTable.EQUALS,
+                        leftSet.get(0),
+                        leftSet.get(i)));
+            }
         }
-      }
-      // Add right side conditions.
-      if (rightSet.size() > 1) {
-        for (int i = 1; i < rightSet.size(); ++i) {
-          result.add(
-              rexBuilder.makeCall(SqlStdOperatorTable.EQUALS,
-                  rightSet.get(0),
-                  rightSet.get(i)));
+        // Add right side conditions.
+        if (rightSet.size() > 1) {
+            for (int i = 1; i < rightSet.size(); ++i) {
+                result.add(
+                    rexBuilder.makeCall(SqlStdOperatorTable.EQUALS,
+                        rightSet.get(0),
+                        rightSet.get(i)));
+            }
         }
-      }
-      // Only need one equal condition for each equal set.
-      if (!leftSet.isEmpty() && !rightSet.isEmpty()) {
-        result.add(
-            rexBuilder.makeCall(SqlStdOperatorTable.EQUALS,
-                leftSet.get(0),
-                rightSet.get(0)));
-      }
+        // Only need one equal condition for each equal set.
+        if (!leftSet.isEmpty() && !rightSet.isEmpty()) {
+            result.add(
+                rexBuilder.makeCall(SqlStdOperatorTable.EQUALS,
+                    leftSet.get(0),
+                    rightSet.get(0)));
+        }
     }
 
     return result;
-  }
+}
 
-  /**
-   * Get conjunctions of filter's condition but with collapsed
-   * {@code IS NOT DISTINCT FROM} expressions if needed.
-   *
-   * @param filter filter containing condition
-   * @return condition conjunctions with collapsed {@code IS NOT DISTINCT FROM}
-   * expressions if any
-   * @see RelOptUtil#conjunctions(RexNode)
-   */
-  private static List<RexNode> getConjunctions(Filter filter) {
+/**
+ * Get conjunctions of filter's condition but with collapsed
+ * {@code IS NOT DISTINCT FROM} expressions if needed.
+ *
+ * @param filter filter containing condition
+ * @return condition conjunctions with collapsed {@code IS NOT DISTINCT FROM}
+ * expressions if any
+ * @see RelOptUtil#conjunctions(RexNode)
+ */
+private static List<RexNode> getConjunctions(Filter filter) {
     List<RexNode> conjunctions = conjunctions(filter.getCondition());
     RexBuilder rexBuilder = filter.getCluster().getRexBuilder();
     for (int i = 0; i < conjunctions.size(); i++) {
-      RexNode node = conjunctions.get(i);
-      if (node instanceof RexCall) {
-        conjunctions.set(i,
-            RelOptUtil.collapseExpandedIsNotDistinctFromExpr((RexCall) node, rexBuilder));
-      }
+        RexNode node = conjunctions.get(i);
+        if (node instanceof RexCall) {
+            conjunctions.set(i,
+                RelOptUtil.collapseExpandedIsNotDistinctFromExpr((RexCall) node, rexBuilder));
+        }
     }
     return conjunctions;
-  }
+}
 
-  /**
-   * Validates that target execution framework can satisfy join filters.
-   *
-   * <p>If the join filter cannot be satisfied (for example, if it is
-   * {@code l.c1 > r.c2} and the join only supports equi-join), removes the
-   * filter from {@code joinFilters} and adds it to {@code aboveFilters}.
-   *
-   * <p>The default implementation does nothing; i.e. the join can handle all
-   * conditions.
-   *
-   * @param aboveFilters Filter above Join
-   * @param joinFilters Filters in join condition
-   * @param join Join
-   * @param joinType JoinRelType could be different from type in Join due to
-   * outer join simplification.
-   */
-  protected void validateJoinFilters(List<RexNode> aboveFilters,
-      List<RexNode> joinFilters, Join join, JoinRelType joinType) {
+/**
+ * Validates that target execution framework can satisfy join filters.
+ *
+ * <p>If the join filter cannot be satisfied (for example, if it is
+ * {@code l.c1 > r.c2} and the join only supports equi-join), removes the
+ * filter from {@code joinFilters} and adds it to {@code aboveFilters}.
+ *
+ * <p>The default implementation does nothing; i.e. the join can handle all
+ * conditions.
+ *
+ * @param aboveFilters Filter above Join
+ * @param joinFilters Filters in join condition
+ * @param join Join
+ * @param joinType JoinRelType could be different from type in Join due to
+ * outer join simplification.
+ */
+protected void validateJoinFilters(List<RexNode> aboveFilters,
+    List<RexNode> joinFilters, Join join, JoinRelType joinType) {
     final Iterator<RexNode> filterIter = joinFilters.iterator();
     while (filterIter.hasNext()) {
-      RexNode exp = filterIter.next();
-      // Do not pull up filter conditions for semi/anti join.
-      if (!config.getPredicate().apply(join, joinType, exp)
-          && joinType.projectsRight()) {
-        aboveFilters.add(exp);
-        filterIter.remove();
-      }
+        RexNode exp = filterIter.next();
+        // Do not pull up filter conditions for semi/anti join.
+        if (!config.getPredicate().apply(join, joinType, exp)
+            && joinType.projectsRight()) {
+            aboveFilters.add(exp);
+            filterIter.remove();
+        }
     }
-  }
+}
 
-  /** Rule that pushes parts of the join condition to its inputs. */
-  public static class JoinConditionPushRule
-      extends FilterJoinRule<JoinConditionPushRule.JoinConditionPushRuleConfig> {
+/** Rule that pushes parts of the join condition to its inputs. */
+public static class JoinConditionPushRule
+    extends FilterJoinRule<JoinConditionPushRule.JoinConditionPushRuleConfig> {
     /** Creates a JoinConditionPushRule. */
     protected JoinConditionPushRule(JoinConditionPushRuleConfig config) {
-      super(config);
+        super(config);
     }
 
     @Deprecated // to be removed before 2.0
     public JoinConditionPushRule(RelBuilderFactory relBuilderFactory,
         Predicate predicate) {
-      this(ImmutableJoinConditionPushRuleConfig.of(predicate)
-          .withRelBuilderFactory(relBuilderFactory)
-          .withOperandSupplier(b ->
-              b.operand(Join.class).anyInputs())
-          .withDescription("FilterJoinRule:no-filter")
-          .withSmart(true));
+        this(ImmutableJoinConditionPushRuleConfig.of(predicate)
+            .withRelBuilderFactory(relBuilderFactory)
+            .withOperandSupplier(b ->
+                b.operand(Join.class).anyInputs())
+            .withDescription("FilterJoinRule:no-filter")
+            .withSmart(true));
     }
 
     @Deprecated // to be removed before 2.0
     public JoinConditionPushRule(RelFactories.FilterFactory filterFactory,
         RelFactories.ProjectFactory projectFactory, Predicate predicate) {
-      this(RelBuilder.proto(filterFactory, projectFactory), predicate);
+        this(RelBuilder.proto(filterFactory, projectFactory), predicate);
     }
 
     @Override public void onMatch(RelOptRuleCall call) {
-      Join join = call.rel(0);
-      perform(call, null, join);
+        Join join = call.rel(0);
+        perform(call, null, join);
     }
 
     /** Rule configuration. */
     @Value.Immutable(singleton = false)
     public interface JoinConditionPushRuleConfig extends FilterJoinRule.Config {
-      JoinConditionPushRuleConfig DEFAULT = ImmutableJoinConditionPushRuleConfig
-          .of((join, joinType, exp) -> true)
-          .withOperandSupplier(b ->
-              b.operand(Join.class).anyInputs())
-          .withSmart(true);
+        JoinConditionPushRuleConfig DEFAULT = ImmutableJoinConditionPushRuleConfig
+            .of((join, joinType, exp) -> true)
+            .withOperandSupplier(b ->
+                b.operand(Join.class).anyInputs())
+            .withSmart(true);
 
-      @Override default JoinConditionPushRule toRule() {
-        return new JoinConditionPushRule(this);
-      }
+        @Override default JoinConditionPushRule toRule() {
+            return new JoinConditionPushRule(this);
+        }
     }
-  }
+}
 
-  /** Rule that tries to push filter expressions into a join
-   * condition and into the inputs of the join.
-   *
-   * @see CoreRules#FILTER_INTO_JOIN */
-  public static class FilterIntoJoinRule
-      extends FilterJoinRule<FilterIntoJoinRule.FilterIntoJoinRuleConfig> {
+/** Rule that tries to push filter expressions into a join
+ * condition and into the inputs of the join.
+ *
+ * @see CoreRules#FILTER_INTO_JOIN */
+public static class FilterIntoJoinRule
+    extends FilterJoinRule<FilterIntoJoinRule.FilterIntoJoinRuleConfig> {
     /** Creates a FilterIntoJoinRule. */
     protected FilterIntoJoinRule(FilterIntoJoinRuleConfig config) {
-      super(config);
+        super(config);
     }
 
     @Deprecated // to be removed before 2.0
     public FilterIntoJoinRule(boolean smart,
         RelBuilderFactory relBuilderFactory, Predicate predicate) {
-      this(ImmutableFilterIntoJoinRuleConfig.of(predicate)
-          .withRelBuilderFactory(relBuilderFactory)
-          .withOperandSupplier(b0 ->
-              b0.operand(Filter.class).oneInput(b1 ->
-                  b1.operand(Join.class).anyInputs()))
-          .withDescription("FilterJoinRule:filter")
-          .withSmart(smart));
+        this(ImmutableFilterIntoJoinRuleConfig.of(predicate)
+            .withRelBuilderFactory(relBuilderFactory)
+            .withOperandSupplier(b0 ->
+                b0.operand(Filter.class).oneInput(b1 ->
+                    b1.operand(Join.class).anyInputs()))
+            .withDescription("FilterJoinRule:filter")
+            .withSmart(smart));
     }
 
     @Deprecated // to be removed before 2.0
@@ -485,53 +676,53 @@ public abstract class FilterJoinRule<C extends FilterJoinRule.Config>
         RelFactories.FilterFactory filterFactory,
         RelFactories.ProjectFactory projectFactory,
         Predicate predicate) {
-      this(ImmutableFilterIntoJoinRuleConfig.of(predicate)
-          .withRelBuilderFactory(
-              RelBuilder.proto(filterFactory, projectFactory))
-          .withOperandSupplier(b0 ->
-              b0.operand(Filter.class).oneInput(b1 ->
-                  b1.operand(Join.class).anyInputs()))
-          .withDescription("FilterJoinRule:filter")
-          .withSmart(smart));
+        this(ImmutableFilterIntoJoinRuleConfig.of(predicate)
+            .withRelBuilderFactory(
+                RelBuilder.proto(filterFactory, projectFactory))
+            .withOperandSupplier(b0 ->
+                b0.operand(Filter.class).oneInput(b1 ->
+                    b1.operand(Join.class).anyInputs()))
+            .withDescription("FilterJoinRule:filter")
+            .withSmart(smart));
     }
 
     @Override public void onMatch(RelOptRuleCall call) {
-      Filter filter = call.rel(0);
-      Join join = call.rel(1);
-      perform(call, filter, join);
+        Filter filter = call.rel(0);
+        Join join = call.rel(1);
+        perform(call, filter, join);
     }
 
     /** Rule configuration. */
     @Value.Immutable(singleton = false)
     public interface FilterIntoJoinRuleConfig extends FilterJoinRule.Config {
-      FilterIntoJoinRuleConfig DEFAULT =
-          ImmutableFilterIntoJoinRuleConfig.of((join, joinType, exp) -> true)
-              .withOperandSupplier(b0 ->
-                  b0.operand(Filter.class).oneInput(b1 ->
-                      b1.operand(Join.class).anyInputs()))
-              .withSmart(true);
+        FilterIntoJoinRuleConfig DEFAULT =
+            ImmutableFilterIntoJoinRuleConfig.of((join, joinType, exp) -> true)
+                .withOperandSupplier(b0 ->
+                    b0.operand(Filter.class).oneInput(b1 ->
+                        b1.operand(Join.class).anyInputs()))
+                .withSmart(true);
 
-      @Override default FilterIntoJoinRule toRule() {
-        return new FilterIntoJoinRule(this);
-      }
+        @Override default FilterIntoJoinRule toRule() {
+            return new FilterIntoJoinRule(this);
+        }
     }
-  }
+}
 
-  /** Predicate that returns whether a filter is valid in the ON clause of a
-   * join for this particular kind of join. If not, Calcite will push it back to
-   * above the join. */
-  @FunctionalInterface
-  public interface Predicate {
+/** Predicate that returns whether a filter is valid in the ON clause of a
+ * join for this particular kind of join. If not, Calcite will push it back to
+ * above the join. */
+@FunctionalInterface
+public interface Predicate {
     boolean apply(Join join, JoinRelType joinType, RexNode exp);
-  }
+}
 
-  /**
-   * Rule configuration.
-   */
-  public interface Config extends RelRule.Config {
+/**
+ * Rule configuration.
+ */
+public interface Config extends RelRule.Config {
     /** Whether to try to strengthen join-type, default false. */
     @Value.Default default boolean isSmart() {
-      return false;
+        return false;
     }
 
     /** Sets {@link #isSmart()}. */
@@ -545,5 +736,5 @@ public abstract class FilterJoinRule<C extends FilterJoinRule.Config>
 
     /** Sets {@link #getPredicate()} ()}. */
     Config withPredicate(Predicate predicate);
-  }
+}
 }

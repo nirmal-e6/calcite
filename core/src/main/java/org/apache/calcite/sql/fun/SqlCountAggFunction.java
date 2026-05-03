@@ -39,66 +39,82 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 
+// Shaded for deriveType method change
+
 /**
  * Definition of the SQL <code>COUNT</code> aggregation function.
  *
  * <p><code>COUNT</code> is an aggregator which returns the number of rows which
- * have gone into it. With one argument (or more), it returns the number of rows
- * for which that argument (or all) is not <code>null</code>.
+ * have gone into it. With one argument (or more), it returns the number of rows for which that argument (or all) is not
+ * <code>null</code>.
  */
-public class SqlCountAggFunction extends SqlAggFunction {
-  //~ Constructors -----------------------------------------------------------
+public class SqlCountAggFunction extends SqlAggFunction
+{
+//~ Constructors -----------------------------------------------------------
 
-  public SqlCountAggFunction(String name) {
+public SqlCountAggFunction(String name)
+{
     this(name, CalciteSystemProperty.STRICT.value() ? OperandTypes.ANY : OperandTypes.ONE_OR_MORE);
-  }
+}
 
-  public SqlCountAggFunction(String name,
-      SqlOperandTypeChecker sqlOperandTypeChecker) {
-    super(name, null, SqlKind.COUNT, ReturnTypes.BIGINT, null,
-        sqlOperandTypeChecker, SqlFunctionCategory.NUMERIC, false, false,
-        Optionality.FORBIDDEN);
-  }
+public SqlCountAggFunction(String name, SqlOperandTypeChecker sqlOperandTypeChecker)
+{
+    super(name, null, SqlKind.COUNT, ReturnTypes.BIGINT, null, sqlOperandTypeChecker, SqlFunctionCategory.NUMERIC,
+        false, false, Optionality.FORBIDDEN);
+}
 
-  //~ Methods ----------------------------------------------------------------
+//~ Methods ----------------------------------------------------------------
 
-  @Override public SqlSyntax getSyntax() {
+@Override
+public SqlSyntax getSyntax()
+{
     return SqlSyntax.FUNCTION_STAR;
-  }
+}
 
-  @SuppressWarnings("deprecation")
-  @Override public List<RelDataType> getParameterTypes(RelDataTypeFactory typeFactory) {
-    return ImmutableList.of(
-        typeFactory.createTypeWithNullability(
-            typeFactory.createSqlType(SqlTypeName.ANY), true));
-  }
+@SuppressWarnings("deprecation")
+@Override
+public List<RelDataType> getParameterTypes(RelDataTypeFactory typeFactory)
+{
+    return ImmutableList.of(typeFactory.createTypeWithNullability(typeFactory.createSqlType(SqlTypeName.ANY), true));
+}
 
-  @SuppressWarnings("deprecation")
-  @Override public RelDataType getReturnType(RelDataTypeFactory typeFactory) {
+@SuppressWarnings("deprecation")
+@Override
+public RelDataType getReturnType(RelDataTypeFactory typeFactory)
+{
     return typeFactory.createSqlType(SqlTypeName.BIGINT);
-  }
+}
 
-  @Override public RelDataType deriveType(
-      SqlValidator validator,
-      SqlValidatorScope scope,
-      SqlCall call) {
+@Override
+public RelDataType deriveType(SqlValidator validator, SqlValidatorScope scope, SqlCall call)
+{
     // Check for COUNT(*) function.  If it is we don't
     // want to try and derive the "*"
-    if (call.isCountStar()) {
-      return validator.getTypeFactory().createSqlType(
-          SqlTypeName.BIGINT);
-    }
-    return super.deriveType(validator, scope, call);
-  }
 
-  @Override public <T extends Object> @Nullable T unwrap(Class<T> clazz) {
-    if (clazz.isInstance(SqlSplittableAggFunction.CountSplitter.INSTANCE)) {
-      return clazz.cast(SqlSplittableAggFunction.CountSplitter.INSTANCE);
+    // E6data change
+    // use type as BIGINT only
+//    if (call.isCountStar())
+//    {
+//        return validator.getTypeFactory().createSqlType(SqlTypeName.BIGINT);
+//    }
+//    return super.deriveType(validator, scope, call);
+    return validator.getTypeFactory().createSqlType(SqlTypeName.BIGINT);
+}
+
+@Override
+public <T extends Object> @Nullable T unwrap(Class<T> clazz)
+{
+    if (clazz.isInstance(SqlSplittableAggFunction.CountSplitter.INSTANCE))
+    {
+        return clazz.cast(SqlSplittableAggFunction.CountSplitter.INSTANCE);
     }
     return super.unwrap(clazz);
-  }
+}
 
-  @Override public SqlAggFunction getRollup() {
+@Override
+public SqlAggFunction getRollup()
+{
     return SqlStdOperatorTable.SUM0;
-  }
+}
+
 }

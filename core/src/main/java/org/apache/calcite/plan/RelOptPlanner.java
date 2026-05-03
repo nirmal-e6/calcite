@@ -31,6 +31,9 @@ import org.slf4j.Logger;
 import java.util.List;
 import java.util.regex.Pattern;
 
+// e6data shade - Shaded to allow us to have both old and latest decorrelator
+// Once we move fully to new one / upgrade remove this file
+
 /**
  * A <code>RelOptPlanner</code> is a query optimizer: it transforms a relational
  * expression into a semantically equivalent relational expression, according to
@@ -343,6 +346,17 @@ public interface RelOptPlanner {
    * @throws IllegalStateException if the decorrelator has not been set
    * */
   RelDecorrelator getDecorrelator();
+
+  // e6data change - to allow old decorrelator
+  /** Sets the old decorrelator. */
+  <T> void setOldDecorrelator(@Nullable T oldRelDecorrelator);
+
+  /**
+   * Returns the old decorrelator used to decorrelate expressions.
+   *
+   * @throws IllegalStateException if the old decorrelator has not been set
+   */
+  <T> T getOldDecorrelator();
 
   /** Called when a relational expression is copied to a similar expression. */
   void onCopy(RelNode rel, RelNode newRel);

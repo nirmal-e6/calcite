@@ -20,10 +20,12 @@ import org.apache.calcite.DataContexts;
 import org.apache.calcite.linq4j.function.Predicate1;
 import org.apache.calcite.plan.RelOptPredicateList;
 import org.apache.calcite.plan.RelOptUtil;
+import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelCollation;
 import org.apache.calcite.rel.RelCollations;
 import org.apache.calcite.rel.RelFieldCollation;
 import org.apache.calcite.rel.core.Calc;
+import org.apache.calcite.rel.core.CorrelationId;
 import org.apache.calcite.rel.core.Filter;
 import org.apache.calcite.rel.core.Join;
 import org.apache.calcite.rel.core.Project;
@@ -1864,6 +1866,30 @@ public class RexUtil {
             return new RexInputRef(index + offset, input.getType());
           }
         });
+  }
+
+  // e6data change - Change ported to port SubQueryRemoveRule from commit b04f744f7fbc6d5a4f12b2bb591be000265a88b2
+  /**
+   * Shifts every {@link RexFieldAccess} with {@link CorrelationId}
+   * in an {@link RelNode} by {@code offset}.
+   */
+  public static RelNode shiftFieldAccess(RexBuilder rexBuilder, RelNode node,
+      final CorrelationId id, RelNode outer, final int offset) {
+    if (offset == 0) {
+      return node;
+    }
+
+    RexNode correl = rexBuilder.makeCorrel(outer.getRowType(), id);
+    return node.accept(new RexShuttle() {
+      @Override public RexNode visitFieldAccess(RexFieldAccess fieldAccess) {
+        if (fieldAccess.getReferenceExpr() instanceof RexCorrelVariable
+            && ((RexCorrelVariable) fieldAccess.getReferenceExpr()).id.equals(id)) {
+          return rexBuilder.makeFieldAccess(correl,
+              fieldAccess.getField().getIndex() + offset);
+        }
+        return fieldAccess;
+      }
+    });
   }
 
   /** Creates an equivalent version of a node where common factors among ORs

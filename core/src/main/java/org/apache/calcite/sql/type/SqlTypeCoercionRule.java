@@ -72,33 +72,33 @@ import static java.util.Objects.requireNonNull;
  * }</pre></blockquote>
  */
 public class SqlTypeCoercionRule implements SqlTypeMappingRule {
-  //~ Static fields/initializers ---------------------------------------------
+//~ Static fields/initializers ---------------------------------------------
 
-  private static final SqlTypeCoercionRule INSTANCE;
+private static final SqlTypeCoercionRule INSTANCE;
 
-  private static final SqlTypeCoercionRule LENIENT_INSTANCE;
+private static final SqlTypeCoercionRule LENIENT_INSTANCE;
 
-  public static final TryThreadLocal<SqlTypeCoercionRule> THREAD_PROVIDERS;
+public static final TryThreadLocal<SqlTypeCoercionRule> THREAD_PROVIDERS;
 
-  //~ Instance fields --------------------------------------------------------
+//~ Instance fields --------------------------------------------------------
 
-  private final Map<SqlTypeName, ImmutableSet<SqlTypeName>> map;
+private final Map<SqlTypeName, ImmutableSet<SqlTypeName>> map;
 
-  //~ Constructors -----------------------------------------------------------
+//~ Constructors -----------------------------------------------------------
 
-  /**
-   * Creates a {@code SqlTypeCoercionRules} with specified type mappings {@code map}.
-   *
-   * <p>Make this constructor private intentionally, use {@link #instance()}.
-   *
-   * @param map The type mapping, for each map entry, the values types can be coerced to
-   *            the key type
-   */
-  private SqlTypeCoercionRule(Map<SqlTypeName, ImmutableSet<SqlTypeName>> map) {
+/**
+ * Creates a {@code SqlTypeCoercionRules} with specified type mappings {@code map}.
+ *
+ * <p>Make this constructor private intentionally, use {@link #instance()}.
+ *
+ * @param map The type mapping, for each map entry, the values types can be coerced to
+ *            the key type
+ */
+private SqlTypeCoercionRule(Map<SqlTypeName, ImmutableSet<SqlTypeName>> map) {
     this.map = ImmutableMap.copyOf(map);
-  }
+}
 
-  static {
+static {
     // We use coerceRules when we're casting
     final SqlTypeMappingRules.Builder coerceRules = SqlTypeMappingRules.builder();
     coerceRules.addAll(SqlTypeAssignmentRule.instance().getTypeMapping());
@@ -135,24 +135,24 @@ public class SqlTypeCoercionRule implements SqlTypeMappingRule {
 
     // Exact numeric types are castable from intervals
     for (SqlTypeName exactType : SqlTypeName.EXACT_TYPES) {
-      coerceRules.add(exactType,
-          coerceRules.copyValues(exactType)
-              .addAll(SqlTypeName.INTERVAL_TYPES)
-              .build());
+        coerceRules.add(exactType,
+            coerceRules.copyValues(exactType)
+                .addAll(SqlTypeName.INTERVAL_TYPES)
+                .build());
     }
 
     // Intervals are castable from exact numeric
     for (SqlTypeName typeName : SqlTypeName.INTERVAL_TYPES) {
-      coerceRules.add(typeName,
-          coerceRules.copyValues(typeName)
-              .add(SqlTypeName.TINYINT)
-              .add(SqlTypeName.SMALLINT)
-              .add(SqlTypeName.INTEGER)
-              .add(SqlTypeName.BIGINT)
-              .add(SqlTypeName.DECIMAL)
-              .add(SqlTypeName.CHAR)
-              .add(SqlTypeName.VARCHAR)
-              .build());
+        coerceRules.add(typeName,
+            coerceRules.copyValues(typeName)
+                .add(SqlTypeName.TINYINT)
+                .add(SqlTypeName.SMALLINT)
+                .add(SqlTypeName.INTEGER)
+                .add(SqlTypeName.BIGINT)
+                .add(SqlTypeName.DECIMAL)
+                .add(SqlTypeName.CHAR)
+                .add(SqlTypeName.VARCHAR)
+                .build());
     }
 
     // BINARY is castable from VARBINARY, CHARACTERS.
@@ -184,6 +184,7 @@ public class SqlTypeCoercionRule implements SqlTypeMappingRule {
             .add(SqlTypeName.TIMESTAMP)
             .add(SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE)
             .add(SqlTypeName.TIMESTAMP_TZ)
+            .add(SqlTypeName.ARRAY) // Added by E6data
             .addAll(SqlTypeName.BINARY_TYPES)
             .addAll(SqlTypeName.NUMERIC_TYPES)
             .addAll(SqlTypeName.INTERVAL_TYPES)
@@ -365,27 +366,27 @@ public class SqlTypeCoercionRule implements SqlTypeMappingRule {
 
     LENIENT_INSTANCE = new SqlTypeCoercionRule(coerceRules.map);
     THREAD_PROVIDERS = TryThreadLocal.of(SqlTypeCoercionRule.INSTANCE);
-  }
+}
 
-  //~ Methods ----------------------------------------------------------------
+//~ Methods ----------------------------------------------------------------
 
-  /** Returns an instance. */
-  public static SqlTypeCoercionRule instance() {
+/** Returns an instance. */
+public static SqlTypeCoercionRule instance() {
     return requireNonNull(THREAD_PROVIDERS.get(), "threadProviders");
-  }
+}
 
-  /** Returns an instance that allows more lenient type coercion. */
-  public static SqlTypeCoercionRule lenientInstance() {
+/** Returns an instance that allows more lenient type coercion. */
+public static SqlTypeCoercionRule lenientInstance() {
     return LENIENT_INSTANCE;
-  }
+}
 
-  /** Returns an instance with specified type mappings. */
-  public static SqlTypeCoercionRule instance(
-      Map<SqlTypeName, ImmutableSet<SqlTypeName>> map) {
+/** Returns an instance with specified type mappings. */
+public static SqlTypeCoercionRule instance(
+    Map<SqlTypeName, ImmutableSet<SqlTypeName>> map) {
     return new SqlTypeCoercionRule(map);
-  }
+}
 
-  @Override public Map<SqlTypeName, ImmutableSet<SqlTypeName>> getTypeMapping() {
+@Override public Map<SqlTypeName, ImmutableSet<SqlTypeName>> getTypeMapping() {
     return this.map;
-  }
+}
 }

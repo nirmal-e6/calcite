@@ -1661,6 +1661,16 @@ public class RelBuilder {
         .preOperands(literal(value));
   }
 
+  // e6data change - Changed ported to port SubQueryRemoveRule from commit b04f744f7fbc6d5a4f12b2bb591be000265a88b2
+  /** Creates a call to the {@code LITERAL_AGG} aggregate function.
+   * optionally an alias. */
+  public AggCall literalAgg(@Nullable Object value, @Nullable String alias,
+      RexNode... operands) {
+    return aggregateCall(SqlInternalOperators.LITERAL_AGG, false, false, false,
+        null, null, ImmutableList.of(), alias, ImmutableList.of(),
+        ImmutableList.copyOf(operands)).preOperands(literal(value));
+  }
+
   // Methods for patterns
 
   /**
