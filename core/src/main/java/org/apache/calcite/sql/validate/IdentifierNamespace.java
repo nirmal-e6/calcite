@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.sql.validate;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.sql.SqlCall;
@@ -30,6 +31,8 @@ import com.google.common.collect.ImmutableList;
 
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -59,6 +62,8 @@ public class IdentifierNamespace extends AbstractNamespace {
    */
   private @Nullable List<Pair<SqlNode, SqlMonotonicity>> monotonicExprs;
 
+protected static final Logger LOG = LoggerFactory.getLogger(IdentifierNamespace.class);
+
   //~ Constructors -----------------------------------------------------------
 
   /**
@@ -80,10 +85,17 @@ public class IdentifierNamespace extends AbstractNamespace {
     this.parentScope = requireNonNull(parentScope, "parentScope");
   }
 
-  IdentifierNamespace(SqlValidatorImpl validator, SqlNode node,
+
+
+public IdentifierNamespace(SqlValidatorImpl validator, SqlNode node,
       @Nullable SqlNode enclosingNode, SqlValidatorScope parentScope) {
     this(validator, split(node).left, split(node).right, enclosingNode,
         parentScope);
+}
+
+public SqlValidatorScope getParentScope()
+{
+    return parentScope;
   }
 
   //~ Methods ----------------------------------------------------------------
@@ -135,9 +147,61 @@ public class IdentifierNamespace extends AbstractNamespace {
       // If we're case sensitive, we'll shortly try again and give an error
       // then.
       if (!nameMatcher.isCaseSensitive()) {
-        throw validator.newValidationError(id,
-            RESOURCE.objectNotFoundWithin(resolve.remainingNames.get(0),
-                SqlIdentifier.getString(resolve.path.stepNames())));
+
+            final String nameToBeResolved = resolve.remainingNames.get(0);
+            final String resolvedPath =
+                SqlIdentifier.getString(resolve.path.stepNames());
+            switch (resolve.remainingNames.size())
+            {
+                case 1:
+                    // e6-changes for immediate table consistency if table not found in first pass
+                    if (CalciteForkSettings.immediateConsistencyEnabled())
+                    {
+                        LOG.info("table {} not found, refreshing table", nameToBeResolved);
+
+                        String tableName = nameToBeResolved;
+
+                        String[] pathParts = resolvedPath.split("\\.");
+                        if (pathParts.length >= 2
+                            && CalciteForkSettings.refreshTable(pathParts[0], pathParts[1], tableName))
+                        {
+                            return resolveImpl(id);
+                        }
+                    }
+                    throw validator.newValidationError(id, RESOURCE.objectNotFoundWithin(nameToBeResolved, resolvedPath));
+                case 2:
+                    throw CalciteForkSettings.invalidSchemaException(id, nameToBeResolved, resolvedPath);
+                default:
+                    break;
+            }
+        }
+    }
+
+    if (resolved.count() == 0) {
+        switch (names.size())
+        {
+            case 1:
+                // e6-changes for immediate table consistency if table not found in first pass
+                if (CalciteForkSettings.immediateConsistencyEnabled())
+                {
+                    String tableName = names.get(0);
+                    LOG.info("table {} not found, refreshing table", tableName);
+                    String catalogName = CalciteForkSettings.defaultCatalog(validator);
+                    String schemaName = CalciteForkSettings.defaultSchema(validator);
+                    if (catalogName != null && schemaName != null
+                        && CalciteForkSettings.refreshTable(catalogName, schemaName, tableName))
+                    {
+                        return resolveImpl(id);
+                    }
+                }
+                break;
+            case 2:
+                throw CalciteForkSettings.invalidSchemaException(id, names.get(0),
+                    CalciteForkSettings.defaultCatalog(validator));
+            case 3:
+                throw CalciteForkSettings.invalidCatalogException(id, names.get(0));
+            default:
+                break;
       }
     }
 
@@ -181,6 +245,20 @@ public class IdentifierNamespace extends AbstractNamespace {
         }
       }
     }
+
+
+    // check temp schema
+    // E6data change
+//    if(resolved.count() == 0 && parentScope instanceof DelegatingScope delegatingScope) {
+//        delegatingScope.resolveTempTable(names, nameMatcher,
+//            SqlValidatorScope.Path.EMPTY, resolved);
+//
+//        final SqlValidatorScope.Resolve resolve = resolved.only();
+//        if (resolve.remainingNames.isEmpty()) {
+//            return resolve.namespace;
+//        }
+//    }
+
     throw validator.newValidationError(id,
         RESOURCE.objectNotFound(id.getComponent(0).toString()));
   }

@@ -43,6 +43,7 @@ import org.apache.calcite.sql.SqlUtil;
 import org.apache.calcite.sql.SqlUuidLiteral;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.impl.SqlParserImpl;
+import org.apache.calcite.sql.type.E6TypeSystemImpl;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.DateString;
 import org.apache.calcite.util.PrecedenceClimbingParser;
@@ -240,7 +241,8 @@ public final class SqlParserUtil {
           break;
         default:
           // non-valid escaped char sequence
-          builder.append(currentChar);
+                  builder.append(nextChar);
+                  i++;
         }
       } else {
         builder.append(currentChar);
@@ -521,7 +523,7 @@ public final class SqlParserUtil {
     try {
       ret =
           intervalQualifier.evaluateIntervalLiteral(literal,
-              intervalQualifier.getParserPosition(), RelDataTypeSystem.DEFAULT);
+                intervalQualifier.getParserPosition(), E6TypeSystemImpl.getInstance());
     } catch (CalciteContextException e) {
       throw new RuntimeException("while parsing day-to-second interval "
           + literal, e);
@@ -561,7 +563,7 @@ public final class SqlParserUtil {
     try {
       ret =
           intervalQualifier.evaluateIntervalLiteral(literal,
-              intervalQualifier.getParserPosition(), RelDataTypeSystem.DEFAULT);
+                intervalQualifier.getParserPosition(), E6TypeSystemImpl.getInstance());
     } catch (CalciteContextException e) {
       throw new RuntimeException("Error while parsing year-to-month interval "
           + literal, e);

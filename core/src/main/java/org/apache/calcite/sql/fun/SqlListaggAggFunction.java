@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.sql.fun;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlFunctionCategory;
 import org.apache.calcite.sql.SqlKind;
@@ -27,11 +28,37 @@ import org.apache.calcite.util.Optionality;
  * <code>LISTAGG</code> aggregate function
  * returns the concatenation of its group rows.
  */
-class SqlListaggAggFunction extends SqlAggFunction {
-  SqlListaggAggFunction(SqlKind kind,
+public class SqlListaggAggFunction extends SqlAggFunction {
+  private String separator;
+  private int limit;
+
+  public SqlListaggAggFunction(SqlKind kind,
       SqlReturnTypeInference returnTypeInference) {
+    this(kind, returnTypeInference, CalciteForkSettings.defaultListaggSeparator(), -1);
+  }
+
+  public SqlListaggAggFunction(SqlKind kind,
+      SqlReturnTypeInference returnTypeInference, String separator, int limit) {
     super(kind.name(), null, kind, returnTypeInference,
         null, OperandTypes.STRING.or(OperandTypes.STRING_STRING),
         SqlFunctionCategory.SYSTEM, false, false, Optionality.OPTIONAL);
+    this.separator = separator;
+    this.limit = limit;
+  }
+
+  public String getSeparator() {
+    return separator;
+  }
+
+  public void setSeparator(String separator) {
+    this.separator = separator;
+  }
+
+  public int getLimit() {
+    return limit;
+  }
+
+  public void setLimit(int limit) {
+    this.limit = limit;
   }
 }

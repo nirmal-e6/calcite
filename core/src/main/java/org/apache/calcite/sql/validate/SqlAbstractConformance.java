@@ -18,6 +18,7 @@ package org.apache.calcite.sql.validate;
 
 import org.apache.calcite.sql.fun.SqlLibrary;
 
+// e6data - Shaded to add our own conformance flags
 /**
  * Abstract base class for implementing {@link SqlConformance}.
  *
@@ -87,6 +88,15 @@ public abstract class SqlAbstractConformance implements SqlConformance {
 
   @Override public boolean isColonFieldAccessAllowed() {
     return SqlConformanceEnum.DEFAULT.isColonFieldAccessAllowed();
+  }
+
+  // e6data change - Spark style PIVOT semantics
+  @Override public boolean allowPivotAggregateExpression() {
+    return SqlConformanceEnum.DEFAULT.allowPivotAggregateExpression();
+  }
+
+  @Override public boolean isPivotValueNullOnEmpty() {
+    return SqlConformanceEnum.DEFAULT.isPivotValueNullOnEmpty();
   }
 
   @Override public boolean isMinusAllowed() {

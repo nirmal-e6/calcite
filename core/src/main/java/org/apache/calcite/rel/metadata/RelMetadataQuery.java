@@ -44,6 +44,11 @@ import java.util.function.Supplier;
 
 import static org.apache.calcite.linq4j.Nullness.castNonNull;
 
+/* This class is a copy of Calcite RelMetadataQuery. The only difference is in the
+ * method getDistinctRowCount - validation has been customized to handle
+ * scenarios where NDV is missing.
+ */
+
 /**
  * RelMetadataQuery provides a strongly-typed facade on top of
  * {@link RelMetadataProvider} for the set of relational expression metadata
@@ -273,6 +278,14 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
     for (;;) {
       try {
         Double result = rowCountHandler.getRowCount(rel, this);
+
+            // Avoiding the NDV set to -1 assert. It happens when CBO tries to fetch
+            // aggregate on a column via the RelMdDistinctRowCount handler
+            if (result == -1)
+            {
+                result = 1.0;
+            }
+
         return RelMdUtil.validateResult(castNonNull(result));
       } catch (MetadataHandlerProvider.NoHandler e) {
         rowCountHandler = revise(BuiltInMetadata.RowCount.Handler.class);
@@ -897,7 +910,23 @@ public class RelMetadataQuery extends RelMetadataQueryBase {
         Double result =
             distinctRowCountHandler.getDistinctRowCount(rel, this, groupKey,
                 predicate);
-        return RelMdUtil.validateResult(result);
+
+            // e6data change to remove check for negative value
+            if (result == null) {
+                return null;
+            }
+
+            if (result.isInfinite()) {
+                result = Double.MAX_VALUE;
+            }
+      /*
+      if (result < 0.0) {
+                LOG.debug("NDV Missing! Might result in sub-optimal plan! \n" + rel.explain());
+      }
+      */
+
+            return result;
+            // return RelMdUtil.validateResult(result);
       } catch (MetadataHandlerProvider.NoHandler e) {
         distinctRowCountHandler = revise(BuiltInMetadata.DistinctRowCount.Handler.class);
       }

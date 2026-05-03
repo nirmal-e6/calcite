@@ -16,20 +16,29 @@
  */
 package org.apache.calcite.sql.validate;
 
+import org.apache.calcite.config.CalciteForkSettings;
+import org.apache.calcite.jdbc.CalciteSchema;
+import org.apache.calcite.plan.RelOptSchema;
 import org.apache.calcite.prepare.Prepare;
+import org.apache.calcite.prepare.RelOptTableImpl;
 import org.apache.calcite.rel.type.DynamicRecordType;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rel.type.StructKind;
 import org.apache.calcite.schema.CustomColumnResolvingTable;
 import org.apache.calcite.schema.Table;
+import org.apache.calcite.schema.Wrapper;
+import org.apache.calcite.sql.JoinConditionType;
+import org.apache.calcite.sql.SqlBasicCall;
 import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlIdentifier;
+import org.apache.calcite.sql.SqlJoin;
 import org.apache.calcite.sql.SqlLambda;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlNodeList;
 import org.apache.calcite.sql.SqlSelect;
 import org.apache.calcite.sql.SqlWindow;
+import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.Util;
@@ -55,6 +64,7 @@ import static org.apache.calcite.util.Static.RESOURCE;
 
 import static java.util.Objects.requireNonNull;
 
+// Added for Lambda expression
 /**
  * A scope which delegates all requests to its parent scope. Use this as a base
  * class for defining nested scopes.
@@ -115,6 +125,13 @@ public abstract class DelegatingScope implements SqlValidatorScope {
       Resolved resolved) {
     if (names.isEmpty()) {
       resolved.found(ns, nullable, this, path, names);
+      return;
+    }
+
+    // added by E6Data for fixing Cyclic Exception
+    // Match_Recognize tries to validate columns inside it and tries to fully qualify it's column names
+    if (ns instanceof MatchRecognizeNamespace
+        && ((MatchRecognizeNamespace) ns).currentlyValidationInProgress()) {
       return;
     }
     final RelDataType rowType = ns.getRowType();
@@ -232,6 +249,68 @@ public abstract class DelegatingScope implements SqlValidatorScope {
     parent.resolveTable(names, nameMatcher, path, resolved);
   }
 
+
+  /**
+   * added by E6Data to resolve temp tables for CTE which are stored in SESSION schema
+   */
+  public void resolveTempTable(List<String> names, SqlNameMatcher nameMatcher,
+      Path path, Resolved resolved) {
+    CalciteSchema rootSchema = validator.catalogReader.getRootSchema();
+
+    List<String> resolverNames = validator.catalogReader.getSchemaPaths().get(0);
+    List<String> tableResolverName = new ArrayList<>();
+    tableResolverName.add(resolverNames.get(0));
+    tableResolverName.add("SESSION");
+    tableResolverName.add(names.get(names.size() - 1));
+
+    CalciteSchema schema = rootSchema;
+    SqlValidatorNamespace namespace = null;
+    List<String> remainingNames = tableResolverName;
+    for (String schemaName : tableResolverName) {
+      if (schema == rootSchema && nameMatcher.matches(schemaName, schema.name)) {
+        remainingNames = Util.skip(remainingNames);
+        continue;
+      }
+      final CalciteSchema subSchema = schema.getSubSchema(schemaName,
+          nameMatcher.isCaseSensitive());
+      if (subSchema != null) {
+        path = path.plus(null, -1, subSchema.name, StructKind.NONE);
+        remainingNames = Util.skip(remainingNames);
+        schema = subSchema;
+        namespace = new SchemaNamespace(validator, ImmutableList.copyOf(path.stepNames()));
+        continue;
+      }
+      CalciteSchema.TableEntry entry = schema.getTable(schemaName,
+          nameMatcher.isCaseSensitive());
+      if (entry == null) {
+        entry = schema.getTableBasedOnNullaryFunction(schemaName,
+            nameMatcher.isCaseSensitive());
+      }
+      if (entry != null) {
+        path = path.plus(null, -1, entry.name, StructKind.NONE);
+        remainingNames = Util.skip(remainingNames);
+        final Table table = entry.getTable();
+        SqlValidatorTable table2 = null;
+        if (table instanceof Wrapper) {
+          table2 = ((Wrapper) table).unwrap(Prepare.PreparingTable.class);
+        }
+        if (table2 == null) {
+          final RelOptSchema relOptSchema = validator.catalogReader.unwrap(RelOptSchema.class);
+          final RelDataType rowType = table.getRowType(validator.typeFactory);
+          table2 = RelOptTableImpl.create(relOptSchema, rowType, entry, null);
+        }
+        namespace = new TableNamespace(validator, table2);
+        resolved.found(namespace, false, null, path, remainingNames);
+        return;
+      }
+      // neither sub-schema nor table
+      if (namespace != null && !remainingNames.equals(names)) {
+        resolved.found(namespace, false, null, path, remainingNames);
+      }
+      return;
+    }
+  }
+
   @Override public SqlValidatorScope getOperandScope(SqlCall call) {
     if (call instanceof SqlSelect) {
       return validator.getSelectScope((SqlSelect) call);
@@ -252,6 +331,7 @@ public abstract class DelegatingScope implements SqlValidatorScope {
    *
    * <p>If the identifier cannot be resolved, throws. Never returns null.
    */
+  @SuppressWarnings("deprecation")
   @Override public SqlQualified fullyQualify(SqlIdentifier identifier) {
     if (identifier.isStar()) {
       return SqlQualified.create(this, 1, null, identifier);
@@ -260,15 +340,14 @@ public abstract class DelegatingScope implements SqlValidatorScope {
     final SqlIdentifier previous = identifier;
     final SqlNameMatcher nameMatcher = validator.catalogReader.nameMatcher();
     String columnName;
-    final String tableName;
-    final SqlValidatorNamespace namespace;
+    String tableName = null;
+    SqlValidatorNamespace namespace = null;
     switch (identifier.names.size()) {
     case 1: {
       columnName = identifier.names.get(0);
       final Map<String, ScopeChild> map =
           findQualifyingTableNames(columnName, identifier, nameMatcher);
-      switch (map.size()) {
-      case 0:
+      if (map.isEmpty()) {
         if (nameMatcher.isCaseSensitive()) {
           final SqlNameMatcher liberalMatcher = SqlNameMatchers.liberal();
           final Map<String, ScopeChild> map2 =
@@ -292,11 +371,44 @@ public abstract class DelegatingScope implements SqlValidatorScope {
         }
         throw validator.newValidationError(identifier,
             RESOURCE.columnNotFound(columnName));
-      case 1:
+      } else if (map.size() == 1) {
         tableName = map.keySet().iterator().next();
         namespace = map.get(tableName).namespace;
-        break;
-      default:
+      } else if (validator.m_bHasUsingClause && CalciteForkSettings.databricks()) {
+        if (this instanceof SelectScope) {
+          SelectScope selectScope = (SelectScope) this;
+          if (selectScope.getNode().getFrom() instanceof SqlJoin) {
+            SqlJoin joinNode = (SqlJoin) selectScope.getNode().getFrom();
+            JoinScope joinScope = (JoinScope) validator.getJoinScope(joinNode);
+            SqlValidatorNamespace preferredNs = preferSideForUsingAmbiguity(validator, joinScope,
+                columnName);
+
+            if (preferredNs != null) {
+              namespace = preferredNs;
+
+              String alias = aliasForNamespace(joinScope, preferredNs);
+
+              // Qualify identifier using the alias of the chosen side
+              if (alias != null) {
+                tableName = alias;
+              } else {
+                tableName = SqlValidatorUtil.alias(preferredNs.getNode());
+                if (tableName == null) {
+                  tableName = SqlValidatorUtil.getAlias(preferredNs.getNode(), -1);
+                }
+              }
+              //identifier.setNames(java.util.Arrays.asList(tableName, columnName), null);
+            } else {
+              throw validator.newValidationError(identifier, RESOURCE.columnAmbiguous(columnName));
+            }
+          } else {
+            throw validator.newValidationError(identifier, RESOURCE.columnAmbiguous(columnName));
+          }
+        } else {
+          throw validator.newValidationError(identifier, RESOURCE.columnAmbiguous(columnName));
+        }
+      } else {
+        // map.size() > 2
         throw validator.newValidationError(identifier,
             RESOURCE.columnAmbiguous(columnName));
       }
@@ -307,8 +419,8 @@ public abstract class DelegatingScope implements SqlValidatorScope {
       final RelDataTypeField field =
           nameMatcher.field(namespace.getRowType(), columnName);
       if (field != null) {
-        if (hasAmbiguousField(namespace.getRowType(), field,
-            columnName, nameMatcher)) {
+        if (!CalciteForkSettings.allowDuplicateAliasInProjection()
+            && hasAmbiguousField(namespace.getRowType(), field, columnName, nameMatcher)) {
           throw validator.newValidationError(identifier,
               RESOURCE.columnAmbiguous(columnName));
         }
@@ -317,8 +429,9 @@ public abstract class DelegatingScope implements SqlValidatorScope {
       }
       // todo: do implicit collation here
       final SqlParserPos pos = identifier.getParserPosition();
-      identifier =
-          new SqlIdentifier(ImmutableList.of(tableName, columnName), null,
+      String tableNameForIdentifier = tableName;
+
+      identifier = new SqlIdentifier(ImmutableList.of(tableNameForIdentifier, columnName), null,
               pos, ImmutableList.of(SqlParserPos.ZERO, pos));
     }
     // fall through
@@ -380,6 +493,8 @@ public abstract class DelegatingScope implements SqlValidatorScope {
             case PEEK_FIELDS:
             case PEEK_FIELDS_DEFAULT:
             case PEEK_FIELDS_NO_EXPAND:
+
+                                case FULLY_QUALIFIED: // E6Data change. Added to support table.struct.field_name and struct.field_name access
               columnName = field.getName(); // use resolved field name
               resolve(ImmutableList.of(tableName2), nameMatcher, false,
                   resolved);
@@ -390,7 +505,7 @@ public abstract class DelegatingScope implements SqlValidatorScope {
                 fromRowType = resolve.rowType();
                 identifier = identifier
                     .setName(0, columnName)
-                    .add(0, tableName2, SqlParserPos.ZERO);
+                    .add(0, tableName2,  identifier.getParserPosition());
                 ++i;
                 ++size;
               }
@@ -527,7 +642,7 @@ public abstract class DelegatingScope implements SqlValidatorScope {
           if (!fieldName.equals(name)) {
             identifier = identifier.setName(k, fieldName);
           }
-          if (hasAmbiguousField(step.rowType, field0, name, nameMatcher)) {
+          if (!CalciteForkSettings.allowDuplicateAliasInProjection() && hasAmbiguousField(step.rowType, field0, name, nameMatcher)) {
             throw validator.newValidationError(identifier,
                 RESOURCE.columnAmbiguous(name));
           }
@@ -696,4 +811,68 @@ public abstract class DelegatingScope implements SqlValidatorScope {
     }
     return n;
   }
+
+
+  @Nullable
+  private static SqlValidatorNamespace preferSideForUsingAmbiguity(SqlValidatorImpl validator,
+      JoinScope joinScope, String columnName) {
+    SqlJoin join = (SqlJoin) joinScope.getNode();
+    final SqlNameMatcher matcher = validator.getCatalogReader().nameMatcher();
+
+    final boolean isUsing = join.getConditionType() == JoinConditionType.USING;
+
+    if (!isUsing) {
+      return null;
+}
+
+    boolean listed = false;
+    final SqlNode cond = join.getCondition();
+    if (cond instanceof SqlNodeList) {
+      for (SqlNode n : (SqlNodeList) cond) {
+        final String n0 = ((SqlIdentifier) n).getSimple();
+        if (matcher.matches(n0, columnName)) {
+          listed = true;
+          break;
+        }
+      }
+    }
+    if (!listed) {
+      return null;
+    }
+
+    // Left/right namespaces of THIS JoinScope
+    final List<SqlValidatorNamespace> children = ((ListScope) joinScope).getChildren();
+    if (children.size() < 2) {
+      return null;
+    }
+    final SqlValidatorNamespace leftNs = children.get(0);
+    final SqlValidatorNamespace rightNs = children.get(children.size() - 1);
+
+    switch (join.getJoinType()) {
+    case LEFT:
+    case INNER:
+      return leftNs;
+    case RIGHT:
+      return rightNs;
+    // keep FULL ambiguous
+    default:
+      return null;
+    }
+  }
+
+  @Nullable
+  private static String aliasForNamespace(JoinScope joinScope, SqlValidatorNamespace ns) {
+    for (SqlValidatorNamespace namespace : ((ListScope) joinScope).getChildren()) {
+      if (namespace == ns) {
+        if (namespace.getEnclosingNode() instanceof SqlBasicCall) {
+          SqlBasicCall call = (SqlBasicCall) namespace.getEnclosingNode();
+          if (call.getOperator() == SqlStdOperatorTable.AS) {
+            return call.operand(1).toString();
+          }
+        }
+      }
+    }
+    return null;
+  }
+
 }

@@ -44,7 +44,7 @@ public class SqlCovarAggFunction extends SqlAggFunction {
     super(kind.name(),
         null,
         kind,
-        kind == SqlKind.REGR_COUNT ? ReturnTypes.BIGINT : ReturnTypes.COVAR_REGR_FUNCTION,
+         ReturnTypes.DOUBLE_NULLABLE,
         null,
         OperandTypes.NUMERIC_NUMERIC,
         SqlFunctionCategory.NUMERIC,

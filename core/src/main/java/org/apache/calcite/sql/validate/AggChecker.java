@@ -36,6 +36,7 @@ import static org.apache.calcite.util.Static.RESOURCE;
 
 import static java.util.Objects.requireNonNull;
 
+// shaded for lambda bug fix at line no. 186
 /**
  * Visitor which throws an exception if any component of the expression is not a
  * group expression.
@@ -193,11 +194,52 @@ class AggChecker extends SqlBasicVisitor<Void> {
     case WITHIN_DISTINCT:
       call.operand(0).accept(this);
       return null;
+        case LAMBDA: // E6data added case
+            return null;
     default:
       break;
     }
     // Visit the operand in window function
     if (call.getKind() == SqlKind.OVER) {
+        // E6Data change
+        // don't go inside operands to validate group by for over
+        // If this window function is in the SELECT clause of a SELECT DISTINCT,
+        // we should not drill into its operands
+        if (scope instanceof AggregatingSelectScope) {
+            final SqlSelect select = (SqlSelect) scope.getNode();
+            SelectScope selectScope =
+                requireNonNull(validator.getRawSelectScope(select),
+                    () -> "rawSelectScope for " + scope.getNode());
+            List<SqlNode> selectList =
+                requireNonNull(selectScope.getExpandedSelectList(),
+                    () -> "expandedSelectList for " + selectScope);
+
+            // Check if this window function is just an element in the select
+            for (SqlNode sqlNode : selectList) {
+                if (sqlNode.getKind() == SqlKind.AS) {
+                    sqlNode = ((SqlCall) sqlNode).operand(0);
+                }
+
+                // check only one level deep
+                SqlNode expanded = validator.expand(sqlNode, scope);
+                if (expanded.equalsDeep(call, Litmus.IGNORE)) {
+                    return null;
+                }
+
+                // added for window operator inside a function in project
+                // example unit test PlannerFixesTest.java#testGroupByOnFunction()
+                // FIXME: investigate this with calcite update
+                else if (expanded instanceof SqlCall) {
+                    SqlCall sqlCall = (SqlCall) expanded;
+                    for (SqlNode operand : sqlCall.getOperandList()) {
+                        if (operand != null && operand.equalsDeep(call, Litmus.IGNORE)) {
+                            return null;
+                        }
+                    }
+                }
+            }
+        }
+
       for (SqlNode operand : call.<SqlCall>operand(0).getOperandList()) {
         operand.accept(this);
       }

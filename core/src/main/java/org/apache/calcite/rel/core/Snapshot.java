@@ -38,6 +38,8 @@ import java.util.List;
 
 import static java.util.Objects.requireNonNull;
 
+// shaded for isValid method condition change
+
 /**
  * Relational expression that returns the contents of a relation expression as
  * it was at a given time in the past.
@@ -130,7 +132,7 @@ public abstract class Snapshot extends SingleRel implements Hintable {
 
   @Override public boolean isValid(Litmus litmus, @Nullable Context context) {
     RelDataType dataType = period.getType();
-    if (!SqlTypeUtil.isTimestamp(dataType)) {
+    if (!SqlTypeUtil.isTimestamp(dataType) && !SqlTypeUtil.isNumeric(dataType)) {
       return litmus.fail("The system time period specification expects Timestamp type but is '"
           + dataType.getSqlTypeName() + "'");
     }

@@ -16,7 +16,7 @@
  */
 package org.apache.calcite.sql2rel;
 
-import org.apache.calcite.avatica.util.Spaces;
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.config.NullCollation;
 import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.linq4j.Ord;
@@ -67,6 +67,7 @@ import org.apache.calcite.rel.logical.LogicalSort;
 import org.apache.calcite.rel.logical.LogicalTableFunctionScan;
 import org.apache.calcite.rel.logical.LogicalTableModify;
 import org.apache.calcite.rel.logical.LogicalTableScan;
+import org.apache.calcite.rel.logical.LogicalUnion;
 import org.apache.calcite.rel.logical.LogicalValues;
 import org.apache.calcite.rel.metadata.RelColumnMapping;
 import org.apache.calcite.rel.metadata.RelMdUtil;
@@ -84,6 +85,7 @@ import org.apache.calcite.rex.RexFieldAccess;
 import org.apache.calcite.rex.RexFieldCollation;
 import org.apache.calcite.rex.RexInputRef;
 import org.apache.calcite.rex.RexLambdaRef;
+import org.apache.calcite.rex.RexLastOptimizer;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexPatternFieldRef;
@@ -103,6 +105,8 @@ import org.apache.calcite.schema.Schemas;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.schema.TranslatableTable;
 import org.apache.calcite.schema.Wrapper;
+import org.apache.calcite.sql.E6SqlLambda;
+import org.apache.calcite.sql.E6SqlSnapshot;
 import org.apache.calcite.sql.JoinConditionType;
 import org.apache.calcite.sql.JoinType;
 import org.apache.calcite.sql.SqlAggFunction;
@@ -137,6 +141,7 @@ import org.apache.calcite.sql.SqlSelect;
 import org.apache.calcite.sql.SqlSelectKeyword;
 import org.apache.calcite.sql.SqlSetOperator;
 import org.apache.calcite.sql.SqlSnapshot;
+import org.apache.calcite.sql.SqlTableFunction;
 import org.apache.calcite.sql.SqlUnnestOperator;
 import org.apache.calcite.sql.SqlUnpivot;
 import org.apache.calcite.sql.SqlUpdate;
@@ -156,10 +161,12 @@ import org.apache.calcite.sql.type.SqlReturnTypeInference;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.type.TableFunctionReturnTypeInference;
 import org.apache.calcite.sql.util.SqlBasicVisitor;
+import org.apache.calcite.sql.util.SqlShuttle;
 import org.apache.calcite.sql.util.SqlVisitor;
 import org.apache.calcite.sql.validate.AggregatingSelectScope;
 import org.apache.calcite.sql.validate.CollectNamespace;
 import org.apache.calcite.sql.validate.DelegatingScope;
+import org.apache.calcite.sql.validate.E6SqlLambdaScope;
 import org.apache.calcite.sql.validate.ListScope;
 import org.apache.calcite.sql.validate.MatchRecognizeScope;
 import org.apache.calcite.sql.validate.MeasureScope;
@@ -244,6 +251,10 @@ import static org.apache.calcite.util.Util.transform;
 
 import static java.util.Objects.requireNonNull;
 
+// Added for Lambda expression
+// made convertIdentifier method protected at line no. 2639
+// Shaded for lambda bug fixes and Character Literal Padding fix
+
 /**
  * Converts a SQL parse tree (consisting of
  * {@link org.apache.calcite.sql.SqlNode} objects) into a relational algebra
@@ -290,7 +301,9 @@ public class SqlToRelConverter {
   private final HintStrategyTable hintStrategies;
   private int explainParamCount;
   public final SqlToRelConverter.Config config;
-  private final RelBuilder relBuilder;
+// change by E6Data
+// made from private to protected
+protected final RelBuilder relBuilder;
 
   /**
    * Fields used in name resolution for correlated sub-queries.
@@ -385,11 +398,13 @@ public class SqlToRelConverter {
 
   //~ Methods ----------------------------------------------------------------
 
-  private SqlValidator validator() {
+protected SqlValidator validator() {
     return requireNonNull(validator, "validator");
   }
 
-  private <T extends SqlValidatorNamespace> T getNamespace(SqlNode node) {
+// change by E6data
+// made from private to protected
+protected <T extends SqlValidatorNamespace> T getNamespace(SqlNode node) {
     return requireNonNull(getNamespaceOrNull(node),
         () -> "Namespace is not found for " + node);
   }
@@ -672,9 +687,11 @@ public class SqlToRelConverter {
         .withHints(hints);
   }
 
+// change by E6data
+// made from private to protected
   /** If any of the fields of {@code r} are measures, wraps them in calls to
    * the {@code M2V} function. */
-  private RelNode unwrapMeasures(RelNode r) {
+protected RelNode unwrapMeasures(RelNode r) {
     if (r.getRowType().getFieldList().stream()
         .anyMatch(f -> f.getType().isMeasure())) {
       return relBuilder.push(r)
@@ -1258,7 +1275,9 @@ public class SqlToRelConverter {
     bb.setRoot(r, false);
   }
 
-  private void replaceSubQueries(
+// E6Data change
+// from private to protected
+protected void replaceSubQueries(
       final Blackboard bb,
       final SqlNode expr,
       RelOptUtil.Logic logic) {
@@ -2147,11 +2166,12 @@ public class SqlToRelConverter {
 
     if ((value instanceof NlsString)
         && (type.getSqlTypeName() == SqlTypeName.CHAR)) {
+        // E6data change
       // pad fixed character type
       NlsString unpadded = (NlsString) value;
       return rexBuilder.makeCharLiteral(
           new NlsString(
-              Spaces.padRight(unpadded.getValue(), type.getPrecision()),
+              unpadded.getValue(),
               unpadded.getCharsetName(),
               unpadded.getCollation()));
     }
@@ -2221,6 +2241,9 @@ public class SqlToRelConverter {
     }
     if (node instanceof SqlCall) {
       switch (kind) {
+            // E6data bug fix for Lambda
+            case LAMBDA:
+                return;
       // Do no change logic for AND, IN and NOT IN expressions;
       // but do change logic for OR, NOT and others;
       // EXISTS was handled already.
@@ -2358,8 +2381,8 @@ public class SqlToRelConverter {
    * @return Relational expression
    */
   private RexNode convertLambda(Blackboard bb, SqlNode node) {
-    final SqlLambda call = (SqlLambda) node;
-    final SqlLambdaScope scope = (SqlLambdaScope) validator().getLambdaScope(call);
+    final E6SqlLambda call = (E6SqlLambda) node;
+    final E6SqlLambdaScope scope = (E6SqlLambdaScope) validator().getLambdaScope(call);
 
     final Map<String, RexNode> nameToNodeMap = new HashMap<>();
     final List<RexLambdaRef> parameters = new ArrayList<>(scope.getParameterTypes().size());
@@ -2377,6 +2400,7 @@ public class SqlToRelConverter {
 
     final Blackboard lambdaBb = createBlackboard(scope, nameToNodeMap, false);
     lambdaBb.setRoot(castNonNull(bb.inputs));
+    // E6data fix for lambda
     replaceSubQueries(lambdaBb, call.getExpression(), RelOptUtil.Logic.TRUE_FALSE_UNKNOWN);
     final RexNode expr = lambdaBb.convertExpression(call.getExpression());
     return rexBuilder.makeLambdaCall(expr, parameters);
@@ -2387,11 +2411,17 @@ public class SqlToRelConverter {
     bb.getValidator().deriveType(bb.scope, call);
     SqlCall aggCall = call.operand(0);
     boolean ignoreNulls = false;
+    SqlNodeList withinGroupOrderList = null;
     switch (aggCall.getKind()) {
     case IGNORE_NULLS:
       ignoreNulls = true;
       // fall through
     case RESPECT_NULLS:
+      aggCall = aggCall.operand(0);
+      break;
+        // e6data change - handle WITHIN_GROUP
+        case WITHIN_GROUP:
+            withinGroupOrderList = (SqlNodeList) aggCall.operand(1);
       aggCall = aggCall.operand(0);
       break;
     default:
@@ -2451,6 +2481,11 @@ public class SqlToRelConverter {
       }
     }
     final RexWindowExclusion exclude = RexWindowExclusion.create(window.getExclude());
+
+    // e6data change - use WITHIN_GROUP order by
+    if (withinGroupOrderList != null && orderList.isEmpty()) {
+        orderList = withinGroupOrderList;
+    }
 
     final ImmutableList.Builder<RexNode> orderKeys =
         ImmutableList.builder();
@@ -2645,6 +2680,18 @@ public class SqlToRelConverter {
       final SqlCall call2 = call.operand(0);
       convertCollectionTable(bb, call2);
       return;
+        case RANGE:
+            // Check if it's a table function
+            if (from instanceof SqlCall)
+            {
+                final SqlCall funcCall = (SqlCall) from;
+                if (funcCall.getOperator() instanceof SqlTableFunction)
+                {
+                    convertCollectionTable(bb, funcCall);
+                    return;
+                }
+            }
+            // Fall through to default error
 
     case LATERAL:
       call = (SqlCall) from;
@@ -2831,6 +2878,7 @@ public class SqlToRelConverter {
       List<SqlNode> operands = ((SqlCall) measure).getOperandList();
       String alias = ((SqlIdentifier) operands.get(1)).getSimple();
       RexNode rex = matchBb.convertExpression(operands.get(0));
+        rex = new RexLastOptimizer(rexBuilder).apply(rex);
       measureNodes.put(alias, rex);
     }
 
@@ -2842,6 +2890,7 @@ public class SqlToRelConverter {
       List<SqlNode> operands = ((SqlCall) def).getOperandList();
       String alias = ((SqlIdentifier) operands.get(1)).getSimple();
       RexNode rex = matchBb.convertExpression(operands.get(0));
+        rex = new RexLastOptimizer(rexBuilder).apply(rex);
       definitionNodes.put(alias, rex);
     }
 
@@ -2862,7 +2911,36 @@ public class SqlToRelConverter {
     bb.setRoot(rel, false);
   }
 
+// e6data change - Support Spark style PIVOT semantics
   protected void convertPivot(Blackboard bb, SqlPivot pivot) {
+    // Extended PIVOT conformance only needs the aggregate-expression lowering
+    // when a measure is not a plain aggregate call, or when null-on-empty
+    // semantics require a final projection.
+    if (requiresPivotAggregateExpressionRewrite(pivot)) {
+        convertPivotAggregateExpressions(bb, pivot);
+        return;
+    }
+    convertSimplePivot(bb, pivot);
+}
+
+private boolean requiresPivotAggregateExpressionRewrite(SqlPivot pivot) {
+    if (validator().config().conformance().isPivotValueNullOnEmpty()) {
+        return true;
+    }
+    if (!validator().config().conformance().allowPivotAggregateExpression()) {
+        return false;
+    }
+    for (SqlNode agg : pivot.aggList) {
+        final SqlNode measure = SqlUtil.stripAs(agg);
+        if (!(measure instanceof SqlCall)
+            || !(((SqlCall) measure).getOperator() instanceof SqlAggFunction)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+private void convertSimplePivot(Blackboard bb, SqlPivot pivot) {
     final SqlValidatorScope scope = validator().getJoinScope(pivot);
     final Blackboard pivotBb = createBlackboard(scope, null, false);
 
@@ -2892,6 +2970,11 @@ public class SqlToRelConverter {
     final List<@Nullable String> aggAliasList = new ArrayList<>();
     assert aggConverter.aggCalls.isEmpty();
     pivot.forEachAgg((alias, call) -> {
+        // E6data fix - Preprocess subquery within aggs to allow
+        // queries like SELECT * FROM (SELECT deptno, job, sal, comm FROM emp)
+        // PIVOT (SUM(CASE WHEN job = 'CLERK' AND deptno IN (10, 20) THEN sal ELSE comm END)
+        // AS conditional_sum FOR deptno IN (10, 20, 30)) to work
+        replaceSubQueries(pivotBb, call, RelOptUtil.Logic.TRUE_FALSE_UNKNOWN);
       call.accept(aggConverter);
       aggAliasList.add(alias);
       assert aggConverter.aggCalls.size() == aggAliasList.size();
@@ -2942,6 +3025,264 @@ public class SqlToRelConverter {
         relBuilder.pivot(groupKey, aggCalls, axes, valueList.build())
             .build();
     bb.setRoot(rel, true);
+  }
+
+private void convertPivotAggregateExpressions(Blackboard bb, SqlPivot pivot) {
+    final SqlValidatorScope scope = validator().getJoinScope(pivot);
+    final Blackboard pivotBb = createBlackboard(scope, null, false);
+
+    // Convert input.
+    convertFrom(pivotBb, pivot.query);
+    final RelNode input = pivotBb.root();
+    final RelDataType inputRowType = input.getRowType();
+    relBuilder.push(input);
+
+    final PivotAggregationContext aggregationContext =
+        collectPivotAggregationContext(pivotBb, pivot, inputRowType);
+
+    // Project the fields that we will need.
+    relBuilder
+        .project(aggregationContext.aggConverter.convertedInputExprs.leftList(),
+            aggregationContext.aggConverter.convertedInputExprs.rightList());
+
+    final ImmutableList.Builder<Pair<String, List<RexNode>>> valueList =
+        ImmutableList.builder();
+    pivot.forEachNameValues((alias, nodeList) ->
+        valueList.add(
+            Pair.of(alias,
+                nodeList.stream().map(bb::convertExpression)
+                    .collect(toImmutableList()))));
+    final ImmutableList<Pair<String, List<RexNode>>> values = valueList.build();
+    final boolean pivotValueNullOnEmpty =
+        validator().config().conformance().isPivotValueNullOnEmpty();
+    final RelBuilder.GroupKey groupKey =
+        relBuilder.groupKey(
+            aggregationContext.groupFields.stream()
+                .map(field ->
+                    aggregationContext.aggConverter.addGroupExpr(
+                        new SqlIdentifier(field.getName(), SqlParserPos.ZERO)))
+                .collect(ImmutableBitSet.toImmutableBitSet()));
+
+    final List<RexNode> axes = new ArrayList<>();
+    for (SqlNode axis : pivot.axisList) {
+        axes.add(relBuilder.field(aggregationContext.aggConverter.addGroupExpr(axis)));
+    }
+
+    final List<RelBuilder.AggCall> aggCalls = new ArrayList<>();
+    for (int i = 0; i < aggregationContext.aggConverter.aggCalls.size(); i++) {
+        aggCalls.add(
+            relBuilder.aggregateCall(aggregationContext.aggConverter.aggCalls.get(i))
+                .as(pivotAggregateAlias(i)));
+    }
+    if (pivotValueNullOnEmpty) {
+        aggCalls.add(relBuilder.countStar(pivotValueCountAlias()));
+    }
+    relBuilder.pivot(groupKey, aggCalls, axes, values);
+
+    final RelNode pivotRel = relBuilder.peek();
+    final RelDataType pivotRowType = pivotRel.getRowType();
+    final List<RelDataTypeField> pivotFields = pivotRowType.getFieldList();
+    final List<List<String>> pivotAggregateFieldNames = new ArrayList<>();
+    final List<String> pivotValueCountFieldNames = new ArrayList<>();
+    // RelBuilder.pivot returns group columns first, then one block of
+    // aggregate outputs per pivot value in values x aggCalls order. Read the
+    // actual field names from the row type because they may be uniquified.
+    int pivotFieldOrdinal = aggregationContext.groupFields.size();
+    for (int valueOrdinal = 0; valueOrdinal < values.size(); valueOrdinal++) {
+        final List<String> aggregateFieldNames = new ArrayList<>();
+        for (int aggregateOrdinal = 0;
+            aggregateOrdinal < aggregationContext.aggConverter.aggCalls.size();
+            aggregateOrdinal++) {
+            aggregateFieldNames.add(pivotFields.get(pivotFieldOrdinal++).getName());
+        }
+        pivotAggregateFieldNames.add(aggregateFieldNames);
+        if (pivotValueNullOnEmpty) {
+            pivotValueCountFieldNames.add(
+                pivotFields.get(pivotFieldOrdinal++).getName());
+        }
+    }
+    assert pivotFieldOrdinal == pivotFields.size();
+    final Map<String, RexNode> nameToNodeMap = new HashMap<>();
+    for (int i = 0; i < pivotFields.size(); i++) {
+        nameToNodeMap.put(pivotFields.get(i).getName(), relBuilder.field(i));
+    }
+    nameToNodeMap.put("_table_", rexBuilder.makeRangeReference(pivotRel));
+    final Map<String, RelDataType> nameToTypeMap = new HashMap<>();
+    for (Map.Entry<String, RexNode> entry : nameToNodeMap.entrySet()) {
+        nameToTypeMap.put(entry.getKey(), entry.getValue().getType());
+    }
+    final ParameterScope projectScope =
+        new ParameterScope((SqlValidatorImpl) validator(), nameToTypeMap);
+    final Blackboard projectBb =
+        createBlackboard(projectScope, nameToNodeMap, false);
+    projectBb.setRoot(pivotRel, true);
+
+    final List<RexNode> finalExprs = new ArrayList<>();
+    final List<String> finalNames = new ArrayList<>();
+    final RelDataType validatedPivotType = getNamespace(pivot).getRowType();
+    int outputFieldOrdinal = 0;
+    for (int i = 0; i < aggregationContext.groupFields.size(); i++) {
+        finalExprs.add(relBuilder.field(i));
+        finalNames.add(validatedPivotType.getFieldList().get(outputFieldOrdinal++).getName());
+    }
+    for (int valueOrdinal = 0; valueOrdinal < values.size(); valueOrdinal++) {
+        for (PivotMeasureExpression measure : aggregationContext.measures) {
+            final SqlNode rewrittenMeasure =
+                replacePivotAggregateTerms(
+                    measure.expression, measure.aggregateOrdinals,
+                    pivotAggregateFieldNames.get(valueOrdinal));
+            final SqlNode validatedMeasure =
+                projectBb.validateExpression(pivotRowType, rewrittenMeasure);
+            RexNode finalExpr = projectBb.convertExpression(validatedMeasure);
+            if (pivotValueNullOnEmpty) {
+                finalExpr =
+                    nullIfPivotValueEmpty(
+                        pivotValueCountFieldNames.get(valueOrdinal), finalExpr);
+            }
+            finalExprs.add(finalExpr);
+            finalNames.add(validatedPivotType.getFieldList().get(outputFieldOrdinal++).getName());
+        }
+    }
+    relBuilder.projectNamed(finalExprs, finalNames, true);
+    bb.setRoot(relBuilder.build(), true);
+}
+
+private PivotAggregationContext collectPivotAggregationContext(
+    Blackboard pivotBb, SqlPivot pivot, RelDataType inputRowType) {
+    final AggConverter aggConverter = AggConverter.create(pivotBb);
+    final Set<String> usedColumnNames = pivot.usedColumnNames();
+    final List<RelDataTypeField> groupFields = inputRowType.getFieldList().stream()
+        .filter(field -> !usedColumnNames.contains(field.getName()))
+        .collect(toImmutableList());
+
+    groupFields.forEach(field ->
+        aggConverter.addGroupExpr(
+            new SqlIdentifier(field.getName(), SqlParserPos.ZERO)));
+    pivot.axisList.forEach(aggConverter::addGroupExpr);
+
+    final List<PivotMeasureExpression> measures = new ArrayList<>();
+    final List<PivotAggregateTerm> aggregateTerms = new ArrayList<>();
+    pivotBb.agg = aggConverter;
+    try {
+        pivot.forEachAgg((alias, expression) -> {
+            replaceSubQueries(pivotBb, expression, RelOptUtil.Logic.TRUE_FALSE_UNKNOWN);
+            final Map<SqlCall, Integer> aggregateOrdinals = new HashMap<>();
+            SqlPivot.forEachAggregateTerm(expression, aggregateTerm -> {
+                final int aggregateOrdinal =
+                    addPivotAggregateTerm(aggConverter, aggregateTerms, aggregateTerm);
+                aggregateOrdinals.put(aggregateTerm, aggregateOrdinal);
+            });
+            measures.add(new PivotMeasureExpression(expression, aggregateOrdinals));
+        });
+    } finally {
+        pivotBb.agg = null;
+    }
+    return new PivotAggregationContext(aggConverter, groupFields, measures);
+}
+
+private RexNode nullIfPivotValueEmpty(String pivotValueCountFieldName,
+    RexNode value) {
+    final RexNode pivotValueCount = relBuilder.field(pivotValueCountFieldName);
+    final RexNode isEmpty =
+        relBuilder.equals(pivotValueCount,
+            rexBuilder.makeExactLiteral(BigDecimal.ZERO, pivotValueCount.getType()));
+    return rexBuilder.makeCall(SqlStdOperatorTable.CASE,
+        ImmutableList.of(isEmpty, rexBuilder.makeNullLiteral(value.getType()), value));
+}
+
+private int addPivotAggregateTerm(AggConverter aggConverter,
+    List<PivotAggregateTerm> aggregateTerms, SqlCall aggregateTerm) {
+    @Nullable Integer aggregateOrdinal =
+        lookupPivotAggregateOrdinal(aggregateTerms, aggregateTerm);
+    if (aggregateOrdinal != null) {
+        return aggregateOrdinal;
+    }
+    aggregateTerm.accept(aggConverter);
+    final RexNode rex =
+        requireNonNull(aggConverter.lookupAggregates(aggregateTerm),
+            () -> "aggregate RexNode for " + aggregateTerm);
+    if (!(rex instanceof RexInputRef)) {
+        throw new AssertionError("Expected RexInputRef for " + aggregateTerm
+            + " but found " + rex);
+    }
+    aggregateOrdinal =
+        ((RexInputRef) rex).getIndex() - aggConverter.groupExprs.size();
+    aggregateTerms.add(new PivotAggregateTerm(aggregateTerm, aggregateOrdinal));
+    return aggregateOrdinal;
+}
+
+private static @Nullable Integer lookupPivotAggregateOrdinal(
+    List<PivotAggregateTerm> aggregateTerms, SqlCall aggregateTerm) {
+    for (PivotAggregateTerm existingTerm : aggregateTerms) {
+        if (existingTerm.term.equalsDeep(aggregateTerm, Litmus.IGNORE)) {
+            return existingTerm.aggregateOrdinal;
+        }
+    }
+    return null;
+}
+
+private static String pivotAggregateAlias(int aggregateOrdinal) {
+    return "PIVOT_AGG_" + aggregateOrdinal;
+}
+
+private static String pivotValueCountAlias() {
+    return "PIVOT_COUNT";
+}
+
+private SqlNode replacePivotAggregateTerms(SqlNode expression,
+    Map<SqlCall, Integer> aggregateOrdinals, List<String> aggregateFieldNames) {
+    return requireNonNull(expression.accept(new SqlShuttle() {
+        @Override public @Nullable SqlNode visit(SqlCall call) {
+            final Integer aggregateOrdinal = aggregateOrdinals.get(call);
+            if (aggregateOrdinal != null) {
+                return new SqlIdentifier(
+                    aggregateFieldNames.get(aggregateOrdinal),
+                    call.getParserPosition());
+            }
+            return super.visit(call);
+        }
+    }), expression::toString);
+}
+
+/** Aggregate collection and grouping state needed to lower a PIVOT through
+ * filtered aggregate calls plus a final projection. */
+private static class PivotAggregationContext {
+    private final AggConverter aggConverter;
+    private final List<RelDataTypeField> groupFields;
+    private final List<PivotMeasureExpression> measures;
+
+    PivotAggregationContext(AggConverter aggConverter,
+        List<RelDataTypeField> groupFields,
+        List<PivotMeasureExpression> measures) {
+        this.aggConverter = aggConverter;
+        this.groupFields = groupFields;
+        this.measures = measures;
+    }
+}
+
+/** Original PIVOT measure expression plus the aggregate ordinals it uses
+ * after decomposition. */
+private static class PivotMeasureExpression {
+    private final SqlNode expression;
+    private final Map<SqlCall, Integer> aggregateOrdinals;
+
+    PivotMeasureExpression(SqlNode expression,
+        Map<SqlCall, Integer> aggregateOrdinals) {
+        this.expression = expression;
+        this.aggregateOrdinals = aggregateOrdinals;
+    }
+}
+
+/** Aggregate term inside a richer PIVOT measure and the underlying
+ * AggregateCall ordinal it maps to. */
+private static class PivotAggregateTerm {
+    private final SqlCall term;
+    private final int aggregateOrdinal;
+
+    PivotAggregateTerm(SqlCall term, int aggregateOrdinal) {
+        this.term = term;
+        this.aggregateOrdinal = aggregateOrdinal;
+    }
   }
 
   protected void convertUnpivot(Blackboard bb, SqlUnpivot unpivot) {
@@ -2995,7 +3336,9 @@ public class SqlToRelConverter {
         true);
   }
 
-  private void convertIdentifier(Blackboard bb, SqlIdentifier id,
+// E6data change
+// made from private to protected
+protected void convertIdentifier(Blackboard bb, SqlIdentifier id,
       @Nullable SqlNodeList extendedColumns, @Nullable SqlNodeList tableHints) {
     final SqlValidatorNamespace fromNamespace = getNamespace(id).resolve();
     if (fromNamespace.getNode() != null) {
@@ -3036,6 +3379,18 @@ public class SqlToRelConverter {
     if (usedDataset[0]) {
       bb.setDataset(datasetName);
     }
+  }
+
+// added by E6data to use datasetStack in child class
+protected String peekDataStack()
+{
+    return datasetStack.isEmpty() ? null : datasetStack.peek();
+}
+
+// added by E6data to use hintStrategies in child class
+protected List<RelHint> applyHintStrategy(@Nullable SqlNodeList tableHint, RelNode relNode)
+{
+    return hintStrategies.apply(SqlUtil.getRelHint(hintStrategies, tableHint), relNode);
   }
 
   protected void convertCollectionTable(
@@ -3112,7 +3467,7 @@ public class SqlToRelConverter {
   }
 
   private void convertTemporalTable(Blackboard bb, SqlCall call) {
-    final SqlSnapshot snapshot = (SqlSnapshot) call;
+    final E6SqlSnapshot snapshot = (E6SqlSnapshot) call;
     final RexNode period = bb.convertExpression(snapshot.getPeriod());
 
     // convert inner query, could be a table name or a derived table
@@ -3320,8 +3675,11 @@ public class SqlToRelConverter {
           .get(originalFieldIndex - namespaceOffset);
       int pos = namespaceOffset + field.getIndex();
 
-      assert field.getType()
-          == topLevelFieldAccess.getField().getType();
+        // changes by E6data
+        // double equals operator (==) was giving false even tho both Types were exactly same
+        // but .equals() method is giving true, in below test
+        // "MockServerTest.java"."testServer()" lateral view explore rewrite test
+        assert field.getType().equals(topLevelFieldAccess.getField().getType());
 
       assert pos != -1;
 
@@ -3655,6 +4013,10 @@ public class SqlToRelConverter {
       return JoinRelType.ASOF;
     case LEFT_ASOF:
       return JoinRelType.LEFT_ASOF;
+        case LEFT_SEMI_JOIN:
+            return JoinRelType.SEMI;
+        case LEFT_ANTI_JOIN:
+            return JoinRelType.ANTI;
     default:
       throw Util.unexpected(joinType);
     }
@@ -4138,7 +4500,8 @@ public class SqlToRelConverter {
     case VALUES:
       return RelRoot.of(convertValues((SqlCall) query, targetRowType), kind);
     default:
-      throw new AssertionError("not a query: " + query);
+            // Changed by E6Data error message as we are getting in some queries unexpected kind
+            throw new AssertionError("Got unexpected SqlKind:" + kind + ", not a query: " + query);
     }
   }
 
@@ -4163,11 +4526,21 @@ public class SqlToRelConverter {
         }
       }
     }
-    return relBuilder
-        .push(left)
-        .push(right)
-        .union(all, 2)
-        .build();
+
+    // change by E6Data
+    // Bug Note :
+    // Not using RelBuilder as of now for creating values
+    // here is a bug in rule 'ValuesReduceRule(Filter)'
+    // because of which it's not considering timestamp's milliseconds in <= or >=
+    // this is why all PlannerFixesTest >> 'TimestampSimplification' and 'IntervalWithQuotes' tests failing
+    // this bug simplifies values to 'LogicalValues(tuples=[[]])'
+    // return relBuilder
+    //    .push(left)
+    //    .push(right)
+    //    .union(all)
+    //    .build();
+
+    return LogicalUnion.create(ImmutableList.of(left, right), all(call));
   }
 
   /**
@@ -4434,9 +4807,11 @@ public class SqlToRelConverter {
         .build();
   }
 
+// E6Data change
+// from private to protected
   /** Creates a blackboard for translating the expressions of generated columns
    * in an INSERT statement. */
-  private Blackboard createInsertBlackboard(RelOptTable targetTable,
+protected Blackboard createInsertBlackboard(RelOptTable targetTable,
       RexNode sourceRef, List<String> targetColumnNames) {
     final Map<String, RexNode> nameToNodeMap = new HashMap<>();
     int j = 0;
@@ -4620,7 +4995,8 @@ public class SqlToRelConverter {
         LogicalTableModify.Operation.UPDATE, targetColumnNameList, rexExpressionList, false);
   }
 
-  private RelNode convertMerge(SqlMerge call) {
+// E6data change - Visibility relaxed from `private` to `protected`
+protected RelNode convertMerge(SqlMerge call) {
     RelOptTable targetTable = getTargetTable(call);
 
     // convert update column list from SqlIdentifier to String
@@ -4988,6 +5364,13 @@ public class SqlToRelConverter {
 
     // Project select clause.
     int i = -1;
+    // E6Data: track occurrence counts for duplicate star-expanded identifiers
+    // when ALLOW_DUPLICATE_ALIAS_IN_PROJECTION is on, so the Nth occurrence of
+    // "a.num" maps to the Nth field named "num" by ordinal rather than always
+    // resolving to the first matching field by name.
+    final Map<String, Integer> duplicateFieldCounter =
+        CalciteForkSettings.allowDuplicateAliasInProjection()
+            ? new HashMap<>() : null;
     for (SqlNode expr : selectList) {
       ++i;
       final SqlNode measure = SqlValidatorUtil.getMeasure(expr);
@@ -4998,6 +5381,33 @@ public class SqlToRelConverter {
           e = m;
         } else {
           e = rexBuilder.makeCall(SqlInternalOperators.V2M, m);
+        }
+        } else if (duplicateFieldCounter != null)
+        {
+            // E6Data: use ordinal-based field lookup for star-expanded
+            // identifiers to correctly resolve duplicate column aliases.
+            final SqlNode strippedExpr = SqlUtil.stripAs(expr);
+            if (strippedExpr instanceof SqlIdentifier && !((SqlIdentifier) strippedExpr).isStar()
+                && ((SqlIdentifier) strippedExpr).names.size() >= 2)
+            {
+                final SqlIdentifier id = (SqlIdentifier) strippedExpr;
+                final String sKey = String.join(".", id.names);
+                final int nOccurrence = duplicateFieldCounter.getOrDefault(sKey, 0);
+                duplicateFieldCounter.put(sKey, nOccurrence + 1);
+                if (nOccurrence > 0)
+                {
+                    final SqlQualified qualified = bb.scope.fullyQualify(id);
+                    final RexNode ordinalRef = bb.lookupExpByOrdinal(qualified, nOccurrence);
+                    e = (ordinalRef != null) ? ordinalRef : bb.convertExpression(expr);
+                }
+                else
+                {
+                    e = bb.convertExpression(expr);
+                }
+            }
+            else
+            {
+                e = bb.convertExpression(expr);
         }
       } else {
         e = bb.convertExpression(expr);
@@ -5084,11 +5494,21 @@ public class SqlToRelConverter {
     checkArgument(ordinal >= 0);
     String alias = SqlValidatorUtil.alias(node, ordinal);
     if (aliases.contains(alias)) {
+        // E6Data change for allowing duplicate alias in projection
+        if(CalciteForkSettings.allowDuplicateAliasInProjection() && alias != null)
+        {
+            aliases.add(alias);
+        }
+        else
+        {
       final String aliasBase = alias;
-      for (int j = 0;; j++) {
+            for (int j = 0; ; j++)
+            {
         alias = aliasBase + j;
-        if (!aliases.contains(alias)) {
+                if (!aliases.contains(alias))
+                {
           break;
+        }
         }
       }
     }
@@ -5672,6 +6092,53 @@ public class SqlToRelConverter {
       return null;
     }
 
+    /**
+     * E6Data: Resolves a star-expanded identifier to the Nth occurrence of a
+     * field by ordinal, to correctly handle duplicate column aliases in
+     * projections when ALLOW_DUPLICATE_ALIAS_IN_PROJECTION is enabled.
+     *
+     * @param qualified  fully-qualified identifier (prefix = table alias, suffix = field name)
+     * @param occurrence 0-based index of the occurrence to resolve
+     * @return RexNode pointing to the correct field, or null if fallback needed
+     */
+    @Nullable RexNode lookupExpByOrdinal(SqlQualified qualified, int occurrence)
+    {
+        if (inputs == null || qualified.suffix().isEmpty())
+        {
+            return null;
+        }
+        final SqlNameMatcher nameMatcher = scope.getValidator().getCatalogReader().nameMatcher();
+        final SqlValidatorScope.ResolvedImpl resolved = new SqlValidatorScope.ResolvedImpl();
+        scope.resolve(qualified.prefix(), nameMatcher, false, resolved);
+        if (resolved.count() != 1 || resolved.only().path.steps().isEmpty())
+        {
+            return null;
+        }
+        final SqlValidatorScope.Resolve resolve = resolved.only();
+        final RelDataType rowType = resolve.rowType();
+        final String sFieldName = qualified.suffix().get(0);
+        int nCount = 0;
+        for (RelDataTypeField field : rowType.getFieldList())
+        {
+            if (nameMatcher.matches(field.getName(), sFieldName))
+            {
+                if (nCount == occurrence)
+                {
+                    final LookupContext rels = new LookupContext(this, inputs, systemFieldList.size());
+                    final RexNode relRef = lookup(resolve.path.steps().get(0).i, rels);
+                    RexNode result = rexBuilder.makeFieldAccess(relRef, field.getIndex());
+                    if (result instanceof RexInputRef)
+                    {
+                        result = SqlToRelConverter.this.adjustInputRef(this, (RexInputRef) result);
+                    }
+                    return result;
+                }
+                nCount++;
+            }
+        }
+        return null;
+    }
+
     public void flatten(
         List<RelNode> rels,
         int systemFieldCount,
@@ -6146,6 +6613,11 @@ public class SqlToRelConverter {
     public @Nullable SqlNode lookupMeasure(SqlIdentifier identifier) {
       return null;
     }
+
+    // added new method by E6data to expose TOP
+    public boolean top() {
+        return top;
+    }
   }
 
   /**
@@ -6537,8 +7009,17 @@ public class SqlToRelConverter {
     final List<SqlNode> orderList = new ArrayList<>();
 
     @Override public Void visit(SqlCall call) {
-      // ignore window aggregates and ranking functions (associated with OVER operator)
+        // -- ignore this line -- ignore window aggregates and ranking functions (associated with OVER operator)
+        // changes by E6Data
+        // add agg inside of over, because enginedotnet has subquery inside agg
+        // example -> coalesce(sum(sum(case -- end)) over())
       if (call.getOperator().getKind() == SqlKind.OVER) {
+            SqlNode operand = call.operand(0);
+            if(CalciteForkSettings.enableSubqueryInAgg() && operand instanceof SqlCall)
+            {
+                SqlCall sqlCall = (SqlCall) operand;
+                visit(sqlCall);
+            }
         return null;
       }
 
@@ -6745,11 +7226,13 @@ public class SqlToRelConverter {
     Config withAddJsonTypeOperatorEnabled(boolean addJsonTypeOperatorEnabled);
   }
 
+// changes by E6data
+// made from private to public
   /**
    * Used to find nested json functions, and add {@link SqlStdOperatorTable#JSON_TYPE_OPERATOR}
    * to nested json output.
    */
-  private class NestedJsonFunctionRelRewriter extends RelShuttleImpl {
+public class NestedJsonFunctionRelRewriter extends RelShuttleImpl {
 
     @Override public RelNode visit(LogicalProject project) {
       final Set<Integer> jsonInputFields = findJsonInputs(project.getInput());

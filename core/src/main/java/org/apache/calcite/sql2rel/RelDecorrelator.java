@@ -678,7 +678,8 @@ public class RelDecorrelator implements ReflectiveVisitor {
     for (int i = 0; i < oldGroupKeyCount; i++) {
       final int idx = groupKeyIndices.get(i);
       final RexLiteral constant = projectedLiteral(newInput, idx);
-      if (constant != null) {
+      // E6: only omit aggregate group-key constants when correlated variables are present.
+      if (constant != null && !frame.corDefOutputs.isEmpty()) {
         // Exclude constants. Aggregate({true}) occurs because Aggregate({})
         // would generate 1 row even when applied to an empty table.
         omittedConstants.put(idx, constant);
@@ -1437,6 +1438,10 @@ public class RelDecorrelator implements ReflectiveVisitor {
         newLocalOutputs = mapNewInputToOutputs.get(newInput);
       }
 
+      if (frame.oldToNewOutputs.size() < oldCorVarOffset) {
+        throw new IndexOutOfBoundsException(
+            "Input Frame doesn't contain Rex Correlated Variable " + corVar);
+      }
       final int newCorVarOffset =
           requireNonNull(frame.oldToNewOutputs.get(oldCorVarOffset));
 

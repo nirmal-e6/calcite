@@ -36,6 +36,7 @@ import org.immutables.value.Value;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Rule that converts true filtered aggregates into CASE-style filtered aggregates.
@@ -83,6 +84,8 @@ public class AggregateFilterToCaseRule
     final List<AggregateCall> newCalls =
         new ArrayList<>(aggregate.getAggCallList().size());
     final List<RexNode> newProjects = new ArrayList<>(project.getProjects());
+    final List<String> projectNames = project.getNamedProjects().stream()
+        .map(p -> p.right).collect(Collectors.toList());
 
     for (AggregateCall aggregateCall : aggregate.getAggCallList()) {
       AggregateCall newCall =
@@ -100,7 +103,7 @@ public class AggregateFilterToCaseRule
 
     relBuilder
         .push(project.getInput())
-        .project(newProjects);
+        .project(newProjects, projectNames);
     final RelBuilder.GroupKey groupKey =
         relBuilder.groupKey(aggregate.getGroupSet(), aggregate.getGroupSets());
     relBuilder.aggregate(groupKey, newCalls);

@@ -103,6 +103,8 @@ import static org.apache.calcite.sql.fun.SqlStdOperatorTable.UPPER;
 
 import static java.util.Objects.requireNonNull;
 
+// E6data shade - Added for hypergraph backport from 1.41
+
 /**
  * Translates {@link org.apache.calcite.rex.RexNode REX expressions} to
  * {@link Expression linq4j expressions}.
@@ -1378,6 +1380,11 @@ public class RexToLixTranslator implements RexVisitor<RexToLixTranslator.Result>
             Boolean.TYPE, list.newName("input_isNull"));
     list.add(Expressions.declare(Modifier.FINAL, isNullVariable, isNullExpression));
     return new Result(isNullVariable, valueVariable);
+  }
+
+  @Override public Result visitNodeAndFieldIndex(
+      RexNodeAndFieldIndex rexNodeAndFieldIndex) {
+    return null;
   }
 
   @Override public Result visitLocalRef(RexLocalRef localRef) {

@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.tools;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.linq4j.Ord;
 import org.apache.calcite.linq4j.function.Experimental;
 import org.apache.calcite.plan.Context;
@@ -2128,7 +2129,7 @@ public class RelBuilder {
 
     // Do not merge projection when top projection has correlation variables
     bloat:
-    if (frame.rel instanceof Project
+    if (!(force && CalciteForkSettings.relBuilderFix()) && frame.rel instanceof Project
         && config.bloat() >= 0
         && variables.isEmpty()) {
       final Project project = (Project) frame.rel;
@@ -2204,14 +2205,18 @@ public class RelBuilder {
       String name = fieldNameList.get(i);
       String originalName = name;
       if (name == null || uniqueNameList.contains(name)) {
-        int j = 0;
-        if (name == null) {
-          j = i;
+        if (CalciteForkSettings.allowDuplicateAliasInProjection() && name != null) {
+          fieldNameList.set(i, name);
+        } else {
+          int j = 0;
+          if (name == null) {
+            j = i;
+          }
+          do {
+            name = SqlValidatorUtil.F_SUGGESTER.apply(originalName, j, j++);
+          } while (uniqueNameList.contains(name));
+          fieldNameList.set(i, name);
         }
-        do {
-          name = SqlValidatorUtil.F_SUGGESTER.apply(originalName, j, j++);
-        } while (uniqueNameList.contains(name));
-        fieldNameList.set(i, name);
       }
       RelDataTypeField fieldType =
           new RelDataTypeFieldImpl(name, i, node.getType());

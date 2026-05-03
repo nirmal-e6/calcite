@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.rel.rules;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.plan.RelRule;
@@ -92,6 +93,20 @@ public abstract class FilterJoinRule<C extends FilterJoinRule.Config>
     // again on the new cartesian product joinRel.
     if (filter == null && joinFilters.isEmpty()) {
       return;
+    }
+
+    // Placing this optimization temporarily under flag, as it results in stack overflow in CB query
+    // (t1.a = 1 AND t2.a = 2) OR (t1.b = 3 AND t2.b = 4), you can
+    // derive table filters:
+    // (t1.a = 1 OR t1.b = 3)
+    // (t2.a = 2 OR t2.b = 4)
+    if (CalciteForkSettings.optimizeFilterWithOr() && filter != null) {
+      OptimizeFilterWithOR extractOrExpressionUtil = new OptimizeFilterWithOR();
+      Filter newFilter =
+          extractOrExpressionUtil.OptimizeFilterWithOR(filter, call.getMetadataQuery());
+      if (newFilter != null) {
+        filter = newFilter;
+      }
     }
 
     List<RexNode> aboveFilters =

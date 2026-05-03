@@ -16,14 +16,18 @@
  */
 package org.apache.calcite.sql.fun;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlFunctionCategory;
 import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.SqlOperatorBinding;
 import org.apache.calcite.sql.SqlSplittableAggFunction;
+import org.apache.calcite.sql.type.E6TypeSystemImpl;
 import org.apache.calcite.sql.type.OperandTypes;
 import org.apache.calcite.sql.type.ReturnTypes;
+import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.Optionality;
 
 import com.google.common.collect.ImmutableList;
@@ -31,6 +35,7 @@ import com.google.common.collect.ImmutableList;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * <code>Sum</code> is an aggregator which returns the sum of the values which
@@ -52,7 +57,7 @@ public class SqlSumAggFunction extends SqlAggFunction {
         "SUM",
         null,
         SqlKind.SUM,
-        ReturnTypes.AGG_SUM,
+         null,
         null,
         OperandTypes.NUMERIC,
         SqlFunctionCategory.NUMERIC,
@@ -63,6 +68,45 @@ public class SqlSumAggFunction extends SqlAggFunction {
   }
 
   //~ Methods ----------------------------------------------------------------
+
+
+
+@Override
+public RelDataType inferReturnType(SqlOperatorBinding opBinding)
+{
+    RelDataType operandType = opBinding.getOperandType(0);
+    if (operandType.getSqlTypeName().equals(SqlTypeName.DECIMAL))
+    {
+      if(operandType.getPrecision() > E6TypeSystemImpl.MAX_DOUBLE_PRECISION)
+      {
+        if (operandType.getScale() == 0 || CalciteForkSettings.decimal128Enabled())
+        {
+          return createTypeWithNullability(opBinding, operandType);
+        }
+      }
+    }
+    return createTypeWithNullability(opBinding,
+        Objects.requireNonNull(ReturnTypes.DOUBLE_NULLABLE.inferReturnType(opBinding)));
+}
+
+// using calcite's nullability on top of our return type implementation
+protected RelDataType createTypeWithNullability(SqlOperatorBinding opBinding,
+    RelDataType type)
+{
+    final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+    // if we use hasEmptyGroup currently, it will not return accurate results
+    // we currently use 1.39 in which group count is used widely
+    // getGroupCount is Deprecated in 1.41
+    // after upgrade we will switch to hasEmptyGroup
+    if (opBinding.getGroupCount() == 0 || opBinding.hasFilter())
+    {
+        return typeFactory.createTypeWithNullability(type, true);
+    }
+    else
+    {
+        return type;
+    }
+}
 
   @SuppressWarnings("deprecation")
   @Override public List<RelDataType> getParameterTypes(RelDataTypeFactory typeFactory) {

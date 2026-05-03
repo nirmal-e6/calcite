@@ -67,6 +67,7 @@ public enum SqlTypeFamily implements RelDataTypeFamily {
   EXACT_NUMERIC,
   UNSIGNED_NUMERIC,
   DECIMAL,
+  INTEGER_EXCLUDING_BIG_INT,
   INTEGER,
   DATETIME,
   DATETIME_INTERVAL,
@@ -208,6 +209,8 @@ public enum SqlTypeFamily implements RelDataTypeFamily {
       return SqlTypeName.EXACT_TYPES;
     case UNSIGNED_NUMERIC:
       return SqlTypeName.UNSIGNED_TYPES;
+    case INTEGER_EXCLUDING_BIG_INT:
+      return SqlTypeName.INTEGER_EXCLDUING_BIG_INT;
     case INTEGER:
       return SqlTypeName.INT_TYPES;
     case DATETIME:
@@ -264,6 +267,8 @@ public enum SqlTypeFamily implements RelDataTypeFamily {
       return factory.createSqlType(SqlTypeName.DOUBLE);
     case EXACT_NUMERIC:
       return SqlTypeUtil.getMaxPrecisionScaleDecimal(factory);
+    case INTEGER_EXCLUDING_BIG_INT:
+      return factory.createSqlType(SqlTypeName.INTEGER);
     case INTEGER:
       return factory.createSqlType(SqlTypeName.BIGINT);
     case DECIMAL:

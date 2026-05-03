@@ -17,6 +17,7 @@
 package org.apache.calcite.sql.fun;
 
 import org.apache.calcite.avatica.util.TimeUnitRange;
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlCharStringLiteral;
@@ -28,6 +29,7 @@ import org.apache.calcite.sql.SqlOperatorBinding;
 import org.apache.calcite.sql.SqlWriter;
 import org.apache.calcite.sql.type.OperandTypes;
 import org.apache.calcite.sql.type.ReturnTypes;
+import org.apache.calcite.sql.type.SqlReturnTypeInference;
 import org.apache.calcite.sql.type.SqlTypeFamily;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.validate.SqlMonotonicity;
@@ -53,11 +55,19 @@ public class SqlExtractFunction extends SqlFunction {
 
   // SQL2003, Part 2, Section 4.4.3 - extract returns a exact numeric
   // TODO: Return type should be decimal for seconds
+  // Native executor returns Int32 for date component extraction functions,
+  // while the Java executor returns Int64.
+  private static final SqlReturnTypeInference EXTRACT_RETURN_TYPE = opBinding ->
+      (CalciteForkSettings.nativeExecutor() ? ReturnTypes.INTEGER_NULLABLE
+          : ReturnTypes.BIGINT_NULLABLE).inferReturnType(opBinding);
+
   public SqlExtractFunction(String name, boolean allowString) {
-    super(name, SqlKind.EXTRACT, ReturnTypes.BIGINT_NULLABLE, null,
+    super(name, SqlKind.EXTRACT, EXTRACT_RETURN_TYPE, null,
         allowString
             ? OperandTypes.INTERVALINTERVAL_INTERVALDATETIME
                 .or(OperandTypes.family(SqlTypeFamily.STRING, SqlTypeFamily.DATETIME))
+                .or(OperandTypes.family(SqlTypeFamily.DATETIME_INTERVAL,
+                    SqlTypeFamily.TIMESTAMP))
             : OperandTypes.INTERVALINTERVAL_INTERVALDATETIME,
         SqlFunctionCategory.SYSTEM);
   }

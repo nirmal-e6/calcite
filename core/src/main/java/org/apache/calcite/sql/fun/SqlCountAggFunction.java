@@ -39,6 +39,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 
+// Shaded for deriveType method change
 /**
  * Definition of the SQL <code>COUNT</code> aggregation function.
  *
@@ -84,11 +85,18 @@ public class SqlCountAggFunction extends SqlAggFunction {
       SqlCall call) {
     // Check for COUNT(*) function.  If it is we don't
     // want to try and derive the "*"
-    if (call.isCountStar()) {
+
+
+    // E6data change
+    // use type as BIGINT only
+//    if (call.isCountStar())
+//    {
+//        return validator.getTypeFactory().createSqlType(SqlTypeName.BIGINT);
+//    }
+//    return super.deriveType(validator, scope, call);
+
       return validator.getTypeFactory().createSqlType(
           SqlTypeName.BIGINT);
-    }
-    return super.deriveType(validator, scope, call);
   }
 
   @Override public <T extends Object> @Nullable T unwrap(Class<T> clazz) {

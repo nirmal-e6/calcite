@@ -33,6 +33,8 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 import static java.util.Objects.requireNonNull;
 
+// SHADED for exposing current state of some members
+
 /**
  * Abstract implementation of {@link SqlValidatorNamespace}.
  */
@@ -236,4 +238,19 @@ abstract class AbstractNamespace implements SqlValidatorNamespace {
         .add(SqlValidatorUtil.alias(requireNonNull(unnest, "unnest"), 0), type)
         .build();
   }
+
+// added by E6Data
+// used at DelegatingScope to fix CyclicException for MatchRecognise
+public boolean currentlyValidationInProgress()
+{
+    return status == SqlValidatorImpl.Status.IN_PROGRESS;
+}
+
+// added by E6Data
+// used at SqlValidator to early check if row type is null or not
+public boolean isRowTypeUnknown()
+{
+    return rowType == null;
+}
+
 }
