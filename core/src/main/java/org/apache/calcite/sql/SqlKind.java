@@ -25,6 +25,7 @@ import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Set;
 
+// Shaded to add custom SqlKind enums line no.261
 /**
  * Enumerates the possible types of {@link SqlNode}.
  *
@@ -130,6 +131,8 @@ public enum SqlKind {
    */
   OTHER_FUNCTION,
 
+    RANGE,
+
   /**
    * Input tables have either row semantics or set semantics.
    * <ul>
@@ -164,6 +167,12 @@ public enum SqlKind {
 
   /** DESCRIBE TABLE statement. */
   DESCRIBE_TABLE,
+
+    /** DESCRIBE DETAIL statement. */
+    DESCRIBE_DETAIL,
+
+    /** DESCRIBE HISTORY statement. */
+    DESCRIBE_HISTORY,
 
   /** INSERT statement. */
   INSERT,
@@ -944,6 +953,31 @@ public enum SqlKind {
   LATERAL,
 
   /**
+     * <a href="https://docs.databricks.com/aws/en/sql/language-manual/functions/colonsign">Databricks' colon operator</a>
+     */
+    COLON,
+
+    /**
+     * Access to a JSON path in a variant value.
+     */
+    VARIANT_GET,
+
+    /**
+     * Access to a JSON path in a variant value. Type conversion errors are ignored.
+     */
+    TRY_VARIANT_GET,
+
+    /**
+     * Parse JSON into a Variant value.
+     */
+    PARSE_JSON,
+
+    /**
+     * Checks if a variant value is null.
+     */
+    IS_VARIANT_NULL,
+
+  /**
    * Table operator which converts user-defined transform into a relation, for
    * example, <code>select * from TABLE(udx(x, y, z))</code>. See also the
    * {@link #EXPLICIT_TABLE} prefix operator.
@@ -1043,6 +1077,8 @@ public enum SqlKind {
 
   /** The {@code SUM} aggregate function. */
   SUM,
+    /** The {@code MIN_N} aggregate function. */
+    MIN_N,
 
   /** The {@code SUM0} aggregate function. */
   SUM0,
@@ -1067,6 +1103,8 @@ public enum SqlKind {
 
   /** The {@code ANY_VALUE} aggregate function. */
   ANY_VALUE,
+
+    BOOL_OR,
 
   /** The {@code COVAR_POP} aggregate function. */
   COVAR_POP,
@@ -1360,7 +1398,286 @@ public enum SqlKind {
    * commands for them. Use OTHER_DDL in the short term, but we are happy to add
    * new enum values for your object types. Just ask!
    */
-  OTHER_DDL;
+    OTHER_DDL,
+    CHAR,
+
+    // Custom E6data Enum values
+    LEFT_SHIFT,
+    RIGHT_SHIFT,
+    BITWISE_AND,
+    CACHE,
+    LAST_DAY,
+    NEXT_DAY,
+    TO_UNIX_TIMESTAMP,
+    UNIX_TIMESTAMP,
+    FORMAT_TIMESTAMP,
+    JSON_VALUE,
+    JSON_OBJECT_KEYS,
+    PERCENTILE,
+    DATE_DIFF,
+    DROP_CACHE,
+    LOCATE,
+    LEFT,
+    RIGHT,
+    REGEXP_LIKE,
+    REGEXP_REPLACE,
+    SPLIT,
+    SOUNDEX,
+    PARSE_TIMESTAMP,
+    REGEXP_COUNT,
+    TANH,
+    SPLIT_PART,
+    APPROX_COUNT_DISTINCT,
+    SIGN,
+    CONVERT_TIMEZONE,
+    TO_TIMESTAMP,
+    TO_TIMESTAMP_LTZ,
+    TO_TIMESTAMP_NTZ,
+    TO_TIMESTAMP_TZ,
+    TRY_TO_TIMESTAMP,
+    TRY_TO_TIMESTAMP_LTZ,
+    TRY_TO_TIMESTAMP_NTZ,
+    TRY_TO_TIMESTAMP_TZ,
+    DAYNAME,
+    STARTSWITH,
+    ENDSWITH,
+    LEN,
+    COPY_INTO,
+    WRITE_INTO,
+    TO_DATE,
+    TO_CHAR,
+    TRY_CAST,
+    UPPER,
+    LOWER,
+    DATEDIFF,
+    DAYS,
+    TRUNC,
+    ELEMENT_AT,
+    SLICE_MAP,
+    CORR,
+    TRY_DIVIDE,
+    TRY_MULTIPLY,
+    TRY_ADD,
+    TRY_MOD,
+    SHOW_VIEW,
+    REFRESH_MATERIALIZED_VIEW,
+    REPLACE_MATERIALIZED_VIEW,
+    FILTER_ARRAY,
+    REDUCE,
+    IS_NULL_VALUE,
+    FROM_UTC_TIMESTAMP,
+    TO_UTC_TIMESTAMP,
+    SHOW_SCHEMAS,
+    SHOW_TABLES,
+    NULLIFZERO,
+    WEEKDAY,
+    TRY_TO_NUMBER,
+    TO_NUMBER,
+    CURRENT_TIMESTAMP,
+    TO_JSON,
+    FROM_JSON,
+    EQUAL_NULL,
+    VERSION,
+    ANALYZE_TABLE,
+    SLEEP,
+    WIDTH_BUCKET,
+    PMOD,
+    UDF,
+    UDF_CREATE,
+    UDF_SQL_BODY,
+    UDF_JAVA_BODY,
+    UDF_EXPRESSION,
+    UDF_BLOCK_STMT,
+    UDF_CONTINUE_STMT,
+    UDF_BREAK_STMT,
+    UDF_IF_STMT,
+    UDF_RETURN_STMT,
+    UDF_WHILE_STMT,
+    UDF_ASSIGN_STMT,
+    COSINE_DISTANCE,
+    UDF_REGISTER,
+    TRY,
+    DATE_PARSE,
+    MAKE_DATE,
+    UNBASE64,
+    UNBASE64_BINARY,
+    MONTHNAME,
+    MAKE_TIMESTAMP,
+    REGEXP_SUBSTR,
+    LEO_DROP_CACHE,
+    LIKE_ANY,
+    DAYOFWEEK,
+    MONTHS_BETWEEN,
+    APPROX_PERCENTILE,
+    ANY_MATCH,
+    SECRET,
+    AES_DECRYPT,
+    AES_ENCRYPT,
+    ENCODE,
+    BASE64,
+    CONCAT,
+    ALL_MATCH,
+    SET_SEARCH,
+    CURRENT_DATE,
+    NOW,
+    CONCAT_WS,
+    SUBSTR,
+    SUBSTRING,
+    GETUTCDATE,
+    POW,
+    REPLACE,
+    GENERATE_TIMESTAMP_ARRAY,
+    GENERATE_DATE_ARRAY,
+    BETA_CDF,
+    BINOMIAL_CDF,
+    BITWISE_ARITHMETIC_SHIFT_RIGHT,
+    BITWISE_LOGICAL_SHIFT_RIGHT,
+    BITWISE_NOT,
+    BITWISE_OR,
+    BITWISE_SHIFT_LEFT,
+    BITWISE_XOR,
+    BIT_COUNT,
+    CHAR2HEXINT,
+    CHI_SQUARED_CDF,
+    CHR,
+    CODEPOINT,
+    UNICODE,
+    COSEC,
+    COSH,
+    ACOSH,
+    CRC32,
+    E,
+    FROM_BASE,
+    FROM_BASE32,
+    FROM_BASE64,
+    FROM_BASE64URL,
+    FROM_HEX,
+    FROM_UNIXTIME,
+    FROM_UNIXTIME_WITHUNIT,
+    TIMESTAMP_SECONDS,
+    HAMMING_DISTANCE,
+    HMAC_MD5,
+    HMAC_SHA1,
+    HMAC_SHA256,
+    HMAC_SHA512,
+    INDEX,
+    INFINITY,
+    INITCAP,
+    ROUND,
+    H3_LATLNG_TO_CELL,
+    H3_LATLNG_TO_CELLADDRESS,
+    H3_POINT_TO_CELL,
+    H3_POINT_TO_CELLADDRESS,
+    H3_CELL_TO_LATLNG,
+    H3_CELLADDRESS_TO_LATLNG,
+    H3_CELL_TO_CELLADDRESS,
+    H3_CELLADDRESS_TO_CELL,
+    H3_CELL_TO_PARENT,
+    H3_CELLADDRESS_TO_PARENT,
+    H3_CELL_TO_BOUNDARY_AS_GEOJSON,
+    H3_POLYGON_TO_CELLS,
+    H3_POLYGON_TO_CELLADDRESSES,
+    H3_GRID_DISK,
+    BING_TILE_QUADKEY,
+    BING_TILE_AT,
+    INSTR,
+    IS_FINITE,
+    IS_INFINITE,
+    IS_NAN,
+    ISNAN,
+    LCASE,
+    LEVENSHTEIN,
+    LOG10,
+    LOG2,
+    LPAD,
+    MD5,
+    MID,
+    NAN,
+    NEGATIVE,
+    NORMALIZE,
+    PARSE_PRESTO_DATA_SIZE,
+    POISSON_CDF,
+    POSITIVE,
+    TYPEOF,
+    RAND,
+    UUID,
+    REGEXP_EXTRACT,
+    REGEXP_EXTRACT_ALL,
+    REGEXP_SPLIT,
+    REPEAT,
+    RPAD,
+    SEC,
+    SECOND,
+    SECURE_RAND,
+    SECURE_RANDOM,
+    SHA,
+    SHA1,
+    SHA256,
+    SHA512,
+    SIGNUM,
+    SINH,
+    ATANH,
+    ASINH,
+    SQUARE,
+    STRPOS,
+    STRRPOS,
+    STUFF,
+    FACTORIAL,
+    TO_BASE,
+    TO_BASE32,
+    TO_BASE64,
+    TO_BASE64URL,
+    TO_HEX,
+    TO_IEEE_754_64,
+    TO_UTF8,
+    UCASE,
+    URL_DECODE,
+    URL_ENCODE,
+    URL_EXTRACT_FRAGMENT,
+    URL_EXTRACT_HOST,
+    URL_EXTRACT_PATH,
+    URL_EXTRACT_PORT,
+    URL_EXTRACT_PROTOCOL,
+    URL_EXTRACT_QUERY,
+    WEIBULL_CDF,
+    SLICE,
+    ARRAY_SORT,
+    DATETIME,
+    TIME_STAMP,
+    DATE_PART,
+    DATEPART,
+    CHARINDEX,
+    SIZE,
+    CARDINALITY,
+    JSON_ARRAY_LENGTH,
+    JSON_FORMAT,
+    JSON_EXTRACT_SCALAR,
+    JSON_EXTRACT,
+    MAX_BY,
+    MIN_BY,
+    FORMAT_TIME_PIVOT_UDF,
+    FORMAT_TIME_UDF,
+    APPLY_TIMEUNIT_UDF,
+    APPLY_TIMEFORMAT_UDF,
+    TRY_ELEMENT_AT,
+    GETBIT,
+    TO_UNIXTIME,
+    PARSE_DATE,
+    FORMAT,
+    FORMAT_DATE,
+    DATE_FORMAT,
+    PARSE_DATETIME,
+    FORMAT_DATETIME,
+    TO_BOOLEAN,
+    HEX_DECODE_STRING,
+    ASCII,
+    DAYOFWEEKISO,
+    WEEKOFYEAR,
+    WEEKISO,
+    YEAROFWEEK,
+    YEAROFWEEKISO,
+    IFF,
+    TRANSPILE;
 
   //~ Static fields/initializers ---------------------------------------------
 
@@ -1383,13 +1700,13 @@ public enum SqlKind {
    */
   public static final EnumSet<SqlKind> AGGREGATE =
       EnumSet.of(COUNT, SUM, SUM0, MIN, MAX, LEAD, LAG, FIRST_VALUE,
-          LAST_VALUE, COVAR_POP, COVAR_SAMP, REGR_COUNT, REGR_SXX, REGR_SYY,
+        LAST_VALUE, BOOL_OR, COVAR_POP, COVAR_SAMP, REGR_COUNT, REGR_SXX, REGR_SYY,
           AVG, STDDEV_POP, STDDEV_SAMP, VAR_POP, VAR_SAMP, NTILE, COLLECT,
           MODE, FUSION, SINGLE_VALUE, ROW_NUMBER, RANK, PERCENT_RANK, DENSE_RANK,
           CUME_DIST, JSON_ARRAYAGG, JSON_OBJECTAGG, BIT_AND, BIT_OR, BIT_XOR,
           LISTAGG, STRING_AGG, ARRAY_AGG, ARRAY_CONCAT_AGG, GROUP_CONCAT, COUNTIF,
-          PERCENTILE_CONT, PERCENTILE_DISC,
-          INTERSECTION, ANY_VALUE);
+        PERCENTILE_CONT, PERCENTILE_DISC, PERCENTILE,
+        INTERSECTION, ANY_VALUE,CORR, APPROX_PERCENTILE);
 
   /**
    * Category consisting of all DML operators.
@@ -1425,7 +1742,7 @@ public enum SqlKind {
           CREATE_SEQUENCE, ALTER_SEQUENCE, DROP_SEQUENCE,
           CREATE_INDEX, ALTER_INDEX, DROP_INDEX,
           CREATE_TYPE, DROP_TYPE,
-          SET_OPTION, OTHER_DDL);
+        UDF_CREATE, SET_OPTION, OTHER_DDL);
 
   /**
    * Category consisting of query node types.
@@ -1518,7 +1835,7 @@ public enum SqlKind {
    * {@link #REGR_SYY}.
    */
   public static final Set<SqlKind> COVAR_AVG_AGG_FUNCTIONS =
-      EnumSet.of(COVAR_POP, COVAR_SAMP, REGR_COUNT, REGR_SXX, REGR_SYY);
+    EnumSet.of(CORR, COVAR_POP, COVAR_SAMP, REGR_COUNT, REGR_SXX, REGR_SYY);
 
   /**
    * Category of comparison operators.

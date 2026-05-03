@@ -20,6 +20,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 
+// E6data shade - Added for hypergraph backport from 1.41
 /**
  * Default implementation of {@link RexVisitor}, which visits each node but does
  * nothing while it's there.

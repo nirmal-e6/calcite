@@ -69,6 +69,7 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.tools.RelBuilder;
 import org.apache.calcite.tools.RelBuilderFactory;
 import org.apache.calcite.util.ImmutableBitSet;
+import org.apache.calcite.util.NlsString;
 import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.Util;
 
@@ -86,6 +87,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+// Shaded for simplifying cast and lambda fix
+// didn't create separate rule because other rules or classes may be calling it internally, for example ValuesReduceRule
 
 /**
  * Collection of planner rules that apply various simplifying transformations on
@@ -725,12 +729,32 @@ public abstract class ReduceExpressionsRule<C extends ReduceExpressionsRule.Conf
 
     boolean simplified = false;
     for (int i = 0; i < expList.size(); i++) {
-      final RexNode expr2 =
-          simplify.simplifyPreservingType(expList.get(i), unknownAs,
-              matchNullability);
-      if (!expr2.equals(expList.get(i))) {
+        // E6data change
+        // added if condition to skip simplify if cast is present
+        boolean skipSimplify = false;
+        if (expList.get(0) instanceof RexCall)
+        {
+            RexCall call = (RexCall) expList.get(0);
+            if (call.getOperator().getKind() == SqlKind.CAST
+                && call.getType().getFamily().toString().equals("TIMESTAMP")
+                && call.getOperands().get(0) instanceof RexLiteral)
+            {
+                RexLiteral literal = (RexLiteral) call.getOperands().get(0);
+                if (literal.getValue() instanceof NlsString)
+                {
+                    NlsString nlsString = (NlsString) literal.getValue();
+                    skipSimplify = nlsString.getValue().length() > 19;
+                }
+            }
+        }
+        if(!skipSimplify)
+        {
+            final RexNode expr2 = simplify.simplifyPreservingType(expList.get(i), unknownAs, matchNullability);
+            if (!expr2.equals(expList.get(i)))
+            {
         expList.set(i, expr2);
         simplified = true;
+      }
       }
     }
 
@@ -741,6 +765,7 @@ public abstract class ReduceExpressionsRule<C extends ReduceExpressionsRule.Conf
     return reduced || simplified;
   }
 
+// TODO: Figure out why functions like LOWER, UPPER are not reduced
   protected static boolean reduceExpressionsInternal(RelNode rel,
       RexSimplify simplify, RexUnknownAs unknownAs, List<RexNode> expList,
       RelOptPredicateList predicates, boolean treatDynamicCallsAsConstant) {
@@ -1120,6 +1145,24 @@ public abstract class ReduceExpressionsRule<C extends ReduceExpressionsRule.Conf
       // assume REDUCIBLE_CONSTANT until proven otherwise
       analyzeCall(call, Constancy.REDUCIBLE_CONSTANT);
       return null;
+    }
+
+    // E6data fix for lambda support
+    @Override
+    public Void visitLambda(RexLambda lambda)
+    {
+        for (RexLambdaRef rexLambdaRef : lambda.getParameters())
+        {
+            visitLambdaRef(rexLambdaRef);
+        }
+        return null;
+    }
+
+    // E6data fix for lambda support
+    @Override
+    public Void visitLambdaRef(RexLambdaRef lambdaRef)
+    {
+        return pushVariable();
     }
 
     @Override public Void visitSubQuery(RexSubQuery subQuery) {

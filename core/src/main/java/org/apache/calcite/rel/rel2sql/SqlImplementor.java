@@ -150,6 +150,9 @@ import static org.apache.calcite.linq4j.Nullness.castNonNull;
 
 import static java.util.Objects.requireNonNull;
 
+// e6data shaded - This class had to be shaded to add a method in Result sub class.
+// Function signature newly added: Result resetAlias(String alias)
+
 /**
  * State for generating a SQL statement.
  */
@@ -1908,8 +1911,8 @@ public abstract class SqlImplementor {
   /** Result of implementing a node. */
   public class Result {
     final SqlNode node;
-    final @Nullable String neededAlias;
-    private final @Nullable RelDataType neededType;
+    @Nullable String neededAlias;
+    private @Nullable RelDataType neededType;
     private final Map<String, RelDataType> aliases;
     final List<Clause> clauses;
     private final boolean anon;
@@ -2448,6 +2451,35 @@ public abstract class SqlImplementor {
       }
     }
 
+    // e6data change - This method is needed to pass in explicit alias constructed from outside.
+    //                 This was done to tackle the problem in cases where both the legs of the join have same aliases,
+    //                 resulting in a conflict, making the rel to sql conversion fail.
+    public Result resetAlias(String alias)
+    {
+      RelDataType typeToUse = this.neededType;
+
+      if (typeToUse == null && this.expectedRel != null) {
+        typeToUse = this.expectedRel.getRowType();
+      }
+
+      if (neededAlias == null) {
+        this.neededAlias = alias;
+        this.neededType = typeToUse;
+        return this;
+      }
+
+      java.util.Map<String, RelDataType> typeMap;
+      if (typeToUse != null) {
+        typeMap = ImmutableMap.of(alias, typeToUse);
+      } else {
+        typeMap = ImmutableMap.of(); // Empty map is better than an NPE
+      }
+
+      return new Result(node, clauses, alias, typeToUse,
+          typeMap, anon, ignoreClauses,
+          expectedClauses, expectedRel);
+    }
+
     /**
      * Sets the alias of the join or correlate just created.
      *
@@ -2500,6 +2532,13 @@ public abstract class SqlImplementor {
           : new Result(node, clauses, neededAlias, neededType, aliases, anon,
               ignoreClauses, ImmutableSet.copyOf(expectedClauses), expectedRel, false);
     }
+
+    @Nullable
+    public RelDataType getNeededType()
+    {
+      return neededType;
+    }
+
   }
 
   /** Builder. */

@@ -2800,4 +2800,9 @@ public abstract class SqlLibraryOperators {
               OperandTypes.family(SqlTypeFamily.TIMESTAMP),
               OperandTypes.family(SqlTypeFamily.TIMESTAMP, SqlTypeFamily.TIMESTAMP)),
           SqlFunctionCategory.TIMEDATE);
+
+  /** The {@code >>} right-shift operator. */
+  @LibraryOperator(libraries = {MYSQL})
+  public static final SqlOperator RIGHT_SHIFT =
+      SqlCustomLibraryOperators.rightShift(">>");
 }

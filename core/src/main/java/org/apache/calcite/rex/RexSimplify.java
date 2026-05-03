@@ -18,6 +18,7 @@ package org.apache.calcite.rex;
 
 import org.apache.calcite.avatica.util.TimeUnit;
 import org.apache.calcite.avatica.util.TimeUnitRange;
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.plan.RelOptPredicateList;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.plan.Strong;
@@ -35,6 +36,7 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.type.SqlTypeUtil;
 import org.apache.calcite.util.Bug;
 import org.apache.calcite.util.ImmutableBitSet;
+import org.apache.calcite.util.NlsString;
 import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.RangeSets;
 import org.apache.calcite.util.Sarg;
@@ -192,6 +194,9 @@ public class RexSimplify {
 
   public RexNode simplifyPreservingType(RexNode e, RexUnknownAs unknownAs,
       boolean matchNullability) {
+    if (shouldPreserveLongTimestampCast(e)) {
+      return e;
+    }
     final RexNode e2 = simplifyUnknownAs(e, unknownAs);
     if (e2.getType() == e.getType()) {
       return e2;
@@ -268,6 +273,9 @@ public class RexSimplify {
    * Verify adds an overhead that is only acceptable for a top-level call.
    */
   RexNode simplify(RexNode e, RexUnknownAs unknownAs) {
+    if (shouldPreserveLongTimestampCast(e)) {
+      return e;
+    }
     if (isSafeExpression(e) && STRONG.isNull(e)) {
       // Only boolean NULL (aka UNKNOWN) can be converted to FALSE. Even in
       // unknownAs=FALSE mode, we must not convert a NULL integer (say) to FALSE
@@ -2548,6 +2556,17 @@ public class RexSimplify {
       default:
         break;
       }
+      if (SqlTypeFamily.NUMERIC.contains(literal.getType())) {
+        return e;
+      }
+      if (CalciteForkSettings.databricks()
+          && literal.getTypeName() == SqlTypeName.BOOLEAN
+          && SqlTypeUtil.isCharacter(e.getType())) {
+        Boolean bVal = literal.getValueAs(Boolean.class);
+        if (bVal != null) {
+          return rexBuilder.makeLiteral(bVal ? "true" : "false", e.getType());
+        }
+      }
       final List<RexNode> reducedValues = new ArrayList<>();
       final RexNode simplifiedExpr = e.operandCount() == 2
           ? rexBuilder.makeCast(e.getParserPosition(), e.getType(), operand, safe, safe,
@@ -2572,6 +2591,24 @@ public class RexSimplify {
             : rexBuilder.makeCast(e.getType(), operand, safe, safe);
       }
     }
+  }
+
+  private static boolean shouldPreserveLongTimestampCast(RexNode e) {
+    if (!(e instanceof RexCall)) {
+      return false;
+    }
+    RexCall call = (RexCall) e;
+    if (call.getOperator().getKind() != SqlKind.CAST
+        || call.getType().getFamily() != SqlTypeFamily.TIMESTAMP
+        || !(call.getOperands().get(0) instanceof RexLiteral)) {
+      return false;
+    }
+    RexLiteral literal = (RexLiteral) call.getOperands().get(0);
+    if (literal.getValue() instanceof NlsString) {
+      NlsString nlsString = (NlsString) literal.getValue();
+      return nlsString.getValue().length() > 19;
+    }
+    return false;
   }
 
   /** Tries to simplify CEIL/FLOOR function on top of CEIL/FLOOR.

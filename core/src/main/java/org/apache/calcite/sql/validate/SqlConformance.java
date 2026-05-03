@@ -19,6 +19,7 @@ package org.apache.calcite.sql.validate;
 import org.apache.calcite.linq4j.function.Experimental;
 import org.apache.calcite.sql.fun.SqlLibrary;
 
+// e6data - Shaded to add our own conformance flags
 /**
  * Enumeration of valid SQL compatibility modes.
  *
@@ -259,6 +260,28 @@ public interface SqlConformance {
    * false otherwise.
    */
   boolean allowHyphenInUnquotedTableName();
+
+  // e6data change - Spark style PIVOT semantics
+  /**
+   * Whether to allow a {@code PIVOT} measure to be a scalar expression over
+   * aggregate terms, or a scalar expression that is independent of the input
+   * row, rather than requiring a top-level aggregate call.
+   *
+   * <p>If true, expressions such as {@code sum(x) / sum(y)} and
+   * {@code coalesce(sum(x), 0)} are valid in the aggregate list of a
+   * {@code PIVOT}, and input-independent scalar measures such as {@code 1} are
+   * also valid. Column references must still occur only inside aggregate
+   * terms. The behavior of output columns for missing pivot buckets is
+   * controlled separately by {@link #isPivotValueNullOnEmpty()}.
+   */
+  boolean allowPivotAggregateExpression();
+
+  /**
+   * Whether a generated {@code PIVOT} value should be {@code NULL} when no
+   * input row matches the corresponding pivot bucket.
+   *
+   */
+  boolean isPivotValueNullOnEmpty();
 
   /**
    * Whether {@code :} is allowed as a field/item access operator.

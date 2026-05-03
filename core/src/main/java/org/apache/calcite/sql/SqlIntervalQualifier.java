@@ -23,6 +23,7 @@ import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.rel.type.TimeFrames;
 import org.apache.calcite.runtime.CalciteContextException;
 import org.apache.calcite.sql.parser.SqlParserPos;
+import org.apache.calcite.sql.type.E6TypeSystemImpl;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.util.SqlVisitor;
 import org.apache.calcite.sql.validate.SqlValidator;
@@ -45,6 +46,7 @@ import static org.apache.calcite.util.Static.RESOURCE;
 
 import static java.util.Objects.requireNonNull;
 
+// shaded for milliseconds interval support
 /**
  * Represents an INTERVAL qualifier.
  *
@@ -414,7 +416,7 @@ public class SqlIntervalQualifier extends SqlNode {
       int leftPrec,
       int rightPrec) {
     writer.getDialect()
-        .unparseSqlIntervalQualifier(writer, this, RelDataTypeSystem.DEFAULT);
+        .unparseSqlIntervalQualifier(writer, this,  E6TypeSystemImpl.getInstance());
   }
 
   /**
@@ -510,8 +512,20 @@ public class SqlIntervalQualifier extends SqlNode {
     // we should never get handed a negative field value
     assert value.compareTo(ZERO) >= 0;
 
+
+    // condition for precision
+    int startPrecision;
+    if (unit == TimeUnit.MILLISECOND || unit == TimeUnit.MICROSECOND || unit == TimeUnit.NANOSECOND)
+    {
+        startPrecision = 3;
+    }
+    else
+    {
     // Leading fields are only restricted by startPrecision.
-    final int startPrecision = getStartPrecision(typeSystem);
+     startPrecision = getStartPrecision(typeSystem);
+
+    }
+
     return startPrecision < POWERS10.length
         ? value.compareTo(POWERS10[startPrecision]) < 0
         : value.compareTo(INT_MAX_VALUE_PLUS_ONE) < 0;
@@ -784,6 +798,37 @@ public class SqlIntervalQualifier extends SqlNode {
       // package values up for return
       final BigDecimal days = week.multiply(BigDecimal.valueOf(7));
       return fillDayTimeIntervalValueArray(sign, days, ZERO, ZERO, ZERO, ZERO);
+    }
+    else
+    {
+        throw invalidValueException(pos, originalValue);
+    }
+}
+
+private int[] evaluateIntervalLiteralAsMillisecond(RelDataTypeSystem typeSystem, int sign, String value,
+    String originalValue, SqlParserPos pos)
+{
+    BigDecimal milliSeconds;
+    // validate as MILLISECOND
+    String intervalPattern = "(\\d+)";
+    Matcher m = Pattern.compile(intervalPattern).matcher(value);
+    if (m.matches())
+    {
+        // Break out  field values
+        try
+        {
+            milliSeconds = parseField(m, 1);
+        }
+        catch (NumberFormatException e)
+        {
+            throw invalidValueException(pos, originalValue);
+        }
+
+        // Validate individual fields
+        checkLeadFieldInRange(typeSystem, sign, milliSeconds, TimeUnit.MILLISECOND, pos);
+
+        // package values up for return
+        return fillDayTimeIntervalValueArray(sign, ZERO, ZERO, ZERO, ZERO, milliSeconds);
     } else {
       throw invalidValueException(pos, originalValue);
     }
@@ -1379,6 +1424,10 @@ public class SqlIntervalQualifier extends SqlNode {
     case SECOND:
       return evaluateIntervalLiteralAsSecond(typeSystem, sign, value, value0,
           pos);
+
+        // added by E6data
+        case MILLISECOND:
+            return evaluateIntervalLiteralAsMillisecond(typeSystem, sign, value, value0, pos);
     default:
       throw invalidValueException(pos, value0);
     }

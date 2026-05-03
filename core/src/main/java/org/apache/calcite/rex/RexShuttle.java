@@ -26,6 +26,7 @@ import org.checkerframework.checker.nullness.qual.PolyNull;
 import java.util.ArrayList;
 import java.util.List;
 
+// E6data shade - Added for hypergraph backport from 1.41
 /**
  * Passes over a row-expression, calling a handler method for each node,
  * appropriate to the type of the node.

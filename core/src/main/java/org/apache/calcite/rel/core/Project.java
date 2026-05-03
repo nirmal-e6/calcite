@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.rel.core;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.linq4j.Ord;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelOptCost;
@@ -59,6 +60,9 @@ import java.util.Optional;
 import java.util.Set;
 
 import static java.util.Objects.requireNonNull;
+
+// shaded for allowing duplicate alias in projection
+// check method isValid
 
 /**
  * Relational expression that computes a set of
@@ -262,6 +266,11 @@ public abstract class Project extends SingleRel implements Hintable {
         return litmus.fail("{} failures in expression {}",
             checker.getFailureCount(), exp);
       }
+    }
+    // E6Data change for allowing duplicate alias in projection
+    if (CalciteForkSettings.allowDuplicateAliasInProjection())
+    {
+        return litmus.succeed();
     }
     if (!Util.isDistinct(getRowType().getFieldNames())) {
       return litmus.fail("field names not distinct: {}", rowType);

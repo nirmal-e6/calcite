@@ -18,10 +18,13 @@ package org.apache.calcite.plan;
 
 import org.apache.calcite.adapter.enumerable.EnumerableRules;
 import org.apache.calcite.avatica.AvaticaConnection;
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.config.CalciteSystemProperty;
 import org.apache.calcite.interpreter.Bindables;
 import org.apache.calcite.linq4j.Ord;
 import org.apache.calcite.linq4j.function.Experimental;
+import org.apache.calcite.plan.hep.HepRelVertex;
+import org.apache.calcite.plan.volcano.RelSubset;
 import org.apache.calcite.rel.RelCollations;
 import org.apache.calcite.rel.RelHomogeneousShuttle;
 import org.apache.calcite.rel.RelNode;
@@ -146,6 +149,9 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static org.apache.calcite.rel.type.RelDataTypeImpl.NON_NULLABLE_SUFFIX;
 
 import static java.util.Objects.requireNonNull;
+
+// shaded to adding alias for pushed join condition columns
+// method -> pushDownJoinConditions
 
 /**
  * <code>RelOptUtil</code> defines static utility methods for use in optimizing
@@ -2981,7 +2987,9 @@ public abstract class RelOptUtil {
                   joinFields,
                   nTotalFields,
                   leftFields,
-                  filter);
+                  filter,
+                  // E6Data change
+                  unwrapChild(joinRel.getInput(0)));
 
           leftFilters.add(shiftedFilter);
         }
@@ -2999,7 +3007,9 @@ public abstract class RelOptUtil {
                   joinFields,
                   nTotalFields,
                   rightFields,
-                  filter);
+                  filter,
+                  // E6data change
+                  unwrapChild(joinRel.getInput(1)));
           rightFilters.add(shiftedFilter);
         }
         filtersToRemove.add(filter);
@@ -3022,6 +3032,18 @@ public abstract class RelOptUtil {
 
     // Did anything change?
     return !filtersToRemove.isEmpty();
+  }
+
+  // added by E6Data
+  private static RelNode unwrapChild(RelNode rel) {
+    if (rel instanceof HepRelVertex) {
+      HepRelVertex hepRelVertex = (HepRelVertex) rel;
+      return hepRelVertex.getCurrentRel();
+    } else if (rel instanceof RelSubset) {
+      RelSubset relSubset = (RelSubset) rel;
+      return relSubset.getBestOrOriginal();
+    }
+    return rel;
   }
 
   /**
@@ -3175,6 +3197,27 @@ public abstract class RelOptUtil {
             joinFields,
             rightFields,
             adjustments));
+  }
+
+  // added by E6Data
+  // for shifting index of correlated variable inside subquery
+  private static RexNode shiftFilter(
+      int start,
+      int end,
+      int offset,
+      RexBuilder rexBuilder,
+      List<RelDataTypeField> joinFields,
+      int nTotalFields,
+      List<RelDataTypeField> rightFields,
+      RexNode filter,
+      RelNode child) {
+    int[] adjustments = new int[nTotalFields];
+    for (int i = start; i < end; i++) {
+      adjustments[i] = offset;
+    }
+
+    return filter.accept(
+        new RexInputConverter(rexBuilder, joinFields, rightFields, adjustments, offset, child));
   }
 
   /**
@@ -3960,7 +4003,10 @@ public abstract class RelOptUtil {
           RelDataTypeField field = fields.get(i);
           pairs.add(new RexInputRef(i, field.getType()), field.getName());
         } else {
-          pairs.add(extraLeftExprs.get(i - leftCount), null);
+          // E6data change
+          String pushedColumnName = CalciteForkSettings.allowDuplicateAliasInProjection()
+              ? "pushedColumn$" + i : null;
+          pairs.add(extraLeftExprs.get(i - leftCount), pushedColumnName);
         }
       }
       relBuilder.project(pairs.leftList(), pairs.rightList());
@@ -3977,9 +4023,12 @@ public abstract class RelOptUtil {
           RelDataTypeField field = fields.get(i);
           pairs.add(new RexInputRef(i, field.getType()), field.getName());
         } else {
+          // E6data change
+          String pushedColumnName = CalciteForkSettings.allowDuplicateAliasInProjection()
+              ? "pushedColumn$" + i : null;
           pairs.add(
               RexUtil.shift(extraRightExprs.get(i - rightCount), -newLeftCount),
-              null);
+              pushedColumnName);
         }
       }
       relBuilder.project(pairs.leftList(), pairs.rightList());
@@ -4846,6 +4895,11 @@ public abstract class RelOptUtil {
     private final int nLeftDestFields;
     private final int[] adjustments;
 
+    // E6data change
+    // new variables added
+    private final int m_offset;
+    private final RelNode m_child;
+
     /**
      * Creates a RexInputConverter.
      *
@@ -4870,7 +4924,9 @@ public abstract class RelOptUtil {
         @Nullable List<RelDataTypeField> destFields,
         @Nullable List<RelDataTypeField> leftDestFields,
         @Nullable List<RelDataTypeField> rightDestFields,
-        int[] adjustments) {
+        int[] adjustments,
+        int offset,
+        RelNode child) {
       this.rexBuilder = rexBuilder;
       this.srcFields = srcFields;
       this.destFields = destFields;
@@ -4883,6 +4939,8 @@ public abstract class RelOptUtil {
         assert destFields == null;
         nLeftDestFields = leftDestFields.size();
       }
+      m_offset = offset;
+      m_child = child;
     }
 
     public RexInputConverter(
@@ -4897,7 +4955,9 @@ public abstract class RelOptUtil {
           null,
           leftDestFields,
           rightDestFields,
-          adjustments);
+          adjustments,
+          0,
+          null);
     }
 
     public RexInputConverter(
@@ -4905,14 +4965,48 @@ public abstract class RelOptUtil {
         @Nullable List<RelDataTypeField> srcFields,
         @Nullable List<RelDataTypeField> destFields,
         int[] adjustments) {
-      this(rexBuilder, srcFields, destFields, null, null, adjustments);
+      this(rexBuilder, srcFields, destFields, null, null, adjustments, 0, null);
     }
 
     public RexInputConverter(
         RexBuilder rexBuilder,
         @Nullable List<RelDataTypeField> srcFields,
         int[] adjustments) {
-      this(rexBuilder, srcFields, null, null, null, adjustments);
+      this(rexBuilder, srcFields, null, null, null, adjustments, 0, null);
+    }
+
+    // E6Data change
+    // new constructor added for offset and child node
+    public RexInputConverter(
+        RexBuilder rexBuilder,
+        @Nullable List<RelDataTypeField> srcFields,
+        @Nullable List<RelDataTypeField> destFields,
+        int[] adjustments,
+        int offset,
+        RelNode child) {
+      this(rexBuilder, srcFields, destFields, null, null, adjustments, offset, child);
+    }
+
+    // Added by E6Data
+    // this method will shift index of correlated variable inside subquery
+    @Override public RexNode visitSubQuery(RexSubQuery subQuery) {
+      boolean[] update = {false};
+      List<RexNode> clonedOperands = visitList(subQuery.operands, update);
+      if (update[0]) {
+        subQuery = subQuery.clone(subQuery.getType(), clonedOperands);
+        final Set<CorrelationId> variablesSet = RelOptUtil.getVariablesUsed(subQuery.rel);
+        if (!variablesSet.isEmpty() && m_child != null) {
+          CorrelationId id = Iterables.getOnlyElement(variablesSet);
+          RelNode newSubQueryRel = subQuery.rel.accept(new RelHomogeneousShuttle() {
+            @Override public RelNode visit(RelNode other) {
+              RelNode node = RexUtil.shiftFieldAccess(rexBuilder, other, id, m_child, m_offset);
+              return super.visit(node);
+            }
+          });
+          subQuery = subQuery.clone(newSubQueryRel);
+        }
+      }
+      return subQuery;
     }
 
     @Override public RexNode visitInputRef(RexInputRef var) {

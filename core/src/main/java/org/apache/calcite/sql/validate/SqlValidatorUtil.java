@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.sql.validate;
 
+import org.apache.calcite.config.CalciteForkSettings;
+
 import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.config.CalciteConnectionConfigImpl;
 import org.apache.calcite.config.CalciteConnectionProperty;
@@ -93,6 +95,10 @@ import static org.apache.calcite.sql.type.NonNullableAccessors.getCollation;
 import static org.apache.calcite.util.Static.RESOURCE;
 
 import static java.util.Objects.requireNonNull;
+
+
+
+// Shaded for e6data changes which includes addition of custom default alias for colon operator
 
 /**
  * Utility methods related to validation.
@@ -366,6 +372,15 @@ public class SqlValidatorUtil {
       // E.g. "foo.bar" --> "bar"
       return Util.last(((SqlIdentifier) node).names);
 
+
+
+        case COLON:
+            // E6Data change - custom default alias for colon
+            String colonAlias = extractColonAlias(node);
+            if (colonAlias != null)
+            {
+                return colonAlias;
+            }
     default:
       if (ordinal < 0) {
         return null;
@@ -373,6 +388,39 @@ public class SqlValidatorUtil {
         return deriveAliasFromOrdinal(ordinal);
       }
     }
+
+}
+
+/**
+ * E6Data change Extracts the rightmost field name from a COLON operator chain. For example, for
+ * meta:bincounttaskmeta:body:temp, returns "temp".
+ */
+private static String extractColonAlias(SqlNode node)
+{
+    if (!CalciteForkSettings.databricks())
+    {
+        return null;
+    }
+
+    SqlCall call = (SqlCall) node;
+    SqlNode jsonPath = call.operand(1);
+    if (jsonPath instanceof SqlLiteral)
+    {
+        SqlLiteral literal = (SqlLiteral) jsonPath;
+        String path = literal.getValueAs(String.class);
+        if (path != null && path.startsWith("$."))
+        {
+            // Extract the last field name from the JSON path
+            // Handle paths like "$.field" or "$.bincounttaskmeta.body.temp"
+            String[] parts = path.substring(2).split("\\.");
+            if (parts.length > 0)
+            {
+                return parts[parts.length - 1];
+            }
+        }
+    }
+
+    return null;
   }
 
   /**
@@ -414,6 +462,12 @@ public class SqlValidatorUtil {
         return name;
       }
     }
+
+    // E6Data change for allowing duplicate alias in projection
+    if (CalciteForkSettings.allowDuplicateAliasInProjection() && name != null)
+    {
+        return name;
+    }
     final String originalName = name;
     for (int j = 0;; j++) {
       name = suggester.apply(originalName, j, usedNames.size());
@@ -439,18 +493,22 @@ public class SqlValidatorUtil {
   }
 
 
+
+
   /**
    * Makes sure that the names in a list are unique.
    *
    * <p>Does not modify the input list. Returns the input list if the strings
    * are unique, otherwise allocates a new list.
    *
-   * @deprecated Use {@link #uniquify(List, Suggester, boolean)}
-   *
    * @param nameList List of strings
    * @param suggester How to generate new names if duplicate names are found
+ *
    * @return List of unique strings
+ *
+ * @deprecated Use {@link #uniquify(List, Suggester, boolean)}
    */
+
   @Deprecated // to be removed before 2.0
   public static List<String> uniquify(List<? extends @Nullable String> nameList,
       Suggester suggester) {
@@ -674,14 +732,18 @@ public class SqlValidatorUtil {
     }
   }
 
+
+
   /**
    * Resolve a target column name in the target table.
    *
-   * @return the target field or null if the name cannot be resolved
    * @param rowType the target row type
    * @param id      the target column identifier
    * @param table   the target table or null if it is not a RelOptTable instance
+ *
+ * @return the target field or null if the name cannot be resolved
    */
+
   public static @Nullable RelDataTypeField getTargetField(
       RelDataType rowType, RelDataTypeFactory typeFactory,
       SqlIdentifier id, SqlValidatorCatalogReader catalogReader,
@@ -808,6 +870,46 @@ public class SqlValidatorUtil {
       fields.add(type.getFieldList().get(field.getIndex()));
     }
     return typeFactory.createStructType(fields);
+}
+
+/**
+ * Returns whether there are empty groups in the GROUP BY clause. The final grouping sets of GROUP BY clause is the
+ * result of the cartesian product of group items. Therefore, the GROUP BY clause contains empty groups only if each
+ * group item contains empty groups.
+ *
+ * @param groupClause Group items in GROUP BY clause
+ *
+ * @return Whether there are empty groups in GROUP BY clause
+ */
+public static boolean hasEmptyGroup(List<SqlNode> groupClause)
+{
+    for (SqlNode groupItem : groupClause)
+    {
+        switch (groupItem.getKind())
+        {
+            case ROLLUP:
+            case CUBE:
+                break;
+            case GROUPING_SETS:
+                boolean atLeastOneEmptyGroup = false;
+                for (SqlNode groupingSetsItem : ((SqlBasicCall) groupItem).getOperandList())
+                {
+                    atLeastOneEmptyGroup |= hasEmptyGroup(ImmutableList.of(groupingSetsItem));
+                }
+                if (atLeastOneEmptyGroup)
+                {
+                    break;
+                }
+                return false;
+            default:
+                if (groupItem instanceof SqlNodeList && ((SqlNodeList) groupItem).isEmpty())
+                {
+                    break;
+                }
+                return false;
+        }
+    }
+    return true;
   }
 
   /**

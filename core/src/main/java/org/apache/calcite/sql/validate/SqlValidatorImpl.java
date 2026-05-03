@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.sql.validate;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.linq4j.Ord;
 import org.apache.calcite.linq4j.function.Functions;
 import org.apache.calcite.plan.RelOptTable;
@@ -42,6 +43,7 @@ import org.apache.calcite.runtime.Resources;
 import org.apache.calcite.schema.ColumnStrategy;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.schema.impl.ModifiableViewTable;
+import org.apache.calcite.sql.E6SqlSnapshot;
 import org.apache.calcite.sql.JoinConditionType;
 import org.apache.calcite.sql.JoinType;
 import org.apache.calcite.sql.SqlAccessEnum;
@@ -93,6 +95,7 @@ import org.apache.calcite.sql.SqlWindowTableFunction;
 import org.apache.calcite.sql.SqlWith;
 import org.apache.calcite.sql.SqlWithItem;
 import org.apache.calcite.sql.TableCharacteristic;
+import org.apache.calcite.sql.fun.E6PercentileCount;
 import org.apache.calcite.sql.fun.SqlCase;
 import org.apache.calcite.sql.fun.SqlInternalOperators;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
@@ -106,6 +109,7 @@ import org.apache.calcite.sql.type.SqlTypeCoercionRule;
 import org.apache.calcite.sql.type.SqlTypeFamily;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.type.SqlTypeUtil;
+import org.apache.calcite.sql.util.ChainedSqlOperatorTable;
 import org.apache.calcite.sql.util.IdPair;
 import org.apache.calcite.sql.util.SqlBasicVisitor;
 import org.apache.calcite.sql.util.SqlShuttle;
@@ -153,6 +157,7 @@ import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -185,6 +190,10 @@ import static java.util.Collections.emptyList;
 import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.joining;
 
+// Shaded class for following E6data fixes and Impls
+// subquery recognition, star expansion guardrail, ambiguous alias fix, alias in agg issue, Except and TOP clause support
+// and made changes to support pivot column renaming according to snowflake syntax & custom LambdaScope
+
 /**
  * Default implementation of {@link SqlValidator}.
  */
@@ -213,6 +222,10 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
 
   private final SqlOperatorTable opTab;
   final SqlValidatorCatalogReader catalogReader;
+
+// variable isSubQuery is added by E6Data
+protected boolean isSubQuery = false;
+protected boolean m_bHasUsingClause = false;
 
   /**
    * Maps {@link SqlParserPos} strings to the {@link SqlIdentifier} identifier
@@ -290,6 +303,11 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
   private Config config;
 
   private final Map<SqlNode, SqlNode> originalExprs = new HashMap<>();
+
+// added by e6data
+// using linkedHashMap to maintain order
+private final Map<String, RelDataType> pivotRenamingColumns = new LinkedHashMap<>();
+private boolean hasPivotWithStar = false;
 
   private @Nullable SqlNode top;
 
@@ -482,13 +500,28 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       final SelectScope scope = (SelectScope) getWhereScope(select);
       if (expandStar(selectItems, aliases, fields, includeSystemVars, scope,
           selectItem)) {
+
+            // E6data Guardrail - Star Expansion Rule
+            CalciteForkSettings.checkStarExpansion(selectItems.size());
         return true;
       }
 
+
+      selectScope = getSelectScope(select);
+
+        // if condition added by E6data to expand pivot renaming columns
+        if (select.getFrom() instanceof SqlBasicCall
+            && ((SqlBasicCall) select.getFrom()).getOperator().getKind() == SqlKind.AS
+            && ((SqlBasicCall) select.getFrom()).getOperandList().get(0) instanceof SqlPivot)
+        {
+            SqlPivot pivot = (SqlPivot) ((SqlBasicCall) select.getFrom()).getOperandList().get(0);
+            expanded = expandPivotSelectExpr(selectItem, scope, select, (PivotNamespace) getNamespaceOrThrow(pivot));
+        }
+        else
+        {
       // Expand the select item: fully-qualify columns, and convert
       // parentheses-free functions such as LOCALTIME into explicit function
       // calls.
-      selectScope = getSelectScope(select);
       expanded = expandSelectExpr(selectItem, scope, select, expansions);
 
       // Non-strict GROUP BY or BY clause: wrap non-aggregated, non-grouped columns in ANY_VALUE()
@@ -500,10 +533,33 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
             SqlStdOperatorTable.ANY_VALUE.createCall(expanded.getParserPosition(), expanded);
       }
     }
-    final String alias =
+
+    }
+     String alias =
         SqlValidatorUtil.alias(selectItem, aliases.size());
 
     // If expansion has altered the natural alias, supply an explicit 'AS'.
+
+    // E6data fix for ambiguous alias
+    if (!CalciteForkSettings.allowDuplicateAliasInProjection() &&
+        aliases.contains(alias) && (!(expanded instanceof SqlCall
+        && (((SqlCall) expanded).getOperator() instanceof SqlAsOperator))))
+    {
+        // generate ordinal alias
+        // it will generate EXPR$1 like alias
+        // as Calcite identifies this as generated alias and uses
+        // correctly than if we try to generate <column_name>1 (e.g cc_city1)
+        alias = SqlUtil.deriveAliasFromOrdinal(aliases.size());
+        if (expanded == selectItem)
+        {
+            // derived aliases
+            expanded = SqlStdOperatorTable.AS.createCall(selectItem.getParserPosition(), expanded,
+                new SqlIdentifier(alias, SqlParserPos.ZERO));
+            deriveTypeImpl(selectScope, expanded);
+        }
+        //        alias = String.format("%s%s", alias, aliases.size());
+    }
+
     if (expanded != selectItem) {
       String newAlias =
           SqlValidatorUtil.alias(expanded, aliases.size());
@@ -707,8 +763,8 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
         replaceMap.isEmpty() ? new boolean[0]
             : new boolean[replaceMap.size()];
     final int originalSize = selectItems.size();
-    final SqlParserPos startPosition = identifier.getParserPosition();
     final int fieldsBeforeStar = fields.size();
+    final SqlParserPos startPosition = identifier.getParserPosition();
     switch (identifier.names.size()) {
     case 1:
       SqlNode from = scope.getNode().getFrom();
@@ -737,14 +793,26 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
                scope,
                includeSystemVars);
         } else {
+
+                    // change in whole else statement by E6data for Pivot
           final SqlNode from2 = SqlNonNullableAccessors.getNode(child);
+
+                    if (from2 instanceof SqlPivot)
+                    {
+                        hasPivotWithStar = true;
+                    }
           final SqlValidatorNamespace fromNs = getNamespaceOrThrow(from2, scope);
           final RelDataType rowType = fromNs.getRowType();
+                    int currentRenamingColumnIndex = 0;
           for (RelDataTypeField field : rowType.getFieldList()) {
             String columnName = field.getName();
 
+
+                        SqlIdentifier exp = null;
+                        if (pivotRenamingColumns.isEmpty())
+                        {
             // TODO: do real implicit collation here
-            final SqlIdentifier exp =
+             exp =
                 new SqlIdentifier(
                     ImmutableList.of(child.name, columnName),
                     startPosition);
@@ -783,6 +851,66 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
                       scope,
                       exp,
                       field);
+
+                            }
+                        }
+                        else
+                        {
+                            if (from2 instanceof SqlPivot)
+                            {
+                                SqlPivot pivot = (SqlPivot) from2;
+                                List<SqlNode> inList = pivot.inList.getList();
+                                for (SqlNode inListNode : inList)
+                                {
+                                    if (inListNode.toString().equals(columnName))
+                                    {
+                                        exp = new SqlIdentifier(ImmutableList.of(child.name, columnName),
+                                            startPosition);
+                                        break;
+                                    }
+                                }
+
+                                if (exp != null)
+                                {
+                                    SqlNode nodeX = exp;
+                                    if (currentRenamingColumnIndex < pivotRenamingColumns.size())
+                                    {
+                                        nodeX = new SqlBasicCall(SqlStdOperatorTable.AS, ImmutableList.of(exp, new SqlIdentifier(
+                                            pivotRenamingColumns.keySet()
+                                            .stream()
+                                            .collect(Collectors.toList())
+                                            .get(currentRenamingColumnIndex), exp.getParserPosition())),
+                                            exp.getParserPosition());
+                                        currentRenamingColumnIndex++;
+                                    }
+
+                                    if (!isRolledUpColumn(exp, scope))
+                                    {
+                                        addToSelectList(selectItems, aliases, fields, nodeX, scope, includeSystemVars);
+                                    }
+                                }
+                            }
+
+                            if (exp == null)
+                            {
+                                exp = new SqlIdentifier(columnName, startPosition);
+
+                                SqlNode nodeX = exp;
+                                if (currentRenamingColumnIndex < pivotRenamingColumns.size())
+                                {
+                                    nodeX = new SqlBasicCall(SqlStdOperatorTable.AS, ImmutableList.of(exp, new SqlIdentifier(
+                                        pivotRenamingColumns.keySet().stream().collect(Collectors.toList()).get(currentRenamingColumnIndex),
+                                        exp.getParserPosition())), exp.getParserPosition());
+                                    currentRenamingColumnIndex++;
+                                }
+
+                                // Don't add expanded rolled up columns
+                                if (!isRolledUpColumn(exp, scope))
+                                {
+                                    addToSelectList(selectItems, aliases, fields, nodeX,
+                                        (from2 instanceof SqlPivot) ? scopes.get(from2) : scope, includeSystemVars);
+                                }
+                            }
             }
           }
         }
@@ -1526,6 +1654,11 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     return getScope(select, Clause.SELECT);
   }
 
+  @Override public SqlValidatorScope  getFunctionScope(final SqlNode function)
+{
+    return getScopeOrThrow(function);
+}
+
   @Override public SqlValidatorScope getMeasureScope(SqlSelect select) {
     return getScope(select, Clause.MEASURE);
   }
@@ -1777,7 +1910,15 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
         opTab.lookupOperatorOverloads(function.getNameAsId(),
             function.getFunctionType(), SqlSyntax.FUNCTION, overloads,
             catalogReader.nameMatcher());
-        if (overloads.size() == 1) {
+
+
+            // condition changed by E6data
+            // original condition  => [ overloads.size() == 1 ]
+            // pick first function to set operator, so it doesn't set as user defined
+            // picking first one because if 2 instances are there then first one will be from the custom table
+            boolean isCustomOperatorTable = CalciteForkSettings.isCustomOperatorTable(opTab)
+                || opTab instanceof ChainedSqlOperatorTable;
+            if (overloads.size() == 1 || (isCustomOperatorTable && overloads.size() == 2)) {
           ((SqlBasicCall) call).setOperator(overloads.get(0));
         }
       }
@@ -1785,7 +1926,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
         node = call.getOperator().rewriteCall(this, call);
       }
     } else if (node instanceof SqlNodeList) {
-      final SqlNodeList list = (SqlNodeList) node;
+       SqlNodeList list = (SqlNodeList) node;
       for (int i = 0; i < list.size(); i++) {
         SqlNode operand = list.get(i);
         SqlNode newOperand =
@@ -1801,6 +1942,28 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     // now transform node itself
     final SqlKind kind = node.getKind();
     switch (kind) {
+    case  OVER:
+        {
+            SqlCall aggCall = ((SqlCall) node).operand(0);
+            SqlWindow window = ((SqlCall) node).operand(1);
+            if (aggCall.getKind() == SqlKind.WITHIN_GROUP)
+            {
+                SqlCall actualAgg = aggCall.operand(0);
+                SqlNodeList orderByList = (SqlNodeList) aggCall.getOperandList().get(1);
+                switch (actualAgg.getKind())
+                {
+                    case PERCENTILE_CONT:
+                        window.setOrderList(orderByList);
+                        E6PercentileCount function = new E6PercentileCount(Optionality.FORBIDDEN);
+                        actualAgg = function.createCall(actualAgg.getParserPosition(), actualAgg.getOperandList());
+                        actualAgg.getOperator();
+                        ((SqlCall) node).setOperand(0, actualAgg);
+                        return node;
+                    default:
+                        // DO NOTHING, will fail most probably
+                }
+            }
+        }
     case VALUES:
       // Do not rewrite VALUES clauses.
       // At some point we used to rewrite VALUES(...) clauses
@@ -1815,13 +1978,26 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       if (orderBy.query instanceof SqlSelect) {
         SqlSelect select = (SqlSelect) orderBy.query;
 
+
+                // E6data exception check for TOP clause
+                if (select.getFetch() != null && orderBy.fetch != null)
+                {
+                    throw new CalciteException("TOP and LIMIT can't be used together!", new Throwable());
+                }
+
         // Don't clobber existing ORDER BY.  It may be needed for
         // an order-sensitive function like RANK.
         if (select.getOrderList() == null) {
           // push ORDER BY into existing select
           select.setOrderBy(orderBy.orderList);
           select.setOffset(orderBy.offset);
+
+                    // E6data TOP clause bug fix for CTEs
+                    if (orderBy.fetch != null)
+                    {
           select.setFetch(orderBy.fetch);
+
+                    }
           return select;
         }
       }
@@ -1836,7 +2012,13 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
           // push ORDER BY into existing select
           select.setOrderBy(orderBy.orderList);
           select.setOffset(orderBy.offset);
+
+                    // E6data TOP clause bug fix for CTEs
+                    if (orderBy.fetch != null)
+                    {
           select.setFetch(orderBy.fetch);
+
+                    }
           return with;
         }
       }
@@ -1862,7 +2044,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       } else {
         orderList = orderBy.orderList;
       }
-      return new SqlSelect(SqlParserPos.ZERO, null, selectList, orderBy.query,
+      return new SqlSelect(SqlParserPos.ZERO, null, selectList,  null, orderBy.query,
           null, null, null, null, null, orderList, orderBy.offset,
           orderBy.fetch, null);
     }
@@ -1872,7 +2054,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       SqlCall call = (SqlCall) node;
       final SqlNodeList selectList = new SqlNodeList(SqlParserPos.ZERO);
       selectList.add(SqlIdentifier.star(SqlParserPos.ZERO));
-      return new SqlSelect(SqlParserPos.ZERO, null, selectList, call.operand(0),
+      return new SqlSelect(SqlParserPos.ZERO, null, selectList, null, call.operand(0),
           null, null, null, null, null, null, null, null, null);
     }
 
@@ -1905,6 +2087,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
 
     case MERGE: {
       SqlMerge call = (SqlMerge) node;
+      expandMergeActionStars(call);
       rewriteMerge(call);
       break;
     }
@@ -1969,7 +2152,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
             JoinConditionType.ON.symbol(SqlParserPos.ZERO),
             call.getCondition());
     SqlSelect select =
-        new SqlSelect(SqlParserPos.ZERO, null, selectList, outerJoin, null,
+        new SqlSelect(SqlParserPos.ZERO, null, selectList,  null, outerJoin, null,
             null, null, null, null, null, null, null, null);
     call.setSourceSelect(select);
 
@@ -1987,10 +2170,112 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
               SqlParserPos.ZERO);
       final SqlNode insertSource = SqlNode.clone(sourceTableRef);
       select =
-          new SqlSelect(SqlParserPos.ZERO, null, selectList, insertSource, null,
+          new SqlSelect(SqlParserPos.ZERO, null, selectList,  null, insertSource, null,
               null, null, null, null, null, null, null, null);
       insertCall.setSource(select);
     }
+
+}
+
+// e6data change - Planner-local support for MERGE action star shorthand.
+// Expands parser marker nodes before Calcite's MERGE rewrite builds source selects.
+private void expandMergeActionStars(SqlMerge call)
+{
+    SqlUpdate updateCall = call.getUpdateCall();
+    SqlInsert insertCall = call.getInsertCall();
+    final boolean updateStar = updateCall != null && isUpdateStar(updateCall);
+    final boolean insertStar = insertCall != null && isInsertStar(insertCall);
+    if (!updateStar && !insertStar)
+    {
+        return;
+    }
+    final SqlValidatorTable table = requireNonNull(getMergeTargetTable(call), () -> "target table for " + call);
+    final SqlNodeList targetColumnList = createMergeStarTargetColumnList(table.getRowType());
+    final SqlNodeList sourceExpressionList = createMergeStarSourceExpressionList(call, table.getRowType());
+
+    if (updateStar)
+    {
+        final SqlUpdate update = requireNonNull(updateCall, "updateCall");
+        update.setOperand(1, SqlNode.clone(targetColumnList));
+        update.setOperand(2, SqlNode.clone(sourceExpressionList));
+        update.setSourceSelect(createSourceSelectForUpdate(update));
+    }
+
+    if (insertStar)
+    {
+        final SqlInsert insert = requireNonNull(insertCall, "insertCall");
+        insert.setOperand(3, SqlNode.clone(targetColumnList));
+        final SqlNode row = SqlStdOperatorTable.ROW.createCall(sourceExpressionList.getParserPosition(),
+            sourceExpressionList.toArray(new SqlNode[0]));
+        insert.setOperand(2, SqlStdOperatorTable.VALUES.createCall(sourceExpressionList.getParserPosition(), row));
+    }
+}
+
+private static boolean isUpdateStar(SqlUpdate updateCall)
+{
+    return isSingleStar(updateCall.getTargetColumnList()) && isSingleStar(updateCall.getSourceExpressionList());
+}
+
+private static boolean isInsertStar(SqlInsert insertCall)
+{
+    return isSingleStar(insertCall.getTargetColumnList());
+}
+
+private static boolean isSingleStar(@Nullable SqlNodeList list)
+{
+    if (list == null || list.size() != 1)
+    {
+        return false;
+    }
+    final SqlNode node = list.get(0);
+    return node instanceof SqlIdentifier && ((SqlIdentifier) node).isStar();
+}
+
+private @Nullable SqlValidatorTable getMergeTargetTable(SqlMerge call)
+{
+    final @Nullable SqlIdentifier id = getMergeTargetTableIdentifier(call.getTargetTable());
+    return id == null ? null : catalogReader.getTable(id.names);
+}
+
+private static @Nullable SqlIdentifier getMergeTargetTableIdentifier(SqlNode targetTable)
+{
+    if (targetTable instanceof SqlIdentifier)
+    {
+        return (SqlIdentifier) targetTable;
+    }
+    if (targetTable instanceof SqlCall)
+    {
+        final SqlCall call = (SqlCall) targetTable;
+        if (call.operandCount() > 0)
+        {
+            return getMergeTargetTableIdentifier(call.operand(0));
+        }
+    }
+    return null;
+}
+
+private static SqlNodeList createMergeStarTargetColumnList(RelDataType targetRowType)
+{
+    final SqlNodeList targetColumnList = new SqlNodeList(SqlParserPos.ZERO);
+    for (RelDataTypeField field : targetRowType.getFieldList())
+    {
+        targetColumnList.add(new SqlIdentifier(field.getName(), SqlParserPos.ZERO));
+    }
+    return targetColumnList;
+}
+
+private static SqlNodeList createMergeStarSourceExpressionList(SqlMerge call, RelDataType targetRowType)
+{
+    final SqlNodeList sourceExpressionList = new SqlNodeList(SqlParserPos.ZERO);
+    final @Nullable String sourceAlias = SqlValidatorUtil.alias(call.getSourceTableRef());
+    for (RelDataTypeField field : targetRowType.getFieldList())
+    {
+        sourceExpressionList.add(sourceAlias == null ? new SqlIdentifier(field.getName(), SqlParserPos.ZERO)
+                                                     : new SqlIdentifier(
+                                                         ImmutableList.of(sourceAlias, field.getName()),
+                                                         SqlParserPos.ZERO));
+    }
+    return sourceExpressionList;
   }
 
   private SqlNode rewriteUpdateToMerge(
@@ -2054,7 +2339,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       ++i;
     }
     source =
-        new SqlSelect(SqlParserPos.ZERO, null, selectList, source, null, null,
+        new SqlSelect(SqlParserPos.ZERO, null, selectList,  null, source, null, null,
             null, null, null, null, null, null, null);
     source = SqlValidatorUtil.addAlias(source, UPDATE_SRC_ALIAS);
     SqlMerge mergeCall =
@@ -2110,7 +2395,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
               sourceTable,
               alias.getSimple());
     }
-    return new SqlSelect(SqlParserPos.ZERO, null, selectList, sourceTable,
+    return new SqlSelect(SqlParserPos.ZERO, null, selectList,  null, sourceTable,
         call.getCondition(), null, null, null, null, null, null, null, null);
   }
 
@@ -2132,7 +2417,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
               sourceTable,
               alias.getSimple());
     }
-    return new SqlSelect(SqlParserPos.ZERO, null, selectList, sourceTable,
+    return new SqlSelect(SqlParserPos.ZERO, null, selectList, null, sourceTable,
         call.getCondition(), null, null, null, null, null, null, null, null);
   }
 
@@ -2270,6 +2555,13 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     final SqlValidatorNamespace ns = getNamespace(expr);
     if (ns != null) {
       return ns.getType();
+    }
+
+    // added by E6Data
+    // for reduce() function
+    if (expr instanceof SqlBasicCall)
+    {
+        inferUnknownTypes(unknownType, scope, expr);
     }
     type = deriveTypeImpl(scope, expr);
     requireNonNull(type, "SqlValidator.deriveTypeInternal returned null");
@@ -2496,6 +2788,8 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     }
   }
 
+
+// parameter [scope] type change by e6data
   /**
    * Adds an expression to a select list, ensuring that its alias does not
    * clash with any existing expressions on the list.
@@ -2505,7 +2799,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       Set<String> aliases,
       List<Map.Entry<String, RelDataType>> fieldList,
       SqlNode exp,
-      SelectScope scope,
+       SqlValidatorScope  scope,
       final boolean includeSystemVars) {
     final @Nullable String alias = SqlValidatorUtil.alias(exp);
     String uniqueAlias =
@@ -2791,9 +3085,13 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
         call.setOperand(0, newExpr);
       }
 
+
+
+      // if condition change by E6data
+      boolean hasPivot = call.getOperandList().get(0) instanceof SqlPivot;
       // If alias has a column list, introduce a namespace to translate
       // column names. We skipped registering it just now.
-      if (needAliasNamespace) {
+      if (needAliasNamespace && !hasPivot) {
         registerNamespace(
             usingScope,
             alias,
@@ -2978,6 +3276,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     case EXCEPT:
     case VALUES:
     case WITH:
+    case  RANGE:
     case OTHER_FUNCTION:
       if (alias == null) {
         alias = SqlValidatorUtil.alias(node, nextGeneratedId++);
@@ -3165,6 +3464,17 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     SqlCall call;
     List<SqlNode> operands;
     switch (node.getKind()) {
+    case  UDF_CREATE:
+            final SqlNode functionNode = node;
+            final SqlValidatorNamespace cfgNamespace =
+                CalciteForkSettings.createFunctionNamespace(this, functionNode);
+            registerNamespace(usingScope, alias, cfgNamespace, forceNullable);
+            final SqlValidatorScope scope =
+                CalciteForkSettings.createFunctionScope(parentScope, functionNode);
+            scopes.put(functionNode, scope);
+            registerOperandSubQueries(scope, (SqlCall) functionNode,
+                CalciteForkSettings.functionBodyOperand(functionNode));
+            break;
     case SELECT:
       final SqlSelect select = (SqlSelect) node;
       final SelectNamespace selectNs =
@@ -3221,6 +3531,59 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       clauseScopes.put(IdPair.of(select, Clause.MEASURE),
           new MeasureScope(selectScope, select));
       if (select.getGroup() != null) {
+
+                // changes by E6Data
+                // removes agg call from group by list if any
+                // can be added by GROUP BY ALL clause
+                SqlNodeList groupByList = select.getGroup();
+                final SelectScope fromScope = (SelectScope) requireNonNull(getFromScope(select),
+                    () -> "fromScope for " + select);
+                List<@Nullable String> fromScopeChildNames = fromScope.getChildNames();
+
+                List<SqlNode> newGroupByList = new ArrayList<>();
+                for (SqlNode groupByNode : groupByList)
+                {
+                    if (groupByNode instanceof SqlIdentifier
+                        && ((SqlIdentifier) groupByNode).isStar())
+                    {
+                        final List<SqlNode> expandedSelectItems = new ArrayList<>();
+                        final Set<String> aliases = new HashSet<>();
+                        final PairList<String, RelDataType> fieldList = PairList.of();
+                        expandStar(expandedSelectItems, aliases, fieldList, false, selectScope, groupByNode);
+
+                        for (SqlNode item : expandedSelectItems)
+                        {
+                            addSqlNodeToGroupByList(item, newGroupByList, fromScope.getChildren(), fromScopeChildNames);
+                        }
+                    }
+                    else
+                    {
+                        if (CalciteForkSettings.databricks() && groupByNode instanceof SqlCall)
+                        {
+                            SqlNodeList selectList = select.getSelectList();
+                            if (!selectList.contains(groupByNode))
+                            {
+                                for (SqlNode selectItem : selectList)
+                                {
+                                    if (selectItem instanceof SqlCall
+                                        && ((SqlCall) selectItem).getOperator().getKind() == SqlKind.AS
+                                        && ((SqlCall) selectItem).operand(0)
+                                        .equalsDeep(groupByNode, Litmus.IGNORE))
+                                    {
+                                        groupByNode = selectItem;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        addSqlNodeToGroupByList(groupByNode, newGroupByList, fromScope.getChildren(),
+                            fromScopeChildNames);
+                    }
+                }
+                SqlNodeList sqlNodes = new SqlNodeList(newGroupByList, groupByList.getParserPosition());
+                select.setGroupBy(sqlNodes);
+
         GroupByScope groupByScope =
             new GroupByScope(selectScope, select.getGroup(), select);
         clauseScopes.put(IdPair.of(select, Clause.GROUP_BY), groupByScope);
@@ -3290,8 +3653,9 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
 
     case LAMBDA:
       call = (SqlCall) node;
-      SqlLambdaScope lambdaScope =
-          new SqlLambdaScope(parentScope, (SqlLambda) call);
+
+            E6SqlLambdaScope  lambdaScope =
+          new  E6SqlLambdaScope(parentScope, (SqlLambda) call);
       scopes.put(call, lambdaScope);
       final LambdaNamespace lambdaNamespace =
           new LambdaNamespace(this, (SqlLambda) call, node);
@@ -3451,6 +3815,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       registerOperandSubQueries(parentScope, call, 0);
       scopes.put(node, parentScope);
       break;
+    case  RANGE:
     case OTHER_FUNCTION:
       call = (SqlCall) node;
       ProcedureNamespace procNs =
@@ -3488,6 +3853,71 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
 
     default:
       throw Util.unexpected(node.getKind());
+
+    }
+}
+
+private void addSqlNodeToGroupByList(SqlNode sqlNode, List<SqlNode> newGroupByList,
+    List<SqlValidatorNamespace> fromNamespaceList, List<String> fromScopeChildNames)
+{
+    if (sqlNode != null && aggOrOverOrGroupFinder.findAgg(sqlNode) == null)
+    {
+        if (sqlNode.getKind().equals(SqlKind.AS))
+        {
+            newGroupByList.add(((SqlCall) sqlNode).operand(1));
+            return;
+        }
+        if (sqlNode instanceof SqlIdentifier
+            && ((SqlIdentifier) sqlNode).isSimple() && CalciteForkSettings.databricks()
+            && fromNamespaceList.size() > 1)
+        {
+            SqlIdentifier node = (SqlIdentifier) sqlNode;
+            try
+            {
+                int fromScopeChildIndex = 0;
+                int newGroupByListOriginalSize = newGroupByList.size();
+                for (SqlValidatorNamespace fromNamespace : fromNamespaceList)
+                {
+                    // validation of fromNamespace is not complete
+                    // abstractNamespace.isRowTypeUnknown() is added by E6Data to check if rowType is null or not
+                    if (fromNamespace instanceof AbstractNamespace
+                        && ((AbstractNamespace) fromNamespace).isRowTypeUnknown())
+                    {
+                        continue;
+                    }
+
+                    AbstractNamespace abstractNamespace = (AbstractNamespace) fromNamespace;
+                    List<String> fieldNames = abstractNamespace.getRowType().getFieldNames();
+                    if (fieldNames.contains(node.getSimple()) && !newGroupByList.contains(node))
+                    {
+                        newGroupByList.add(
+                            new SqlIdentifier(ImmutableList.of(fromScopeChildNames.get(fromScopeChildIndex), node.getSimple()),
+                                node.getParserPosition()));
+                        break;
+                    }
+                    else if (!abstractNamespace.isRowTypeUnknown() && !newGroupByList.contains(sqlNode))
+                    {
+                        newGroupByList.add(sqlNode);
+                    }
+                    fromScopeChildIndex++;
+                }
+
+                if (newGroupByList.size() == newGroupByListOriginalSize)
+                {
+                    newGroupByList.add(sqlNode);
+                }
+            }
+            catch (Throwable throwable)
+            {
+                TRACER.warn("Failed to infer group by node from multiple namespace : {}", throwable.getMessage(), throwable);
+                TRACER.info("using simple alias");
+                newGroupByList.add(sqlNode);
+            }
+        }
+        else
+        {
+            newGroupByList.add(sqlNode);
+        }
     }
   }
 
@@ -3548,8 +3978,11 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       final SqlWithItem withItem = (SqlWithItem) withItem_;
 
       final boolean isRecursiveWith = withItem.recursive.booleanValue();
+
+        // changes by E6Data
+        // replaced WithScope with E6WithScope for cte name case sensitivity
       final SqlValidatorScope withScope =
-          new WithScope(scope, withItem,
+          new  E6WithScope(scope, withItem,
               isRecursiveWith ? new WithRecursiveScope(scope, withItem) : null);
       scopes.put(withItem, withScope);
 
@@ -3661,6 +4094,8 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       for (int i = 0, count = list.size(); i < count; i++) {
         SqlNode listNode = list.get(i);
         if (listNode.getKind().belongsTo(SqlKind.QUERY)) {
+
+                isSubQuery = true; // E6Data change for subquery
           listNode =
               SqlStdOperatorTable.SCALAR_QUERY.createCall(
                   listNode.getParserPosition(),
@@ -3693,6 +4128,8 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     }
     if (operand.getKind().belongsTo(SqlKind.QUERY)
         && call.getOperator().argumentMustBeScalar(operandOrdinal)) {
+
+        isSubQuery = true; // E6Data change for subquery
       operand =
           SqlStdOperatorTable.SCALAR_QUERY.createCall(
               operand.getParserPosition(),
@@ -3970,6 +4407,9 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
 
   protected void validateUnnest(SqlCall call, SqlValidatorScope scope,
       RelDataType targetRowType) {
+
+    // E6Data We infer the unknown type inside the call, for example this calls the TYPE_INFERENCE inside functions
+    inferUnknownTypes(unknownType, scope, call);
     for (int i = 0; i < call.operandCount(); i++) {
       SqlNode expandedItem = expand(call.operand(i), scope);
       call.setOperand(i, expandedItem);
@@ -4029,14 +4469,27 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       checkArgument(join.getCondition() == null);
       break;
     case ON:
-      final SqlNode condition = expand(getCondition(join), joinScope);
-      join.setOperand(5, condition);
-      validateWhereOrOn(joinScope, condition, "ON");
-      checkRollUp(null, join, condition, joinScope, "ON");
+      final SqlNode condition = getCondition(join);
+            SqlNode expandedCondition;
+            if (scope.getNode() instanceof SqlSelect)
+            {
+                expandedCondition = expandWithAlias(condition, joinScope, (SqlSelect) scope.getNode());
+            }
+            else
+            {
+                expandedCondition = expand(condition, joinScope);
+
+            }
+            join.setOperand(5,  expandedCondition);
+      validateWhereOrOn(joinScope,  expandedCondition, "ON");
+      checkRollUp(null, join,  expandedCondition, joinScope, "ON");
       break;
     case USING:
       @SuppressWarnings({"rawtypes", "unchecked"}) List<SqlIdentifier> list =
           (List) getCondition(join);
+
+            // added by E6data
+            m_bHasUsingClause = true;
 
       // Parser ensures that using clause is not empty.
       checkArgument(!list.isEmpty(), "Empty USING clause");
@@ -4303,10 +4756,11 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     String name = id.names.get(0);
     SqlNameMatcher nameMatcher = getCatalogReader().nameMatcher();
     RelDataType rowType = getNamespaceOrThrow(node).getRowType();
-    final RelDataTypeField field =
+
+    RelDataType colType  =
         requireNonNull(nameMatcher.field(rowType, name),
-            () -> "unable to find left field " + name + " in " + rowType);
-    return field.getType();
+            () -> "unable to find left field " + name + " in " + rowType).getType();
+    return colType;
   }
 
   /** Validates a column in a USING clause, or an inferred join key in a
@@ -4329,9 +4783,13 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     } else {
       rowTypes = Collections.singleton(rowType);
     }
+    if (CalciteForkSettings.databricks())
+    {
     for (RelDataType rowType0 : rowTypes) {
       if (nameMatcher.frequency(rowType0.getFieldNames(), name) > 1) {
         throw newValidationError(id, RESOURCE.columnInUsingNotUnique(name));
+
+            }
       }
     }
     checkRollUpInUsing(id, leftOrRight, scope);
@@ -5073,7 +5531,10 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       final List<String> fieldNames =
           getValidatedNodeType(withItem.query).getFieldNames();
       final int i = Util.firstDuplicate(fieldNames);
-      if (i >= 0) {
+
+        // e6 change - by pass duplicate check if flag enabled for kantar use case
+        // this is wrong and can break things in calcite
+        if (!CalciteForkSettings.allowDuplicateAliasInProjection() && i >= 0) {
         throw newValidationError(withItem.query,
             RESOURCE.duplicateColumnAndNoColumnList(fieldNames.get(i)));
       }
@@ -5340,7 +5801,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       return;
     }
     final SqlValidatorScope whereScope = getWhereScope(select);
-    final SqlNode expandedWhere = expand(where, whereScope);
+    final SqlNode expandedWhere =  expandWithAlias(where, whereScope, select);
     select.setWhere(expandedWhere);
     validateWhereOrOn(whereScope, expandedWhere, "WHERE");
   }
@@ -6151,24 +6612,23 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       @Nullable SqlValidatorScope scope,
       SqlValidatorNamespace ns) {
     if (node.getKind() == SqlKind.SNAPSHOT) {
-      SqlSnapshot snapshot = (SqlSnapshot) node;
-      SqlNode period = snapshot.getPeriod();
-      RelDataType dataType = deriveType(requireNonNull(scope, "scope"), period);
-      if (!SqlTypeUtil.isTimestamp(dataType)) {
-        throw newValidationError(period,
-            Static.RESOURCE.illegalExpressionForTemporal(dataType.getSqlTypeName().getName()));
-      }
       if (ns instanceof IdentifierNamespace && ns.resolve() instanceof WithItemNamespace) {
         // If the snapshot is used over a CTE, then we don't have a concrete underlying
         // table to operate on. This will be rechecked later in the planner rules.
         return;
       }
-      SqlValidatorTable table = getTable(ns);
-      if (!table.isTemporal()) {
-        List<String> qualifiedName = table.getQualifiedName();
+
+      E6SqlSnapshot snapshot = (E6SqlSnapshot) node;
+      SqlValidatorTable validatorTable = getTable(ns);
+      Table table = validatorTable.table();
+      if (CalciteForkSettings.supportsTimeTravel(table)) {
+        snapshot.validate(scope);
+      } else {
+        List<String> qualifiedName = validatorTable.getQualifiedName();
         String tableName = qualifiedName.get(qualifiedName.size() - 1);
-        throw newValidationError(snapshot.getTableRef(),
-            Static.RESOURCE.notTemporalTable(tableName));
+        throw CalciteForkSettings.timeTravelNotSupportedException(snapshot.getTableRef(),
+
+                tableName, CalciteForkSettings.tableTypeName(table));
       }
     }
   }
@@ -6421,7 +6881,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
   }
 
   @Override public void validateLambda(SqlLambda lambdaExpr) {
-    final SqlLambdaScope scope = (SqlLambdaScope) scopes.get(lambdaExpr);
+    final  E6SqlLambdaScope  scope = (E6SqlLambdaScope) scopes.get(lambdaExpr);
     requireNonNull(scope, "scope");
     final LambdaNamespace ns =
         getNamespaceOrThrow(lambdaExpr).unwrap(LambdaNamespace.class);
@@ -6593,7 +7053,10 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       final String alias = SqlValidatorUtil.alias(measure, aliases.size());
       aliases.add(alias);
 
-      SqlNode expand = expand(measure, scope);
+
+
+        // added by E6data for lateral alias expansion
+        SqlNode expand =  expandMeasureAliasMatchRecognize(measure, scope, mr);
       expand = navigationInMeasure(expand, allRows);
       setOriginal(expand, measure);
 
@@ -6688,6 +7151,13 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
   public void validatePivot(SqlPivot pivot) {
     final PivotScope scope = (PivotScope) getJoinScope(pivot);
 
+
+    // e6data change - Support Spark style PIVOT semantics
+    final boolean allowPivotAggregateExpression =
+        config.conformance().allowPivotAggregateExpression();
+    final boolean pivotValueNullOnEmpty =
+        config.conformance().isPivotValueNullOnEmpty();
+
     final PivotNamespace ns =
         getNamespaceOrThrow(pivot).unwrap(PivotNamespace.class);
     assert ns.rowType == null;
@@ -6702,13 +7172,23 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     // where k1, ... kN are columns that are not referenced as an argument to
     // an aggregate or as an axis.
 
-    // Aggregates, e.g. "PIVOT (sum(x) AS sum_x, count(*) AS c)"
+
+
+    // Measures, e.g. "PIVOT (sum(x) AS sum_x, count(*) AS c, 1 AS one)"
+
     final PairList<@Nullable String, RelDataType> aggNames = PairList.of();
     pivot.forEachAgg((alias, call) -> {
       call.validate(this, scope);
-      final RelDataType type = deriveType(scope, call);
+       RelDataType type = deriveType(scope, call);
+
+        if (pivotValueNullOnEmpty) {
+            type = typeFactory.createTypeWithNullability(type, true);
+        }
       aggNames.add(alias, type);
-      if (!(call instanceof SqlCall)
+
+        if (allowPivotAggregateExpression) {
+            validatePivotMeasureExpression(call);
+        } else if (!(call instanceof SqlCall)
           || !(((SqlCall) call).getOperator() instanceof SqlAggFunction)) {
         throw newValidationError(call, RESOURCE.pivotAggMalformed());
       }
@@ -6757,8 +7237,87 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
               aggType));
     });
 
+
+
+    // condition added by e6data to populate pivotRenamingColumns
+    SqlNode enclosingPivotNode = namespaces.get(pivot).getEnclosingNode();
+    if (!(enclosingPivotNode instanceof SqlPivot) && enclosingPivotNode instanceof SqlCall
+        && ((SqlCall) enclosingPivotNode).getOperator().getKind() == SqlKind.AS
+        && ((SqlCall) enclosingPivotNode).getOperandList().size() > 2)
+    {
+        SqlCall call = (SqlCall) enclosingPivotNode;
+        for (int i = 2; i < call.getOperandList().size(); i++)
+        {
+            if (call.getOperandList().get(i) instanceof SqlIdentifier)
+            {
+                SqlIdentifier identifier = (SqlIdentifier) call.getOperandList().get(i);
+                pivotRenamingColumns.put(identifier.getSimple(), null);
+            }
+        }
+    }
+
     final RelDataType rowType = typeBuilder.build();
     ns.setType(rowType);
+
+}
+
+// e6data change - Support Spark style PIVOT semantics
+private void validatePivotMeasureExpression(SqlNode node) {
+    // Input-independent scalar expressions are valid when richer PIVOT
+    // measures are enabled. The recursive walk throws only when it finds an
+    // input-dependent construct outside an aggregate term.
+    validatePivotMeasureExpressionInternal(node);
+}
+
+private boolean validatePivotMeasureExpressionInternal(SqlNode node) {
+    if (node == null) {
+        return false;
+    }
+    if (node.isA(SqlKind.QUERY)) {
+        throw newValidationError(node, RESOURCE.pivotAggExpressionMalformed());
+    }
+    if (node instanceof SqlIdentifier) {
+        throw newValidationError(node, RESOURCE.pivotAggExpressionMalformed());
+    }
+    if (node instanceof SqlCall) {
+        final SqlCall call = (SqlCall) node;
+        if (call.getKind() == SqlKind.OVER) {
+            throw newValidationError(call,
+                RESOURCE.windowedAggregateIllegalInClause("PIVOT"));
+        }
+        if (isUnsupportedPivotAggregateWrapper(call)) {
+            throw newValidationError(call, RESOURCE.pivotAggExpressionMalformed());
+        }
+        if (SqlPivot.isAggregateTerm(call)) {
+            return true;
+        }
+        boolean foundAggregate = false;
+        for (SqlNode operand : call.getOperandList()) {
+            foundAggregate |= validatePivotMeasureExpressionInternal(operand);
+        }
+        return foundAggregate;
+    }
+    if (node instanceof SqlNodeList) {
+        boolean foundAggregate = false;
+        for (SqlNode child : (SqlNodeList) node) {
+            foundAggregate |= validatePivotMeasureExpressionInternal(child);
+        }
+        return foundAggregate;
+    }
+    return false;
+}
+
+private static boolean isUnsupportedPivotAggregateWrapper(SqlCall call) {
+    switch (call.getKind()) {
+        case FILTER:
+        case WITHIN_DISTINCT:
+        case WITHIN_GROUP:
+        case IGNORE_NULLS:
+        case RESPECT_NULLS:
+            return true;
+        default:
+            return false;
+    }
   }
 
   public void validateUnpivot(SqlUnpivot unpivot) {
@@ -6987,7 +7546,13 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     if (op.isPercentile()) {
       switch (aggCall.operandCount()) {
       case 1:
-        assert op.requiresGroupOrder() == Optionality.MANDATORY;
+
+                // The window form (WITHIN GROUP + OVER) is rewritten to use
+                // FORBIDDEN group order with 1 operand; skip WITHIN GROUP
+                // validation since the order was moved to the window clause.
+                if ( op.requiresGroupOrder() == Optionality.MANDATORY)
+                {
+
         assert orderList != null;
         // Validate that percentile function have a single ORDER BY expression
         if (orderList.size() != 1) {
@@ -7004,6 +7569,8 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
               RESOURCE.unsupportedTypeInOrderBy(
                   type.getSqlTypeName().getName(),
                   op.getName()));
+
+                    }
         }
         break;
       case 2:
@@ -7090,6 +7657,27 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     return newExpr;
   }
 
+
+
+// new method added by e6data to expand select expression if pivot is present
+public SqlNode expandPivotSelectExpr(SqlNode expr, SelectScope scope, SqlSelect select, PivotNamespace pivotNamespace)
+{
+    final PivotSelectExpander expander = new PivotSelectExpander(this, scope, select, pivotNamespace,
+        pivotRenamingColumns.keySet().stream().collect(Collectors.toList()));
+    SqlNode newExpr = expander.go(expr);
+
+    String alias = expander.getAlias();
+    RelDataType datatype = expander.getDatatype();
+    pivotRenamingColumns.replace(alias, datatype);
+
+    if (expr != newExpr)
+    {
+        setOriginal(newExpr, expr);
+    }
+
+    return newExpr;
+}
+
   @Override public SqlNode expand(SqlNode expr, SqlValidatorScope scope) {
     final Expander expander = new Expander(this, scope);
     SqlNode newExpr = expander.go(expr);
@@ -7103,7 +7691,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
   private SqlNode extendedExpand(SqlNode expr,
       SqlValidatorScope scope, SqlSelect select, Clause clause) {
     final Expander expander =
-        new ExtendedExpander(this, scope, select, expr, clause);
+        new ExtendedExpander(this, scope, select, expr, clause, aggFinder);
     SqlNode newExpr = expander.go(expr);
     if (expr != newExpr) {
       setOriginal(newExpr, expr);
@@ -7114,6 +7702,30 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
   public SqlNode extendedExpandGroupBy(SqlNode expr,
       SqlValidatorScope scope, SqlSelect select) {
     return extendedExpand(expr, scope, select, Clause.GROUP_BY);
+}
+
+public SqlNode expandWithAlias(SqlNode expr, SqlValidatorScope scope, SqlSelect select)
+{
+    final Expander expander = new ExtendedAliasExpander(this, scope, select);
+    SqlNode newExpr = expr.accept(expander);
+    assert newExpr != null;
+    if (!expr.equalsDeep(newExpr, Litmus.IGNORE))
+    {
+        setOriginal(newExpr, expr);
+    }
+    return newExpr;
+}
+
+// added by E6Data for expanding columns inside match recognize measure with lateral alias
+public SqlNode expandMeasureAliasMatchRecognize(SqlNode expr, SqlValidatorScope scope, SqlMatchRecognize matchRecognize)
+{
+    final Expander expander = new MatchRecognizeMeasureAliasExpander(this, scope, matchRecognize);
+    SqlNode newExpr = expander.go(expr);
+    if (expr != newExpr)
+    {
+        setOriginal(newExpr, expr);
+    }
+    return newExpr;
   }
 
   @Override public boolean isSystemField(RelDataTypeField field) {
@@ -7242,6 +7854,20 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     return isPhysicalNavigation(kind)
         || isLogicalNavigation(kind)
         || isAggregation(kind);
+  }
+
+
+
+// new method by e6data
+public List<String> getPivotRenamingColumns()
+{
+    return pivotRenamingColumns.keySet().stream().collect(Collectors.toList());
+}
+
+// new method by E6data
+public boolean hasPivotWithStar()
+{
+    return hasPivotWithStar;
   }
 
   //~ Inner Classes ----------------------------------------------------------
@@ -7380,7 +8006,25 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     }
 
     @Override public RelDataType visit(SqlLiteral literal) {
-      return resolveLiteral(literal).createSqlType(typeFactory);
+
+        RelDataType type =  resolveLiteral(literal).createSqlType(typeFactory);
+        // added by E6Data
+        // if literal is a character, then cast it to varchar
+        // because we are casting every literal to varchar in conversion
+        // see convertExtendedExpression() method in E6SqlToRelConverter.java
+        if (CalciteForkSettings.castCharLiteralToVarchar()
+            && type.getSqlTypeName().equals(SqlTypeName.CHAR))
+        {
+            RelDataType newType = typeFactory.createSqlType(SqlTypeName.VARCHAR, type.getPrecision());
+            newType = typeFactory.createTypeWithNullability(newType, type.isNullable());
+            if (type.getCharset() != null && type.getCollation() != null)
+            {
+                newType = typeFactory.createTypeWithCharsetAndCollation(newType, type.getCharset(),
+                    type.getCollation());
+            }
+            return newType;
+        }
+        return type;
     }
 
     @Override public RelDataType visit(SqlCall call) {
@@ -7407,8 +8051,23 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
             call);
       }
 
+
+
+        // added condition by E6data to get relDatatype for pivot renamed column
       RelDataType type = null;
-      if (!(scope instanceof EmptyScope)) {
+
+        String columnName = id.names.get(id.names.size() - 1);
+        if (!pivotRenamingColumns.isEmpty() && pivotRenamingColumns.containsKey(columnName))
+        {
+            RelDataType pivotColumnType = pivotRenamingColumns.get(columnName);
+            if (pivotColumnType != null)
+            {
+                return pivotColumnType;
+            }
+
+            throw newValidationError(id, RESOURCE.unknownIdentifier(columnName));
+        }
+        else if (!(scope instanceof EmptyScope)) {
         id = scope.fullyQualify(id).identifier;
       }
 
@@ -7710,6 +8369,10 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
 
           assert qualifiedNode.size() == 2;
 
+          if (join.getConditionType() == JoinConditionType.USING) {
+            return qualifiedNode.get(0);
+          }
+
           final SqlCall coalesceCall =
               SqlStdOperatorTable.COALESCE.createCall(SqlParserPos.ZERO, qualifiedNode.get(0),
                   qualifiedNode.get(1));
@@ -7800,7 +8463,11 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
               false);
       SqlNode expr = expandedSelectList.get(ordinal);
       expr = stripAs(expr);
-      if (expr instanceof SqlIdentifier) {
+
+        // added by E6data
+        // skip fully qualify if pivot renamed column is present
+        if (expr instanceof SqlIdentifier
+            && !pivotRenamingColumns.containsKey(((SqlIdentifier) expr).names.get(((SqlIdentifier) expr).names.size() - 1))) {
         expr = getScope().fullyQualify((SqlIdentifier) expr).identifier;
       }
 
@@ -7840,6 +8507,76 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     }
   }
 
+
+
+/**
+ * Added by E6data Shuttle which walks over an expression replacing usage of alias with underlying expression.
+ */
+static class ExtendedAliasExpander extends Expander
+{
+
+    SqlSelect select;
+
+    ExtendedAliasExpander(SqlValidatorImpl validator, SqlValidatorScope scope, SqlSelect select)
+    {
+        super(validator, scope);
+        this.select = select;
+    }
+
+    @Override
+    public SqlNode visit(SqlIdentifier id)
+    {
+        if (id.isSimple())
+        {
+            try
+            {
+                SqlNode sqlNode = super.visit(id);
+                return sqlNode;
+            }
+            catch (Exception e)
+            {
+                String name = id.getSimple();
+                SqlNode expr = null;
+                final SqlNameMatcher nameMatcher = validator.catalogReader.nameMatcher();
+                int n = 0;
+                for (SqlNode s : select.getSelectList())
+                {
+                    final String alias = SqlValidatorUtil.alias(s);
+                    if (alias != null && nameMatcher.matches(alias, name))
+                    {
+                        expr = s;
+                        n++;
+                    }
+                }
+                if (n == 0)
+                {
+                    return super.visit(id);
+                }
+                else if (n > 1)
+                {
+                    // More than one column has this alias.
+                    throw validator.newValidationError(id, RESOURCE.columnAmbiguous(name));
+                }
+                expr = stripAs(expr);
+                if (expr instanceof SqlIdentifier)
+                {
+                    if (((SqlIdentifier) expr).names.equals(id.names))
+                    {
+                        // Not an alias , don't want to update parser position
+                        return super.visit(id);
+                    }
+                    expr = getScope().fullyQualify((SqlIdentifier) expr).identifier;
+                }
+                //                validator.setOriginal(expr, id);
+                final Expander expander = new ExtendedAliasExpander(validator, getScope(), select);
+                return expr.accept(expander);
+            }
+        }
+        return super.visit(id);
+    }
+
+}
+
   /**
    * Converts an expression into canonical form by fully-qualifying any
    * identifiers. For common columns in USING, it will be converted to
@@ -7847,7 +8584,8 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
    * allows isSelectAlias, it expands identifiers that refer to
    * local select expressions into the expressions themselves.
    */
-  static class SelectExpander extends Expander {
+  static class SelectExpander extends  ExtendedAliasExpander
+ {
     final SqlSelect select;
     // Maps simple identifiers to their expansions.
     final Map<String, SqlNode> expansions;
@@ -7858,7 +8596,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
 
     private SelectExpander(SqlValidatorImpl validator, SelectScope scope,
         SqlSelect select, Map<String, SqlNode> expansions, Set<String> lookingUp) {
-      super(validator, scope);
+      super(validator, scope, select);
       this.select = select;
       this.expansions = expansions;
       this.lookingUp = lookingUp;
@@ -7973,6 +8711,94 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     }
   }
 
+
+
+/**
+ * Expander added by E6data to expand select statement having pivot renaming columns
+ */
+static class PivotSelectExpander extends Expander
+{
+
+    private final SqlSelect select;
+    private final SelectScope scope;
+    private ScopeChild m_scopeChild = null;
+    private final PivotNamespace m_pivotNamespace;
+    private final List<String> pivotRenamingColumns;
+    private String pivotRenameColumnAlias = null;
+    private RelDataType pivotRenameColumnDatatype = null;
+    private boolean isPivotRenamingColumn = false;
+    private String pivotOriginalColumnName = null;
+
+    PivotSelectExpander(SqlValidatorImpl validator, SelectScope scope, SqlSelect select, PivotNamespace namespace,
+        List<String> pivotRenamingColumns)
+    {
+        super(validator, scope);
+        this.select = select;
+        this.scope = scope;
+        m_pivotNamespace = namespace;
+        this.pivotRenamingColumns = pivotRenamingColumns;
+    }
+
+    @Override
+    public @Nullable SqlNode visit(SqlIdentifier id)
+    {
+        SqlNode expanded = null;
+        List<RelDataTypeField> fieldList = m_pivotNamespace.getRowType().getFieldList();
+
+        String columnName = id.names.get(id.names.size() - 1);
+        for (int i = 0; i < pivotRenamingColumns.size(); i++)
+        {
+            if (pivotRenamingColumns.get(i).equals(columnName))
+            {
+                expanded = new SqlBasicCall(SqlStdOperatorTable.AS,
+                    ImmutableList.of(new SqlIdentifier(fieldList.get(i).getName(), id.getParserPosition()),
+                        new SqlIdentifier(ImmutableList.of(columnName), id.getParserPosition())), id.getParserPosition());
+                pivotRenameColumnAlias = columnName;
+                pivotOriginalColumnName = fieldList.get(i).getName();
+                pivotRenameColumnDatatype = fieldList.get(i).getType();
+                isPivotRenamingColumn = true;
+                break;
+            }
+        }
+
+        if (expanded == null)
+        {
+            final SqlNode node = expandCommonColumn(select, id, (SelectScope) getScope());
+            if (node != id)
+            {
+                return node;
+            }
+            else
+            {
+                return super.visit(id);
+            }
+        }
+
+        return expanded;
+    }
+
+    public String getAlias()
+    {
+        return pivotRenameColumnAlias;
+    }
+
+    public RelDataType getDatatype()
+    {
+        return pivotRenameColumnDatatype;
+    }
+
+    public boolean isPivotRenamingColumn()
+    {
+        return isPivotRenamingColumn;
+    }
+
+    public String getPivotOriginalColumnName()
+    {
+        return pivotOriginalColumnName;
+    }
+
+}
+
   /**
    * Shuttle which walks over an expression in the GROUP BY/HAVING clause, replacing
    * usages of aliases or ordinals with the underlying expression.
@@ -7981,18 +8807,22 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     final SqlSelect select;
     final SqlNode root;
     final Clause clause;
+    final AggFinder aggFinder;
     // This contains the ordinal nodes in a GROUP BY that may need to be expanded
     // into column names when using a conformance that allows ordinals in group bys
     // E.g., For GROUP BY 1, 1 will be in this list
     // For GROUP BY CUBE(1), 1 will also be in this list
+    // Retain only expandable aliases or ordinals to prevent their expansion in a SQL call expr.
     final Set<SqlNode> aliasOrdinalExpandSet = Sets.newIdentityHashSet();
 
     ExtendedExpander(SqlValidatorImpl validator, SqlValidatorScope scope,
-        SqlSelect select, SqlNode root, Clause clause) {
+        SqlSelect select, SqlNode root, Clause clause,
+        AggFinder aggFinder) {
       super(validator, scope);
       this.select = select;
       this.root = root;
       this.clause = clause;
+        this.aggFinder = aggFinder;
       if (clause == Clause.GROUP_BY) {
         addExpandableOrdinals();
       }
@@ -8057,6 +8887,15 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       for (SqlNode s : SqlNonNullableAccessors.getSelectList(select)) {
         final @Nullable String alias = SqlValidatorUtil.alias(s);
         if (alias != null && nameMatcher.matches(alias, name)) {
+
+                if (CalciteForkSettings.databricks() && clause != Clause.HAVING)
+                {
+                    SqlCall agg = aggFinder.findAgg(s);
+                    if (agg != null)
+                    {
+                        continue;
+                    }
+                }
           expr = s;
           n++;
         }
@@ -8089,8 +8928,28 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       expr = stripAs(expr);
       if (expr instanceof SqlIdentifier) {
         SqlIdentifier sid = (SqlIdentifier) expr;
+
+
+            // E6data change
+            // call makeNullaryCall and add function if necessary
+            // this fixes issue in group by column expansion of CURRENT_DATE and similar functions
+            // check TestZpt#testGroupByExpansionFix
+            SqlNode sqlNode = null;
+            if (sid.isSimple())
+            {
+                sqlNode = super.visit(sid);
+            }
+
+            if (sqlNode == null || sqlNode.equalsDeep(sid, Litmus.IGNORE))
+            {
         final SqlIdentifier fqId = getScope().fullyQualify(sid).identifier;
         expr = expandDynamicStar(sid, fqId);
+
+            }
+            else
+            {
+                expr = sqlNode;
+            }
       }
 
       return expr;
@@ -8190,6 +9049,73 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
         Util.swallow(e, null);
         return true;
       }
+    }
+  }
+
+/**
+ * Added by E6data for expanding lateral alias of Match Recognize Measure element
+ */
+static class MatchRecognizeMeasureAliasExpander extends Expander
+{
+
+    SqlMatchRecognize m_sqlMatchRecognize;
+
+    MatchRecognizeMeasureAliasExpander(SqlValidatorImpl validator, SqlValidatorScope scope,
+        SqlMatchRecognize matchRecognize)
+    {
+        super(validator, scope);
+        this.m_sqlMatchRecognize = matchRecognize;
+    }
+
+    @Override
+    public @Nullable SqlNode visit(SqlIdentifier id)
+    {
+        if (id.isSimple())
+        {
+            try
+            {
+                return super.visit(id);
+            }
+            catch (Exception e)
+            {
+                String name = id.getSimple();
+                SqlNode expr = null;
+                final SqlNameMatcher nameMatcher = validator.catalogReader.nameMatcher();
+                int n = 0;
+                for (SqlNode measure : m_sqlMatchRecognize.getMeasureList())
+                {
+                    final String alias = SqlValidatorUtil.alias(measure);
+                    if (alias != null && nameMatcher.matches(alias, name))
+                    {
+                        expr = measure;
+                        n++;
+                    }
+                }
+                if (n == 0)
+                {
+                    return super.visit(id);
+                }
+                else if (n > 1)
+                {
+                    // More than one column has this alias.
+                    throw validator.newValidationError(id, RESOURCE.columnAmbiguous(name));
+                }
+                expr = stripAs(expr);
+                if (expr instanceof SqlIdentifier)
+                {
+                    if (((SqlIdentifier) expr).names.equals(id.names))
+                    {
+                        // Not an alias , don't want to update parser position
+                        return super.visit(id);
+                    }
+                    expr = getScope().fullyQualify((SqlIdentifier) expr).identifier;
+                }
+                final Expander expander = new MatchRecognizeMeasureAliasExpander(validator, getScope(),
+                    m_sqlMatchRecognize);
+                return expr.accept(expander);
+            }
+        }
+        return super.visit(id);
     }
   }
 

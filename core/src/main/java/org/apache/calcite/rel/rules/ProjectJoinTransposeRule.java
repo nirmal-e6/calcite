@@ -24,7 +24,6 @@ import org.apache.calcite.rel.core.Join;
 import org.apache.calcite.rel.core.Project;
 import org.apache.calcite.rel.logical.LogicalJoin;
 import org.apache.calcite.rel.logical.LogicalProject;
-import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexNode;
@@ -40,6 +39,9 @@ import java.util.List;
 
 import static java.util.Objects.requireNonNull;
 
+// This rule has been shaded to include a new property, AllowCastWithNULL.
+// Default is FALSE. If it is set to true, then CAST with NOT NULL is not
+// considered as a preserved expression.
 /**
  * Planner rule that pushes a {@link org.apache.calcite.rel.core.Project}
  * past a {@link org.apache.calcite.rel.core.Join}
@@ -106,6 +108,41 @@ public class ProjectJoinTransposeRule
       return;
     }
 
+    // Coalesce gets re-written into CASE Statement. As part of this, we project
+    // CAST with NOT NULL columns. That makes it to rightPreserveExprs list, that
+    // drops the CAST with NOT NULL, leaving only the column reference. This leads
+    // to Assertion error, because the row types of equivalence set doesn't match.
+    if (config.isAllowCastWithNULL())
+    {
+        if (!pushProjector.rightPreserveExprs.isEmpty())
+        {
+            for (RexNode rexNode : pushProjector.rightPreserveExprs)
+            {
+                if (rexNode instanceof RexCall)
+                {
+                    RexCall rexCall = (RexCall) rexNode;
+
+                    if ((rexNode.getKind() == SqlKind.CAST) && rexCall.getOperands().size() == 1 && rexCall.getType()
+                        .getFullTypeString()
+                        .contains("NOT NULL"))
+                    {
+                        List<RexNode> updatedRightPreserveExprs = new ArrayList<>();
+                        for(RexNode expr : pushProjector.rightPreserveExprs)
+                        {
+                            if(!expr.equals(rexNode))
+                            {
+                                updatedRightPreserveExprs.add(expr);
+                            }
+                        }
+
+                        pushProjector.rightPreserveExprs = updatedRightPreserveExprs;
+                    }
+                }
+            }
+        }
+    }
+
+
     // create left and right projections, projecting only those
     // fields referenced on each side
     final RelNode leftProject =
@@ -159,24 +196,8 @@ public class ProjectJoinTransposeRule
   @Value.Immutable(singleton = false)
   public interface Config extends RelRule.Config {
     Config DEFAULT = ImmutableProjectJoinTransposeRule.Config.builder()
-        .withPreserveExprCondition(expr -> {
-          // Do not push down over's expression by default
-          if (expr instanceof RexOver) {
-            return false;
-          }
-          if (SqlKind.CAST == expr.getKind()) {
-            final RelDataType relType = expr.getType();
-            final RexCall castCall = (RexCall) expr;
-            final RelDataType operand0Type = castCall.getOperands().get(0).getType();
-            if (relType.getSqlTypeName() == operand0Type.getSqlTypeName()
-                && operand0Type.isNullable() && !relType.isNullable()) {
-              // Do not push down not nullable cast's expression with the same type by default
-              // eg: CAST($1):VARCHAR(10) NOT NULL, and type of $1 is nullable VARCHAR(10)
-              return false;
-            }
-          }
-          return true;
-        })
+        .withPreserveExprCondition(expr -> !(expr instanceof RexOver))
+        .withAllowCastWithNULL(false)
         .build()
         .withOperandFor(LogicalProject.class, LogicalJoin.class);
 
@@ -198,5 +219,10 @@ public class ProjectJoinTransposeRule
               b1.operand(joinClass).anyInputs()))
           .as(Config.class);
     }
+
+    @Value.Default default boolean isAllowCastWithNULL() {
+        return false;
+    }
+    Config withAllowCastWithNULL(boolean allowCastWithNull);
   }
 }

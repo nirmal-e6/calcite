@@ -17,6 +17,7 @@
 package org.apache.calcite.rex;
 
 import org.apache.calcite.DataContexts;
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.linq4j.function.Predicate1;
 import org.apache.calcite.plan.PlanTooComplexError;
 import org.apache.calcite.plan.RelOptPredicateList;
@@ -630,6 +631,35 @@ public class RexUtil {
     if (sarg.isAll() || sarg.isNone()) {
       return simpleSarg(pos, rexBuilder, ref, sarg, unknownAs);
     }
+    if (canConvertToSetSearch(sarg, type)) {
+      ArrayList<RexNode> inList = new ArrayList<>();
+      inList.add(ref);
+      Set<Range<C>> ranges = sarg.isPoints()
+          ? sarg.rangeSet.asRanges()
+          : sarg.rangeSet.complement().asRanges();
+
+      ranges.forEach(range -> inList.add(rexBuilder.makeLiteral(range.lowerEndpoint(),
+          type, true, true)));
+      RexNode node = rexBuilder.makeCall(pos, SqlStdOperatorTable.SET_SEARCH, inList);
+      if (sarg.isComplementedPoints()) {
+        node = rexBuilder.makeCall(pos, SqlStdOperatorTable.NOT, node);
+      }
+      if (unknownAs == RexUnknownAs.UNKNOWN) {
+        switch (sarg.nullAs) {
+        case TRUE:
+          node = rexBuilder.makeCall(pos, SqlStdOperatorTable.OR,
+              rexBuilder.makeCall(pos, SqlStdOperatorTable.IS_NULL, ref), node);
+          break;
+        case FALSE:
+          node = rexBuilder.makeCall(pos, SqlStdOperatorTable.AND,
+              rexBuilder.makeCall(pos, SqlStdOperatorTable.IS_NOT_NULL, ref), node);
+          break;
+        case UNKNOWN:
+          break;
+        }
+      }
+      return node;
+    }
     final List<RexNode> orList = new ArrayList<>();
     if (sarg.nullAs == RexUnknownAs.TRUE
         && unknownAs == RexUnknownAs.UNKNOWN) {
@@ -665,6 +695,35 @@ public class RexUtil {
               node);
     }
     return node;
+  }
+
+  private static <C extends Comparable<C>> boolean canConvertToSetSearch(
+      Sarg<C> sarg, RelDataType type) {
+    if (!sarg.isPoints() && !sarg.isComplementedPoints()) {
+      return false;
+    }
+    boolean validType;
+    switch (type.getSqlTypeName()) {
+    case ARRAY:
+    case MAP:
+    case STRUCTURED:
+    case CURSOR:
+    case ROW:
+    case DYNAMIC_STAR:
+    case FUNCTION:
+    case DISTINCT:
+    case UNKNOWN:
+    case NULL:
+      validType = false;
+      break;
+    default:
+      validType = true;
+      break;
+    }
+    int threshold = CalciteForkSettings.inSubquerySetThreshold();
+    return validType
+        && (sarg.isPoints() ? sarg.pointCount > threshold
+            : sarg.rangeSet.complement().asRanges().size() > threshold);
   }
 
   /**

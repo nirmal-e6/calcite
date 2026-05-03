@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.plan;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexFieldAccess;
 import org.apache.calcite.rex.RexInputRef;
@@ -37,6 +38,7 @@ import com.google.common.collect.Iterables;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -63,6 +65,7 @@ import static java.util.Objects.requireNonNull;
  */
 public class Strong {
   private static final Map<SqlKind, Policy> MAP = createPolicyMap();
+  private static final Map<String, Policy> FUNCTION_MAP = createPolicyMapForFunctions();
 
   public Strong() {
     super();
@@ -130,6 +133,11 @@ public class Strong {
   public static Policy policy(SqlOperator operator) {
     if (operator.getStrongPolicyInference() != null) {
       return operator.getStrongPolicyInference().get();
+    }
+    // E6: custom function instances can share names but carry different SqlKind values.
+    if (CalciteForkSettings.enableOuterJoinOpt()
+        && FUNCTION_MAP.containsKey(operator.getName().toUpperCase())) {
+      return FUNCTION_MAP.get(operator.getName().toUpperCase());
     }
     return MAP.getOrDefault(operator.getKind(), Policy.AS_IS);
   }
@@ -298,6 +306,41 @@ public class Strong {
       }
     }
     return false;
+  }
+
+  private static Map<String, Policy> createPolicyMapForFunctions() {
+    HashMap<String, Policy> map = new HashMap<>();
+
+    // Other functions to check: JSON_EXTRACT, SEQUENCE, UNNEST, CAST,
+    // ROW_NUMBER, VARCHAR
+    map.put("TRIM", Policy.ANY);
+    map.put("LOWER", Policy.ANY);
+    map.put("LTRIM", Policy.ANY);
+    map.put("RTRIM", Policy.ANY);
+    map.put("CEIL", Policy.ANY);
+    map.put("FLOOR", Policy.ANY);
+    map.put("EXTRACT", Policy.ANY);
+    map.put("DATE", Policy.ANY);
+    map.put("DATETIME", Policy.ANY);
+    map.put("DATE_ADD", Policy.ANY);
+    map.put("DATE_DIFF", Policy.ANY);
+    map.put("DATE_FORMAT", Policy.ANY);
+    map.put("DATE_TRUNC", Policy.ANY);
+    map.put("DAY", Policy.ANY);
+    map.put("HOUR", Policy.ANY);
+    map.put("FROM_UNIXTIME", Policy.ANY);
+    map.put("ROUND", Policy.ANY);
+
+    // The following types of expressions could potentially be custom.
+    map.put("CASE", Policy.AS_IS);
+    map.put("DECODE", Policy.AS_IS);
+    // NULLIF(1, NULL) yields 1, but NULLIF(1, 1) yields NULL
+    map.put("NULLIF", Policy.AS_IS);
+    // COALESCE(NULL, 2) yields 2
+    map.put("COALESCE", Policy.AS_IS);
+    map.put("NVL", Policy.AS_IS);
+
+    return map;
   }
 
   private static Map<SqlKind, Policy> createPolicyMap() {

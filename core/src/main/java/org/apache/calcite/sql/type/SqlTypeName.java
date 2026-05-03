@@ -189,6 +189,9 @@ public enum SqlTypeName {
   public static final List<SqlTypeName> UNSIGNED_TYPES =
       ImmutableList.of(UTINYINT, USMALLINT, UINTEGER, UBIGINT);
 
+  public static final List<SqlTypeName> INTEGER_EXCLDUING_BIG_INT =
+      ImmutableList.of(TINYINT, SMALLINT, INTEGER);
+
   public static final List<SqlTypeName> EXACT_TYPES =
       combine(combine(INT_TYPES, UNSIGNED_TYPES), ImmutableList.of(DECIMAL));
 

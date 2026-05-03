@@ -200,6 +200,7 @@ public class SqlTypeCoercionRule implements SqlTypeMappingRule {
             .add(SqlTypeName.TIMESTAMP)
             .add(SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE)
             .add(SqlTypeName.TIMESTAMP_TZ)
+            .add(SqlTypeName.ARRAY) // Added by E6data
             .addAll(SqlTypeName.BINARY_TYPES)
             .addAll(SqlTypeName.NUMERIC_TYPES)
             .addAll(SqlTypeName.INTERVAL_TYPES)

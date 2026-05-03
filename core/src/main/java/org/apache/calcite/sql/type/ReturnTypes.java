@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.sql.type;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeField;
@@ -50,6 +51,8 @@ import static org.apache.calcite.util.Static.RESOURCE;
 
 import static java.util.Objects.requireNonNull;
 
+// changed return type of PERCENTILE_DISC_CONT
+// WARNING : DO NOT PUT CUSTOM RETURN TYPES HERE AS IT'S A COPY OF CALCITE'S CLASS
 /**
  * A collection of return-type inference strategies.
  */
@@ -602,10 +605,154 @@ public abstract class ReturnTypes {
       andThen(SqlTypeTransforms.FROM_MEASURE_IF::apply,
           ReturnTypes::leastRestrictive);
 
+
+
+public static final SqlReturnTypeInference LEAST_RESTRICTIVE_NVL = andThen(SqlTypeTransforms.FROM_MEASURE_IF::apply,
+    (opBinding) ->
+    {
+        List<RelDataType> types = opBinding.collectOperandTypes();
+        return leastRestrictive(opBinding, types, SqlTypeMappingRules.instance(false));
+    });
+
+public static @Nullable RelDataType leastRestrictive(SqlOperatorBinding opBinding, List<RelDataType> types,
+    SqlTypeMappingRule mappingRule)
+{
+    requireNonNull(types, "types");
+    requireNonNull(mappingRule, "mappingRule");
+    checkArgument(types.size() >= 1, "types.size >= 1");
+
+    RelDataType type0 = types.get(0);
+    if (type0.getSqlTypeName() != null)
+    {
+        RelDataType resultType = opBinding.getTypeFactory().leastRestrictive(types);
+        if (resultType != null)
+        {
+            return resultType;
+        }
+        return leastRestrictiveByCast(opBinding, types, mappingRule);
+    }
+
+    return leastRestrictive(opBinding, types, mappingRule);
+}
+
+private static @Nullable RelDataType leastRestrictiveByCast(SqlOperatorBinding opBinding, List<RelDataType> types,
+    SqlTypeMappingRule mappingRule)
+{
+    RelDataType resultType = types.get(0);
+    boolean anyNullable = resultType.isNullable();
+    for (int i = 1; i < types.size(); i++)
+    {
+        RelDataType type = types.get(i);
+        if (type.getSqlTypeName() == SqlTypeName.NULL)
+        {
+            anyNullable = true;
+            continue;
+        }
+
+        if (type.isNullable())
+        {
+            anyNullable = true;
+        }
+
+        if (SqlTypeUtil.canCastFrom(type, resultType, mappingRule))
+        {
+            resultType = type;
+        }
+        else
+        {
+            if(CalciteForkSettings.databricks())
+            {
+                {
+                    //Apply custom rules for incompatible types according to databricks
+                    // Rule 1: VARCHAR and NUMERIC -> NUMERIC
+                    // Rule 2: VARCHAR and DATE -> DATE
+                    // Rule 3: DATE and TIMESTAMP -> TIMESTAMP
+
+                    boolean hasVarchar = false;
+                    boolean hasNumeric = false;
+                    boolean hasDate = false;
+                    boolean hasTimestamp = false;
+                    RelDataType numericType = null;
+                    RelDataType dateType = null;
+                    RelDataType timestampType = null;
+
+                    for (RelDataType t : types)
+                    {
+                        if (t.getSqlTypeName() == SqlTypeName.NULL)
+                        {
+                            continue;
+                        }
+
+                        if (SqlTypeUtil.isCharacter(t))
+                        {
+                            hasVarchar = true;
+                        }
+                        else if (SqlTypeUtil.isNumeric(t))
+                        {
+                            hasNumeric = true;
+                            numericType = t;
+                        }
+                        else if (SqlTypeUtil.isDate(t))
+                        {
+                            hasDate = true;
+                            dateType = t;
+                        }
+                        else if (SqlTypeUtil.isTimestamp(t))
+                        {
+                            hasTimestamp = true;
+                            timestampType = t;
+                        }
+                    }
+
+                    if (hasVarchar && hasNumeric)
+                    {
+                        resultType = numericType != null ? numericType : opBinding.getTypeFactory().createSqlType(SqlTypeName.DOUBLE);
+                        anyNullable = true;
+                        break;
+                    }
+                    else if (hasVarchar && hasDate)
+                    {
+                        resultType = dateType != null ? dateType : opBinding.getTypeFactory().createSqlType(SqlTypeName.DATE);
+                        anyNullable = true;
+                        break;
+                    }
+                    else if (hasDate && hasTimestamp)
+                    {
+                        resultType = timestampType != null ? timestampType : opBinding.getTypeFactory().createSqlType(SqlTypeName.TIMESTAMP);
+                        anyNullable = true;
+                        break;
+                    }
+                    else if (hasVarchar && hasTimestamp)
+                    {
+                        resultType = timestampType != null ? timestampType : opBinding.getTypeFactory().createSqlType(SqlTypeName.TIMESTAMP);
+                        anyNullable = true;
+                        break;
+                    }
+                    else
+                    {
+                        return null;
+                    }
+                }
+            }
+        }
+    }
+    if (anyNullable)
+    {
+        return opBinding.getTypeFactory().createTypeWithNullability(resultType, true);
+    }
+    else
+    {
+        return resultType;
+    }
+}
+
   private static @Nullable RelDataType leastRestrictive(
       SqlOperatorBinding opBinding) {
+
+
+    List<RelDataType> types = opBinding.collectOperandTypes();
     return opBinding.getTypeFactory()
-        .leastRestrictive(opBinding.collectOperandTypes());
+        .leastRestrictive(types);
   }
 
   /**
@@ -1496,6 +1643,11 @@ public abstract class ReturnTypes {
     }
   };
 
+
+
+// E6data change
+//public static final SqlReturnTypeInference PERCENTILE_DISC_CONT = opBinding ->
+//    opBinding.getCollationType();
   public static final SqlReturnTypeInference PERCENTILE_DISC_CONT =
-      SqlOperatorBinding::getCollationType;
+       DOUBLE;
 }

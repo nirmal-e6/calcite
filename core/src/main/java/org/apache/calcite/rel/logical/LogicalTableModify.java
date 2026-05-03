@@ -31,11 +31,12 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 
+// E6data shade - Remove final from Class definition
 /**
  * Sub-class of {@link org.apache.calcite.rel.core.TableModify}
  * not targeted at any particular engine or calling convention.
  */
-public final class LogicalTableModify extends TableModify {
+public class LogicalTableModify extends TableModify {
   //~ Constructors -----------------------------------------------------------
 
   /**

@@ -27,6 +27,7 @@ import org.apache.calcite.sql.validate.SqlValidatorScope;
 
 import static org.apache.calcite.util.Static.RESOURCE;
 
+// e6data shade - Fixes to support query pattern involving WITHIN_GROUP
 /**
  * An operator describing a window function specification.
  *
@@ -67,6 +68,8 @@ public class SqlOverOperator extends SqlBinaryOperator {
     switch (aggCall.getKind()) {
     case RESPECT_NULLS:
     case IGNORE_NULLS:
+      // e6data change - add WITHIN_GROUP here also
+    case WITHIN_GROUP:
       validator.validateCall(aggCall, scope);
       aggCall = aggCall.operand(0);
       break;
@@ -99,10 +102,14 @@ public class SqlOverOperator extends SqlBinaryOperator {
           + " should be SqlCall, got " + agg.getClass() + ": " + agg);
     }
 
+    // E6data change - Unwrap WITHIN GROUP to get the inner aggregate call
+    SqlCall aggCall = (SqlCall) agg;
+    if (aggCall.getKind() == SqlKind.WITHIN_GROUP) {
+      aggCall = aggCall.operand(0);
+    }
+
     SqlNode window = call.operand(1);
     SqlWindow w = validator.resolveWindow(window, scope);
-
-    final SqlCall aggCall = (SqlCall) agg;
 
     SqlCallBinding opBinding = new SqlCallBinding(validator, scope, aggCall) {
       @Override public boolean hasEmptyGroup() {

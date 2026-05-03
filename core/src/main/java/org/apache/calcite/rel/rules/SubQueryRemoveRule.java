@@ -1004,8 +1004,13 @@ public class SubQueryRemoveRule
           LogicVisitor.find(RelOptUtil.Logic.TRUE, ImmutableList.of(c), e);
       final Set<CorrelationId>  variablesSet =
           RelOptUtil.getVariablesUsed(e.rel);
-      // Only consider the correlated variables which originated from this sub-query level.
-      variablesSet.retainAll(filterVariablesSet);
+      // E6: keep sub-query variables when the filter itself has no local variables.
+      // Emptying this set can skip creating the required correlate while the
+      // correlation variable remains in the expression tree.
+      if (!filterVariablesSet.isEmpty()) {
+        // Only consider the correlated variables which originated from this sub-query level.
+        variablesSet.retainAll(filterVariablesSet);
+      }
       final RexNode target =
           rule.apply(e, variablesSet, logic,
               builder, 1, builder.peek().getRowType().getFieldCount(), count);
@@ -1041,7 +1046,6 @@ public class SubQueryRemoveRule
     //
     // In such a case $cor0.DNAME need to be accounted as input form left side.
     final Set<CorrelationId> variablesSet = RelOptUtil.getVariablesUsed(e.rel);
-    variablesSet.retainAll(join.getVariablesSet());
     for (CorrelationId id : variablesSet) {
       ImmutableBitSet requiredColumns = RelOptUtil.correlationColumns(id, e.rel);
       inputSet = ImmutableBitSet.union(ImmutableList.of(requiredColumns, inputSet));

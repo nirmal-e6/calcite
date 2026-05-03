@@ -44,12 +44,13 @@ import java.util.Map;
 /**
  * Planner rule that pulls up constants through a Union operator.
  *
- * @see CoreRules#UNION_PULL_UP_CONSTANTS
+ * Shaded to match latest Calcite rule
  */
 @Value.Enclosing
 public class UnionPullUpConstantsRule
     extends RelRule<UnionPullUpConstantsRule.Config>
-    implements SubstitutionRule {
+    implements TransformationRule
+{
 
   /** Creates a UnionPullUpConstantsRule. */
   protected UnionPullUpConstantsRule(Config config) {
@@ -64,6 +65,7 @@ public class UnionPullUpConstantsRule
         .withOperandFor(unionClass));
   }
 
+@SuppressWarnings("deprecation")
   @Override public void onMatch(RelOptRuleCall call) {
     final Union union = call.rel(0);
 
@@ -98,7 +100,7 @@ public class UnionPullUpConstantsRule
         if (constant.getType().equals(field.getType())) {
           topChildExprs.add(constant);
         } else {
-          topChildExprs.add(rexBuilder.makeCast(field.getType(), constant, true, false));
+                topChildExprs.add(rexBuilder.makeCast(field.getType(), constant, true));
         }
         topChildExprsFields.add(field.getName());
       } else {
@@ -140,7 +142,6 @@ public class UnionPullUpConstantsRule
     relBuilder.convert(union.getRowType(), false);
 
     call.transformTo(relBuilder.build());
-    call.getPlanner().prune(union);
   }
 
   /** Rule configuration. */
