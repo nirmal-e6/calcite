@@ -17,6 +17,7 @@
 
 package org.apache.calcite.sql.type;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.rel.type.*;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.validate.SqlValidatorNamespace;
@@ -27,7 +28,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.AbstractList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.function.BooleanSupplier;
 import java.util.function.UnaryOperator;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -48,15 +48,8 @@ import static org.apache.calcite.util.Static.RESOURCE;
 public abstract class ReturnTypes
 {
 
-private static BooleanSupplier databricksLeastRestrictiveSupplier = () -> false;
-
 private ReturnTypes()
 {
-}
-
-public static void setDatabricksLeastRestrictiveSupplier(BooleanSupplier supplier)
-{
-    databricksLeastRestrictiveSupplier = requireNonNull(supplier, "supplier");
 }
 
 /**
@@ -588,7 +581,7 @@ private static @Nullable RelDataType leastRestrictiveByCast(SqlOperatorBinding o
         }
         else
         {
-            if(databricksLeastRestrictiveSupplier.getAsBoolean())
+            if(CalciteForkSettings.databricksLeastRestrictive())
             {
                 {
                     //Apply custom rules for incompatible types according to databricks

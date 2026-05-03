@@ -1,13 +1,11 @@
 package org.apache.calcite.sql.type;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.rel.type.*;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.function.BooleanSupplier;
-
 import static java.lang.Math.max;
 import static java.lang.Math.min;
-import static java.util.Objects.requireNonNull;
 
 public class E6TypeSystemImpl extends RelDataTypeSystemImpl
 {
@@ -20,7 +18,6 @@ private static final int MINIMUM_DECIMAL_ADJUSTED_SCALE = 6;
 public static final boolean ALLOW_DECIMAL_PRECISION_LOSS = true; // TODO: Make it configurable
 
 private static final E6TypeSystemImpl INSTANCE = new E6TypeSystemImpl();
-private static BooleanSupplier decimal128EnabledSupplier = () -> false;
 
 public static RelDataTypeSystem getInstance()
 {
@@ -31,14 +28,9 @@ private E6TypeSystemImpl()
 {
 }
 
-public static void setDecimal128EnabledSupplier(BooleanSupplier supplier)
-{
-    decimal128EnabledSupplier = requireNonNull(supplier, "supplier");
-}
-
 private static boolean isDecimal128Enabled()
 {
-    return decimal128EnabledSupplier.getAsBoolean();
+    return CalciteForkSettings.decimal128Enabled();
 }
 
 @Override

@@ -17,6 +17,7 @@
 package org.apache.calcite.sql.fun;
 
 import com.google.common.collect.ImmutableSet;
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.avatica.util.TimeUnitRange;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.sql.*;
@@ -27,10 +28,7 @@ import org.apache.calcite.sql.validate.SqlValidatorScope;
 import org.apache.calcite.util.Static;
 import org.apache.calcite.util.Util;
 
-import java.util.function.BooleanSupplier;
-
 import static org.apache.calcite.sql.validate.SqlNonNullableAccessors.getOperandLiteralValueOrThrow;
-import static java.util.Objects.requireNonNull;
 
 /**
  * The SQL <code>EXTRACT</code> operator. Extracts a specified field value from a DATETIME or an INTERVAL. E.g.<br>
@@ -40,8 +38,6 @@ import static java.util.Objects.requireNonNull;
 public class SqlExtractFunction extends SqlFunction
 {
 //~ Constructors -----------------------------------------------------------
-
-private static BooleanSupplier nativeExecutorSupplier = () -> false;
 
 private static final SqlSingleOperandTypeChecker INTERVAL_TIMESTAMP = OperandTypes.family(
     SqlTypeFamily.DATETIME_INTERVAL, SqlTypeFamily.TIMESTAMP);
@@ -57,7 +53,7 @@ private static final SqlSingleOperandTypeChecker OPERAND_TYPE_CHECKER = OperandT
 // Native executor returns Int32 for date component extraction functions,
 // while the Java executor returns Int64.
 private static final SqlReturnTypeInference EXTRACT_RETURN_TYPE = opBinding ->
-    (nativeExecutorSupplier.getAsBoolean() ? ReturnTypes.INTEGER_NULLABLE : ReturnTypes.BIGINT_NULLABLE)
+    (CalciteForkSettings.nativeExecutor() ? ReturnTypes.INTEGER_NULLABLE : ReturnTypes.BIGINT_NULLABLE)
         .inferReturnType(opBinding);
 
 public SqlExtractFunction(String name, boolean allowString) {
@@ -75,11 +71,6 @@ public SqlExtractFunction(String name, boolean allowString) {
 public SqlExtractFunction(String name)
 {
     super(name, SqlKind.EXTRACT, EXTRACT_RETURN_TYPE, null, OPERAND_TYPE_CHECKER, SqlFunctionCategory.SYSTEM);
-}
-
-public static void setNativeExecutorSupplier(BooleanSupplier supplier)
-{
-    nativeExecutorSupplier = requireNonNull(supplier, "supplier");
 }
 
 //~ Methods ----------------------------------------------------------------

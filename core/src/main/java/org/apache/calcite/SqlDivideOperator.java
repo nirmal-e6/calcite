@@ -1,5 +1,6 @@
 package org.apache.calcite;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.SqlBinaryOperator;
@@ -8,14 +9,8 @@ import org.apache.calcite.sql.SqlOperatorBinding;
 import org.apache.calcite.sql.type.*;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.function.BooleanSupplier;
-
-import static java.util.Objects.requireNonNull;
-
 public class SqlDivideOperator extends SqlBinaryOperator
 {
-
-private static BooleanSupplier decimal128EnabledSupplier = () -> false;
 
 /**
  * Creates a SqlBinaryOperator.
@@ -35,7 +30,7 @@ public SqlDivideOperator(String name, SqlKind kind, int prec, boolean leftAssoc,
 
 public RelDataType inferReturnType(SqlOperatorBinding opBinding)
 {
-    Boolean isDecimal128 = decimal128EnabledSupplier.getAsBoolean();
+    Boolean isDecimal128 = CalciteForkSettings.decimal128Enabled();
     RelDataType operand1 = opBinding.getOperandType(0);
     RelDataType operand2 = opBinding.getOperandType(1);
     if (SqlTypeUtil.isExactNumeric(operand1) && SqlTypeUtil.isExactNumeric(operand2) && (SqlTypeUtil.isDecimal(operand1)
@@ -51,11 +46,6 @@ public RelDataType inferReturnType(SqlOperatorBinding opBinding)
         }
     }
     return ReturnTypes.DOUBLE_NULLABLE.inferReturnType(opBinding);
-}
-
-public static void setDecimal128EnabledSupplier(BooleanSupplier supplier)
-{
-    decimal128EnabledSupplier = requireNonNull(supplier, "supplier");
 }
 
 }

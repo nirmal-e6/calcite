@@ -9,6 +9,7 @@
 
 package org.apache.calcite.sql.type;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFamily;
 import org.apache.calcite.rel.type.RelDataTypeImpl;
@@ -18,8 +19,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.nio.charset.Charset;
 import java.util.List;
-import java.util.function.BooleanSupplier;
-import java.util.function.IntSupplier;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
@@ -32,34 +31,9 @@ import static java.util.Objects.requireNonNull;
 public class E6SqlTypeFactoryImpl extends SqlTypeFactoryImpl
 {
 
-private static BooleanSupplier databricksSupplier = () -> false;
-private static BooleanSupplier castDoubleToDecimalEnabledSupplier = () -> false;
-private static IntSupplier defaultScaleForDecimalSupplier = () -> 6;
-private static IntSupplier decimalRoundOffScaleSupplier = () -> 6;
-
 public E6SqlTypeFactoryImpl(RelDataTypeSystem typeSystem)
 {
     super(typeSystem);
-}
-
-public static void setDatabricksSupplier(BooleanSupplier supplier)
-{
-    databricksSupplier = requireNonNull(supplier, "supplier");
-}
-
-public static void setCastDoubleToDecimalEnabledSupplier(BooleanSupplier supplier)
-{
-    castDoubleToDecimalEnabledSupplier = requireNonNull(supplier, "supplier");
-}
-
-public static void setDefaultScaleForDecimalSupplier(IntSupplier supplier)
-{
-    defaultScaleForDecimalSupplier = requireNonNull(supplier, "supplier");
-}
-
-public static void setDecimalRoundOffScaleSupplier(IntSupplier supplier)
-{
-    decimalRoundOffScaleSupplier = requireNonNull(supplier, "supplier");
 }
 
 @Override
@@ -384,7 +358,7 @@ private @Nullable RelDataType leastRestrictiveSqlType(List<RelDataType> types)
                 final boolean isInt1 = SqlTypeUtil.isIntType(type1);
                 // E6data change
                 // is date and interval is there then return timestamp
-                if(databricksSupplier.getAsBoolean() && isInterval1 && SqlTypeUtil.isDate(resultType))
+                if(CalciteForkSettings.databricks() && isInterval1 && SqlTypeUtil.isDate(resultType))
                 {
                     resultType = createSqlType(SqlTypeName.TIMESTAMP);
                     return createTypeWithNullability(resultType, nullCount > 0 || nullableCount > 0);
@@ -517,18 +491,18 @@ public RelDataType createSqlType(SqlTypeName typeName, int precision, int scale)
         return new EmbeddingVectorType();
     }
 
-    if (!castDoubleToDecimalEnabledSupplier.getAsBoolean())
+    if (!CalciteForkSettings.castDoubleToDecimalEnabled())
     {
-        if (scale > defaultScaleForDecimalSupplier.getAsInt())
+        if (scale > CalciteForkSettings.defaultScaleForDecimal())
         {
-            scale = defaultScaleForDecimalSupplier.getAsInt();
+            scale = CalciteForkSettings.defaultScaleForDecimal();
         }
     }
     else
     {
-        if (scale > decimalRoundOffScaleSupplier.getAsInt())
+        if (scale > CalciteForkSettings.decimalRoundOffScale())
         {
-            scale = decimalRoundOffScaleSupplier.getAsInt();
+            scale = CalciteForkSettings.decimalRoundOffScale();
         }
     }
     assertBasic(typeName);

@@ -17,6 +17,7 @@
 package org.apache.calcite.sql.fun;
 
 import com.google.common.collect.ImmutableList;
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.*;
@@ -28,9 +29,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.function.BooleanSupplier;
-
-import static java.util.Objects.requireNonNull;
 
 /**
  * <code>Sum</code> is an aggregator which returns the sum of the values which
@@ -42,8 +40,6 @@ public class SqlSumAggFunction extends SqlAggFunction
 {
 
 private static final int MAX_DOUBLE_PRECISION = 19;
-
-private static BooleanSupplier decimal128EnabledSupplier = () -> false;
 
 //~ Instance fields --------------------------------------------------------
 
@@ -69,7 +65,7 @@ public RelDataType inferReturnType(SqlOperatorBinding opBinding)
     {
       if(operandType.getPrecision() > MAX_DOUBLE_PRECISION)
       {
-        if (operandType.getScale() == 0 || decimal128EnabledSupplier.getAsBoolean())
+        if (operandType.getScale() == 0 || CalciteForkSettings.decimal128Enabled())
         {
           return operandType;
         }
@@ -89,11 +85,6 @@ public List<RelDataType> getParameterTypes(RelDataTypeFactory typeFactory)
 public RelDataType getType()
 {
     return type;
-}
-
-public static void setDecimal128EnabledSupplier(BooleanSupplier supplier)
-{
-    decimal128EnabledSupplier = requireNonNull(supplier, "supplier");
 }
 
 @SuppressWarnings("deprecation")

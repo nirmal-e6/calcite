@@ -18,6 +18,7 @@ package org.apache.calcite.rel.rules;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.plan.RelRule;
@@ -37,9 +38,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import org.immutables.value.Value;
 
 import java.util.*;
-import java.util.function.BooleanSupplier;
 
-import static java.util.Objects.requireNonNull;
 import static org.apache.calcite.plan.RelOptUtil.conjunctions;
 
 // shaded to add rewrite at line no. 97
@@ -57,8 +56,6 @@ public abstract class FilterJoinRule<C extends FilterJoinRule.Config>
  * will be pushed into the ON clause. */
 @Deprecated // to be removed before 2.0
 public static final Predicate TRUE_PREDICATE = (join, joinType, exp) -> true;
-
-private static BooleanSupplier optimizeFilterWithOrSupplier = () -> false;
 
 /** Creates a FilterJoinRule. */
 protected FilterJoinRule(C config) {
@@ -87,7 +84,7 @@ protected void perform(RelOptRuleCall call, @Nullable Filter filter,
     // (t1.a = 1 OR t1.b = 3)
     // (t2.a = 2 OR t2.b = 4)
 
-    if (optimizeFilterWithOrSupplier.getAsBoolean() && filter != null)
+    if (CalciteForkSettings.optimizeFilterWithOr() && filter != null)
     {
         Filter newFilter = optimizeFilterWithOR(filter, call.getMetadataQuery());
         if(newFilter != null)
@@ -241,11 +238,6 @@ protected void perform(RelOptRuleCall call, @Nullable Filter filter,
         RexUtil.fixUp(rexBuilder, aboveFilters,
             RelOptUtil.getFieldTypeList(relBuilder.peek().getRowType())));
     call.transformTo(relBuilder.build());
-}
-
-public static void setOptimizeFilterWithOrSupplier(BooleanSupplier supplier)
-{
-    optimizeFilterWithOrSupplier = requireNonNull(supplier, "supplier");
 }
 
 private static Filter optimizeFilterWithOR(Filter filter, RelMetadataQuery mq)

@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.plan;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexFieldAccess;
 import org.apache.calcite.rex.RexInputRef;
@@ -36,7 +37,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 
 import java.util.*;
-import java.util.function.BooleanSupplier;
 
 import static java.util.Objects.requireNonNull;
 
@@ -64,14 +64,8 @@ public class Strong {
 
     private static final Map<String, Policy> FUNCTION_MAP = createPolicyMapForFunctions();
 
-    private static BooleanSupplier enableOuterJoinOptSupplier = () -> false;
-
     public Strong() {
         super();
-    }
-
-    public static void setEnableOuterJoinOptSupplier(BooleanSupplier supplier) {
-        enableOuterJoinOptSupplier = requireNonNull(supplier, "supplier");
     }
 
     /** Returns a checker that consults a bit set to find out whether particular
@@ -141,7 +135,7 @@ public class Strong {
         // Function's Kind shouldn't matter here because while validating, when we encounter multiple instances of same function
         // then we are setting Function from SqlStdOperatorTablePlus
         // and function kind are different for different functions
-        if (enableOuterJoinOptSupplier.getAsBoolean())
+        if (CalciteForkSettings.enableOuterJoinOpt())
         {
             if (FUNCTION_MAP.containsKey(operator.getName().toUpperCase()))
             {

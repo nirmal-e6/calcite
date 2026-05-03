@@ -17,6 +17,7 @@
 package org.apache.calcite.sql.fun;
 
 import com.google.common.base.Preconditions;
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.SqlAggFunction;
@@ -28,10 +29,7 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.type.SqlTypeUtil;
 import org.apache.calcite.util.Optionality;
 
-import java.util.function.BooleanSupplier;
-
 import static com.google.common.base.Preconditions.checkArgument;
-import static java.util.Objects.requireNonNull;
 
 /**
  * <code>Avg</code> is an aggregator which returns the average of the values
@@ -40,8 +38,6 @@ import static java.util.Objects.requireNonNull;
  */
 public class SqlAvgAggFunction extends SqlAggFunction
 {
-
-private static BooleanSupplier decimal128EnabledSupplier = () -> false;
 
 //~ Constructors -----------------------------------------------------------
 
@@ -99,7 +95,7 @@ private static final SqlReturnTypeInference AVG_AGG_FUNCTION = opBinding ->
 
     if (SqlTypeUtil.isExactNumeric(operand1) && SqlTypeUtil.isDecimal(operand1) && operand1.getScale() <= 6)
     {
-        if (decimal128EnabledSupplier.getAsBoolean())
+        if (CalciteForkSettings.decimal128Enabled())
         {
             RelDataType countReturnType = typeFactory.createSqlType(SqlTypeName.BIGINT);
             RelDataType relDataType = typeFactory.getTypeSystem()
@@ -126,10 +122,5 @@ private static final SqlReturnTypeInference AVG_AGG_FUNCTION = opBinding ->
         return relDataType;
     }
 };
-
-public static void setDecimal128EnabledSupplier(BooleanSupplier supplier)
-{
-    decimal128EnabledSupplier = requireNonNull(supplier, "supplier");
-}
 
 }
