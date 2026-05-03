@@ -28,58 +28,54 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 /**
  * <code>Covar</code> is an aggregator which returns the Covariance of the
- * values which go into it. It has precisely two arguments of numeric type
- * (<code>int</code>, <code>long</code>, <code>float</code>, <code>
- * double</code>), and the result is the same type.
+ * values which go into it. It has precisely two arguments of numeric type (<code>int</code>, <code>long</code>,
+ * <code>float</code>, <code> double</code>), and the result is the same type.
  */
-public class SqlCovarAggFunction extends SqlAggFunction {
-  //~ Instance fields --------------------------------------------------------
+public class SqlCovarAggFunction extends SqlAggFunction
+{
+//~ Instance fields --------------------------------------------------------
 
-  //~ Constructors -----------------------------------------------------------
+//~ Constructors -----------------------------------------------------------
 
-  /**
-   * Creates a SqlCovarAggFunction.
-   */
-  public SqlCovarAggFunction(SqlKind kind) {
-    super(kind.name(),
-        null,
-        kind,
-        kind == SqlKind.REGR_COUNT ? ReturnTypes.BIGINT : ReturnTypes.COVAR_REGR_FUNCTION,
-        null,
-        OperandTypes.NUMERIC_NUMERIC,
-        SqlFunctionCategory.NUMERIC,
-        false,
-        false,
-        Optionality.FORBIDDEN);
-    checkArgument(SqlKind.COVAR_AVG_AGG_FUNCTIONS.contains(kind),
-        "unsupported sql kind: " + kind);
-  }
+/**
+ * Creates a SqlCovarAggFunction.
+ */
+public SqlCovarAggFunction(SqlKind kind)
+{
+    super(kind.name(), null, kind, ReturnTypes.DOUBLE_NULLABLE, null, OperandTypes.NUMERIC_NUMERIC,
+        SqlFunctionCategory.NUMERIC, false, false, Optionality.FORBIDDEN);
+    checkArgument(SqlKind.COVAR_AVG_AGG_FUNCTIONS.contains(kind), "unsupported sql kind: " + kind);
+}
 
-  @Deprecated // to be removed before 2.0
-  public SqlCovarAggFunction(RelDataType type, Subtype subtype) {
+@Deprecated // to be removed before 2.0
+public SqlCovarAggFunction(RelDataType type, Subtype subtype)
+{
     this(SqlKind.valueOf(subtype.name()));
-  }
+}
 
-  //~ Methods ----------------------------------------------------------------
+//~ Methods ----------------------------------------------------------------
 
-  /**
-   * Returns the specific function, e.g. COVAR_POP or COVAR_SAMP.
-   *
-   * @return Subtype
-   */
-  @Deprecated // to be removed before 2.0
-  public Subtype getSubtype() {
+/**
+ * Returns the specific function, e.g. COVAR_POP or COVAR_SAMP.
+ *
+ * @return Subtype
+ */
+@Deprecated // to be removed before 2.0
+public Subtype getSubtype()
+{
     return Subtype.valueOf(kind.name());
-  }
+}
 
-  /**
-   * Enum for defining specific types.
-   */
-  @Deprecated // to be removed before 2.0
-  public enum Subtype {
+/**
+ * Enum for defining specific types.
+ */
+@Deprecated // to be removed before 2.0
+public enum Subtype
+{
     COVAR_POP,
     COVAR_SAMP,
     REGR_SXX,
     REGR_SYY
-  }
+}
+
 }

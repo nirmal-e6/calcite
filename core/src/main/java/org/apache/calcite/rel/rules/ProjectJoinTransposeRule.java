@@ -13,6 +13,10 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * This rule has been shaded to include a new property, AllowCastWithNULL.
+ * Default is FALSE. If it is set to true, then CAST with NOT NULL is not
+ * considered as a preserved expression.
  */
 package org.apache.calcite.rel.rules;
 
@@ -24,7 +28,6 @@ import org.apache.calcite.rel.core.Join;
 import org.apache.calcite.rel.core.Project;
 import org.apache.calcite.rel.logical.LogicalJoin;
 import org.apache.calcite.rel.logical.LogicalProject;
-import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexNode;
@@ -53,27 +56,27 @@ public class ProjectJoinTransposeRule
     extends RelRule<ProjectJoinTransposeRule.Config>
     implements TransformationRule {
 
-  /** Creates a ProjectJoinTransposeRule. */
-  protected ProjectJoinTransposeRule(Config config) {
+/** Creates a ProjectJoinTransposeRule. */
+protected ProjectJoinTransposeRule(Config config) {
     super(config);
-  }
+}
 
-  @Deprecated // to be removed before 2.0
-  public ProjectJoinTransposeRule(
-      Class<? extends Project> projectClass,
-      Class<? extends Join> joinClass,
-      PushProjector.ExprCondition preserveExprCondition,
-      RelBuilderFactory relBuilderFactory) {
+@Deprecated // to be removed before 2.0
+public ProjectJoinTransposeRule(
+    Class<? extends Project> projectClass,
+    Class<? extends Join> joinClass,
+    PushProjector.ExprCondition preserveExprCondition,
+    RelBuilderFactory relBuilderFactory) {
     this(Config.DEFAULT
         .withRelBuilderFactory(relBuilderFactory)
         .as(Config.class)
         .withOperandFor(projectClass, joinClass)
         .withPreserveExprCondition(preserveExprCondition));
-  }
+}
 
-  //~ Methods ----------------------------------------------------------------
+//~ Methods ----------------------------------------------------------------
 
-  @Override public void onMatch(RelOptRuleCall call) {
+@Override public void onMatch(RelOptRuleCall call) {
     final Project origProject = call.rel(0);
     final Join join = call.rel(1);
 
@@ -81,14 +84,14 @@ public class ProjectJoinTransposeRule
     // form of IS NOT DISTINCT FROM as PushProject also visit the filter condition
     // and push down expressions.
     RexNode joinFilter = join.getCondition().accept(new RexShuttle() {
-      @Override public RexNode visitCall(RexCall rexCall) {
-        final RexNode node = super.visitCall(rexCall);
-        if (!(node instanceof RexCall)) {
-          return node;
+        @Override public RexNode visitCall(RexCall rexCall) {
+            final RexNode node = super.visitCall(rexCall);
+            if (!(node instanceof RexCall)) {
+                return node;
+            }
+            return RelOptUtil.collapseExpandedIsNotDistinctFromExpr((RexCall) node,
+                call.builder().getRexBuilder());
         }
-        return RelOptUtil.collapseExpandedIsNotDistinctFromExpr((RexCall) node,
-            call.builder().getRexBuilder());
-      }
     });
 
     // locate all fields referenced in the projection and join condition;
@@ -103,8 +106,43 @@ public class ProjectJoinTransposeRule
             config.preserveExprCondition(),
             call.builder());
     if (pushProjector.locateAllRefs()) {
-      return;
+        return;
     }
+
+    // Coalesce gets re-written into CASE Statement. As part of this, we project
+    // CAST with NOT NULL columns. That makes it to rightPreserveExprs list, that
+    // drops the CAST with NOT NULL, leaving only the column reference. This leads
+    // to Assertion error, because the row types of equivalence set doesn't match.
+    if (config.isAllowCastWithNULL())
+    {
+        if (!pushProjector.rightPreserveExprs.isEmpty())
+        {
+            for (RexNode rexNode : pushProjector.rightPreserveExprs)
+            {
+                if (rexNode instanceof RexCall)
+                {
+                    RexCall rexCall = (RexCall) rexNode;
+
+                    if ((rexNode.getKind() == SqlKind.CAST) && rexCall.getOperands().size() == 1 && rexCall.getType()
+                        .getFullTypeString()
+                        .contains("NOT NULL"))
+                    {
+                        List<RexNode> updatedRightPreserveExprs = new ArrayList<>();
+                        for(RexNode expr : pushProjector.rightPreserveExprs)
+                        {
+                            if(!expr.equals(rexNode))
+                            {
+                                updatedRightPreserveExprs.add(expr);
+                            }
+                        }
+
+                        pushProjector.rightPreserveExprs = updatedRightPreserveExprs;
+                    }
+                }
+            }
+        }
+    }
+
 
     // create left and right projections, projecting only those
     // fields referenced on each side
@@ -123,18 +161,18 @@ public class ProjectJoinTransposeRule
     RexNode newJoinFilter = null;
     int[] adjustments = pushProjector.getAdjustments();
     if (joinFilter != null) {
-      List<RelDataTypeField> projectJoinFieldList = new ArrayList<>();
-      projectJoinFieldList.addAll(
-          join.getSystemFieldList());
-      projectJoinFieldList.addAll(
-          leftProject.getRowType().getFieldList());
-      projectJoinFieldList.addAll(
-          rightProject.getRowType().getFieldList());
-      newJoinFilter =
-          pushProjector.convertRefsAndExprs(
-              joinFilter,
-              projectJoinFieldList,
-              adjustments);
+        List<RelDataTypeField> projectJoinFieldList = new ArrayList<>();
+        projectJoinFieldList.addAll(
+            join.getSystemFieldList());
+        projectJoinFieldList.addAll(
+            leftProject.getRowType().getFieldList());
+        projectJoinFieldList.addAll(
+            rightProject.getRowType().getFieldList());
+        newJoinFilter =
+            pushProjector.convertRefsAndExprs(
+                joinFilter,
+                projectJoinFieldList,
+                adjustments);
     }
 
     // create a new join with the projected children
@@ -153,35 +191,19 @@ public class ProjectJoinTransposeRule
         pushProjector.createNewProject(newJoin, adjustments);
 
     call.transformTo(topProject);
-  }
+}
 
-  /** Rule configuration. */
-  @Value.Immutable(singleton = false)
-  public interface Config extends RelRule.Config {
+/** Rule configuration. */
+@Value.Immutable(singleton = false)
+public interface Config extends RelRule.Config {
     Config DEFAULT = ImmutableProjectJoinTransposeRule.Config.builder()
-        .withPreserveExprCondition(expr -> {
-          // Do not push down over's expression by default
-          if (expr instanceof RexOver) {
-            return false;
-          }
-          if (SqlKind.CAST == expr.getKind()) {
-            final RelDataType relType = expr.getType();
-            final RexCall castCall = (RexCall) expr;
-            final RelDataType operand0Type = castCall.getOperands().get(0).getType();
-            if (relType.getSqlTypeName() == operand0Type.getSqlTypeName()
-                && operand0Type.isNullable() && !relType.isNullable()) {
-              // Do not push down not nullable cast's expression with the same type by default
-              // eg: CAST($1):VARCHAR(10) NOT NULL, and type of $1 is nullable VARCHAR(10)
-              return false;
-            }
-          }
-          return true;
-        })
+        .withPreserveExprCondition(expr -> !(expr instanceof RexOver))
+        .withAllowCastWithNULL(false)
         .build()
         .withOperandFor(LogicalProject.class, LogicalJoin.class);
 
     @Override default ProjectJoinTransposeRule toRule() {
-      return new ProjectJoinTransposeRule(this);
+        return new ProjectJoinTransposeRule(this);
     }
 
     /** Defines when an expression should not be pushed. */
@@ -193,10 +215,15 @@ public class ProjectJoinTransposeRule
     /** Defines an operand tree for the given classes. */
     default Config withOperandFor(Class<? extends Project> projectClass,
         Class<? extends Join> joinClass) {
-      return withOperandSupplier(b0 ->
-          b0.operand(projectClass).oneInput(b1 ->
-              b1.operand(joinClass).anyInputs()))
-          .as(Config.class);
+        return withOperandSupplier(b0 ->
+            b0.operand(projectClass).oneInput(b1 ->
+                b1.operand(joinClass).anyInputs()))
+            .as(Config.class);
     }
-  }
+
+    @Value.Default default boolean isAllowCastWithNULL() {
+        return false;
+    }
+    Config withAllowCastWithNULL(boolean allowCastWithNull);
+}
 }

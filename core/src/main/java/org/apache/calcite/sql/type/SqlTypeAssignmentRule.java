@@ -24,44 +24,46 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+// shaded for changing timestamp assignment
+
 /**
  * Rules that determine whether a type is assignable from another type.
  */
 public class SqlTypeAssignmentRule implements SqlTypeMappingRule {
-  //~ Static fields/initializers ---------------------------------------------
+//~ Static fields/initializers ---------------------------------------------
 
-  private static final SqlTypeAssignmentRule INSTANCE;
+private static final SqlTypeAssignmentRule INSTANCE;
 
-  //~ Instance fields --------------------------------------------------------
+//~ Instance fields --------------------------------------------------------
 
-  private final Map<SqlTypeName, ImmutableSet<SqlTypeName>> map;
+private final Map<SqlTypeName, ImmutableSet<SqlTypeName>> map;
 
-  //~ Constructors -----------------------------------------------------------
+//~ Constructors -----------------------------------------------------------
 
-  /**
-   * Creates a {@code SqlTypeAssignmentRules} with specified type mappings {@code map}.
-   *
-   * <p>Make this constructor private intentionally, use {@link #instance()}.
-   *
-   * @param map The type mapping, for each map entry, the values types can be assigned to
-   *            the key type
-   */
-  private SqlTypeAssignmentRule(
-      Map<SqlTypeName, ImmutableSet<SqlTypeName>> map) {
+/**
+ * Creates a {@code SqlTypeAssignmentRules} with specified type mappings {@code map}.
+ *
+ * <p>Make this constructor private intentionally, use {@link #instance()}.
+ *
+ * @param map The type mapping, for each map entry, the values types can be assigned to
+ *            the key type
+ */
+private SqlTypeAssignmentRule(
+    Map<SqlTypeName, ImmutableSet<SqlTypeName>> map) {
     this.map = ImmutableMap.copyOf(map);
-  }
+}
 
-  static {
+static {
     final SqlTypeMappingRules.Builder rules = SqlTypeMappingRules.builder();
 
     final Set<SqlTypeName> rule = new HashSet<>();
 
     // IntervalYearMonth is assignable from...
     for (SqlTypeName interval : SqlTypeName.YEAR_INTERVAL_TYPES) {
-      rules.add(interval, SqlTypeName.YEAR_INTERVAL_TYPES);
+        rules.add(interval, SqlTypeName.YEAR_INTERVAL_TYPES);
     }
     for (SqlTypeName interval : SqlTypeName.DAY_INTERVAL_TYPES) {
-      rules.add(interval, SqlTypeName.DAY_INTERVAL_TYPES);
+        rules.add(interval, SqlTypeName.DAY_INTERVAL_TYPES);
     }
 
     // MULTISET is assignable from...
@@ -179,7 +181,9 @@ public class SqlTypeAssignmentRule implements SqlTypeMappingRule {
     rules.add(SqlTypeName.TIME_TZ, EnumSet.of(SqlTypeName.TIME_TZ));
 
     // TIMESTAMP is assignable from ...
-    rules.add(SqlTypeName.TIMESTAMP, EnumSet.of(SqlTypeName.TIMESTAMP));
+    // E6data change
+    // added DATE in EnumSet
+    rules.add(SqlTypeName.TIMESTAMP, EnumSet.of(SqlTypeName.TIMESTAMP, SqlTypeName.DATE));
 
     // TIMESTAMP WITH LOCAL TIME ZONE is assignable from...
     rules.add(SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE,
@@ -223,16 +227,16 @@ public class SqlTypeAssignmentRule implements SqlTypeMappingRule {
     rules.add(SqlTypeName.ANY, rule);
 
     INSTANCE = new SqlTypeAssignmentRule(rules.map);
-  }
+}
 
-  //~ Methods ----------------------------------------------------------------
+//~ Methods ----------------------------------------------------------------
 
-  /** Returns an instance. */
-  public static SqlTypeAssignmentRule instance() {
+/** Returns an instance. */
+public static SqlTypeAssignmentRule instance() {
     return INSTANCE;
-  }
+}
 
-  @Override public Map<SqlTypeName, ImmutableSet<SqlTypeName>> getTypeMapping() {
+@Override public Map<SqlTypeName, ImmutableSet<SqlTypeName>> getTypeMapping() {
     return this.map;
-  }
+}
 }

@@ -471,6 +471,12 @@ public class SqlStdOperatorTable extends ReflectiveSqlOperatorTable {
   public static final SqlInternalOperator SEARCH =
       new SqlSearchOperator();
 
+  public static final SqlFunction SET_SEARCH =
+      new SqlFunction("SET_SEARCH", SqlKind.SET_SEARCH,
+          ReturnTypes.BOOLEAN_NULLABLE, InferTypes.FIRST_KNOWN,
+          OperandTypes.COMPARABLE_UNORDERED_COMPARABLE_UNORDERED,
+          SqlFunctionCategory.USER_DEFINED_FUNCTION);
+
   /**
    * The <code>&lt; SOME</code> operator (synonymous with
    * <code>&lt; ANY</code>).

@@ -27,6 +27,7 @@ import org.apache.calcite.sql.validate.SqlValidatorScope;
 
 import static org.apache.calcite.util.Static.RESOURCE;
 
+// e6data shade - Fixes to support query pattern involving WITHIN_GROUP
 /**
  * An operator describing a window function specification.
  *
@@ -41,109 +42,114 @@ import static org.apache.calcite.util.Static.RESOURCE;
  * </ul>
  */
 public class SqlOverOperator extends SqlBinaryOperator {
-  //~ Constructors -----------------------------------------------------------
+//~ Constructors -----------------------------------------------------------
 
-  public SqlOverOperator() {
-    super(
-        "OVER",
-        SqlKind.OVER,
-        20,
-        true,
-        ReturnTypes.ARG0_FORCE_NULLABLE,
-        null,
-        OperandTypes.ANY_IGNORE);
-  }
+public SqlOverOperator() {
+  super(
+      "OVER",
+      SqlKind.OVER,
+      20,
+      true,
+      ReturnTypes.ARG0_FORCE_NULLABLE,
+      null,
+      OperandTypes.ANY_IGNORE);
+}
 
-  //~ Methods ----------------------------------------------------------------
+//~ Methods ----------------------------------------------------------------
 
-  @Override public void validateCall(
-      SqlCall call,
-      SqlValidator validator,
-      SqlValidatorScope scope,
-      SqlValidatorScope operandScope) {
-    assert call.getOperator() == this;
-    assert call.operandCount() == 2;
-    SqlCall aggCall = call.operand(0);
-    switch (aggCall.getKind()) {
+@Override public void validateCall(
+    SqlCall call,
+    SqlValidator validator,
+    SqlValidatorScope scope,
+    SqlValidatorScope operandScope) {
+  assert call.getOperator() == this;
+  assert call.operandCount() == 2;
+  SqlCall aggCall = call.operand(0);
+  switch (aggCall.getKind()) {
     case RESPECT_NULLS:
     case IGNORE_NULLS:
+      // e6data change - add WITHIN_GROUP here also
+    case WITHIN_GROUP:
       validator.validateCall(aggCall, scope);
       aggCall = aggCall.operand(0);
       break;
     default:
       break;
-    }
-    if (!aggCall.getOperator().isAggregator()) {
-      throw validator.newValidationError(aggCall, RESOURCE.overNonAggregate());
-    }
-    final SqlNode window = call.operand(1);
-    validator.validateWindow(window, scope, aggCall);
+  }
+  if (!aggCall.getOperator().isAggregator()) {
+    throw validator.newValidationError(aggCall, RESOURCE.overNonAggregate());
+  }
+  final SqlNode window = call.operand(1);
+  validator.validateWindow(window, scope, aggCall);
+}
+
+@Override public RelDataType deriveType(
+    SqlValidator validator,
+    SqlValidatorScope scope,
+    SqlCall call) {
+  // Validate type of the inner aggregate call
+  validateOperands(validator, scope, call);
+
+  // Assume the first operand is an aggregate call and derive its type.
+  // When we are sure the window is not empty, pass that information to the
+  // aggregate's operator return type inference as groupCount=1
+  // Otherwise pass groupCount=0 so the agg operator understands the window
+  // can be empty
+  SqlNode agg = call.operand(0);
+
+  if (!(agg instanceof SqlCall)) {
+    throw new IllegalStateException("Argument to SqlOverOperator"
+        + " should be SqlCall, got " + agg.getClass() + ": " + agg);
   }
 
-  @Override public RelDataType deriveType(
-      SqlValidator validator,
-      SqlValidatorScope scope,
-      SqlCall call) {
-    // Validate type of the inner aggregate call
-    validateOperands(validator, scope, call);
+  // E6data change - Unwrap WITHIN GROUP to get the inner aggregate call
+  SqlCall aggCall = (SqlCall) agg;
+  if (aggCall.getKind() == SqlKind.WITHIN_GROUP) {
+    aggCall = aggCall.operand(0);
+  }
 
-    // Assume the first operand is an aggregate call and derive its type.
-    // When we are sure the window is not empty, pass that information to the
-    // aggregate's operator return type inference as groupCount=1
-    // Otherwise pass groupCount=0 so the agg operator understands the window
-    // can be empty
-    SqlNode agg = call.operand(0);
+  SqlNode window = call.operand(1);
+  SqlWindow w = validator.resolveWindow(window, scope);
 
-    if (!(agg instanceof SqlCall)) {
-      throw new IllegalStateException("Argument to SqlOverOperator"
-          + " should be SqlCall, got " + agg.getClass() + ": " + agg);
+  SqlCallBinding opBinding = new SqlCallBinding(validator, scope, aggCall) {
+    @Override public boolean hasEmptyGroup() {
+      return !w.isAlwaysNonEmpty();
     }
+  };
 
-    SqlNode window = call.operand(1);
-    SqlWindow w = validator.resolveWindow(window, scope);
+  RelDataType ret = aggCall.getOperator().inferReturnType(opBinding);
 
-    final int groupCount = w.isAlwaysNonEmpty() ? 1 : 0;
-    final SqlCall aggCall = (SqlCall) agg;
+  // Copied from validateOperands
+  validator.setValidatedNodeType(call, ret);
+  validator.setValidatedNodeType(agg, ret);
+  return ret;
+}
 
-    SqlCallBinding opBinding = new SqlCallBinding(validator, scope, aggCall) {
-      @Override public int getGroupCount() {
-        return groupCount;
+/**
+ * Accepts a {@link SqlVisitor}, and tells it to visit each child.
+ *
+ * @param visitor Visitor
+ */
+@Override public <R> void acceptCall(
+    SqlVisitor<R> visitor,
+    SqlCall call,
+    boolean onlyExpressions,
+    SqlBasicVisitor.ArgHandler<R> argHandler) {
+  if (onlyExpressions) {
+    for (Ord<SqlNode> operand : Ord.zip(call.getOperandList())) {
+      // if the second param is an Identifier then it's supposed to
+      // be a name from a window clause and isn't part of the
+      // group by check
+      if (operand == null) {
+        continue;
       }
-    };
-
-    RelDataType ret = aggCall.getOperator().inferReturnType(opBinding);
-
-    // Copied from validateOperands
-    validator.setValidatedNodeType(call, ret);
-    validator.setValidatedNodeType(agg, ret);
-    return ret;
-  }
-
-  /**
-   * Accepts a {@link SqlVisitor}, and tells it to visit each child.
-   *
-   * @param visitor Visitor
-   */
-  @Override public <R> void acceptCall(
-      SqlVisitor<R> visitor,
-      SqlCall call,
-      boolean onlyExpressions,
-      SqlBasicVisitor.ArgHandler<R> argHandler) {
-    if (onlyExpressions) {
-      for (Ord<SqlNode> operand : Ord.zip(call.getOperandList())) {
-        // if the second param is an Identifier then it's supposed to
-        // be a name from a window clause and isn't part of the
-        // group by check
-        if (operand == null) {
-          continue;
-        }
-        if (operand.i == 1 && operand.e instanceof SqlIdentifier) {
-          continue;
-        }
-        argHandler.visitChild(visitor, call, operand.i, operand.e);
+      if (operand.i == 1 && operand.e instanceof SqlIdentifier) {
+        continue;
       }
-    } else {
-      super.acceptCall(visitor, call, onlyExpressions, argHandler);
+      argHandler.visitChild(visitor, call, operand.i, operand.e);
     }
+  } else {
+    super.acceptCall(visitor, call, onlyExpressions, argHandler);
   }
+}
 }

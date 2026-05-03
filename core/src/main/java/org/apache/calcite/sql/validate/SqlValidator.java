@@ -624,6 +624,14 @@ public interface SqlValidator {
   SqlValidatorScope getLambdaScope(SqlLambda node);
 
   /**
+   * Retrieves the scope of a provided function-definition node.
+   *
+   * @param function The function node for which the scope is determined.
+   * @return scope associated with the provided function node
+   */
+  SqlValidatorScope getFunctionScope(SqlNode function);
+
+  /**
    * Returns a scope that cannot see anything.
    */
   SqlValidatorScope getEmptyScope();

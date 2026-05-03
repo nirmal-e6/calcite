@@ -1,3 +1,4 @@
+// E6data shade - Added for hypergraph backport from 1.41
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -157,6 +158,10 @@ public class RexInterpreter implements RexVisitor<Comparable> {
 
   @Override public Comparable visitLambdaRef(RexLambdaRef lambdaRef) {
     throw unbound(lambdaRef);
+  }
+  // backported by E6data from calcite 1.41 for HyperGraph
+  @Override public Comparable visitNodeAndFieldIndex(RexNodeAndFieldIndex nodeAndFieldIndex) {
+    throw unbound(nodeAndFieldIndex);
   }
 
   @Override public Comparable visitCall(RexCall call) {

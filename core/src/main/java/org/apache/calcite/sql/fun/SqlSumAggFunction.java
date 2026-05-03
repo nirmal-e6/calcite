@@ -16,21 +16,20 @@
  */
 package org.apache.calcite.sql.fun;
 
+import com.google.common.collect.ImmutableList;
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
-import org.apache.calcite.sql.SqlAggFunction;
-import org.apache.calcite.sql.SqlFunctionCategory;
-import org.apache.calcite.sql.SqlKind;
-import org.apache.calcite.sql.SqlSplittableAggFunction;
+import org.apache.calcite.sql.*;
+import org.apache.calcite.sql.type.E6TypeSystemImpl;
 import org.apache.calcite.sql.type.OperandTypes;
 import org.apache.calcite.sql.type.ReturnTypes;
+import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.Optionality;
-
-import com.google.common.collect.ImmutableList;
-
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * <code>Sum</code> is an aggregator which returns the sum of the values which
@@ -38,55 +37,76 @@ import java.util.List;
  * <code>long</code>, <code>float</code>, <code>double</code>), and the result
  * is the same type.
  */
-public class SqlSumAggFunction extends SqlAggFunction {
+public class SqlSumAggFunction extends SqlAggFunction
+{
 
-  //~ Instance fields --------------------------------------------------------
+//~ Instance fields --------------------------------------------------------
 
-  @Deprecated // to be removed before 2.0
-  private final RelDataType type;
+@Deprecated // to be removed before 2.0
+private final RelDataType type;
 
-  //~ Constructors -----------------------------------------------------------
+//~ Constructors -----------------------------------------------------------
 
-  public SqlSumAggFunction(RelDataType type) {
-    super(
-        "SUM",
-        null,
-        SqlKind.SUM,
-        ReturnTypes.AGG_SUM,
-        null,
-        OperandTypes.NUMERIC,
-        SqlFunctionCategory.NUMERIC,
-        false,
-        false,
-        Optionality.FORBIDDEN);
+public SqlSumAggFunction(RelDataType type)
+{
+    super("SUM", null, SqlKind.SUM, null, null, OperandTypes.NUMERIC,
+        SqlFunctionCategory.NUMERIC, false, false, Optionality.FORBIDDEN);
     this.type = type;
-  }
+}
 
-  //~ Methods ----------------------------------------------------------------
+//~ Methods ----------------------------------------------------------------
 
-  @SuppressWarnings("deprecation")
-  @Override public List<RelDataType> getParameterTypes(RelDataTypeFactory typeFactory) {
+@Override
+public RelDataType inferReturnType(SqlOperatorBinding opBinding)
+{
+    RelDataType operandType = opBinding.getOperandType(0);
+    if (operandType.getSqlTypeName().equals(SqlTypeName.DECIMAL))
+    {
+      if(operandType.getPrecision() > E6TypeSystemImpl.MAX_DOUBLE_PRECISION)
+      {
+        if (operandType.getScale() == 0 || CalciteForkSettings.decimal128Enabled())
+        {
+          return operandType;
+        }
+      }
+    }
+    return Objects.requireNonNull(ReturnTypes.DOUBLE_NULLABLE.inferReturnType(opBinding));
+}
+
+@SuppressWarnings("deprecation")
+@Override
+public List<RelDataType> getParameterTypes(RelDataTypeFactory typeFactory)
+{
     return ImmutableList.of(type);
-  }
+}
 
-  @Deprecated // to be removed before 2.0
-  public RelDataType getType() {
+@Deprecated // to be removed before 2.0
+public RelDataType getType()
+{
     return type;
-  }
+}
 
-  @SuppressWarnings("deprecation")
-  @Override public RelDataType getReturnType(RelDataTypeFactory typeFactory) {
+@SuppressWarnings("deprecation")
+@Override
+public RelDataType getReturnType(RelDataTypeFactory typeFactory)
+{
     return type;
-  }
+}
 
-  @Override public <T extends Object> @Nullable T unwrap(Class<T> clazz) {
-    if (clazz.isInstance(SqlSplittableAggFunction.SumSplitter.INSTANCE)) {
-      return clazz.cast(SqlSplittableAggFunction.SumSplitter.INSTANCE);
+@Override
+public <T extends Object> @Nullable T unwrap(Class<T> clazz)
+{
+    if (clazz.isInstance(SqlSplittableAggFunction.SumSplitter.INSTANCE))
+    {
+        return clazz.cast(SqlSplittableAggFunction.SumSplitter.INSTANCE);
     }
     return super.unwrap(clazz);
-  }
+}
 
-  @Override public SqlAggFunction getRollup() {
+@Override
+public SqlAggFunction getRollup()
+{
     return this;
-  }
+}
+
 }

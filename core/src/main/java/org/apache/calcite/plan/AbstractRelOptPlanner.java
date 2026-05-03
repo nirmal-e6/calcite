@@ -51,6 +51,8 @@ import static org.apache.calcite.util.Static.RESOURCE;
 
 import static java.util.Objects.requireNonNull;
 
+// e6data shade - Shaded to allow us to have both old and latest decorrelator
+// Once we move fully to new one / upgrade remove this file
 /**
  * Abstract base for implementations of the {@link RelOptPlanner} interface.
  */
@@ -88,6 +90,9 @@ public abstract class AbstractRelOptPlanner implements RelOptPlanner {
   private @Nullable RexExecutor executor;
 
   private @Nullable RelDecorrelator decorrelator;
+
+  // e6data change - to allow us to have both old and latest decorrelator
+  private @Nullable Object oldDecorrelator;
 
   //~ Constructors -----------------------------------------------------------
 
@@ -302,6 +307,21 @@ public abstract class AbstractRelOptPlanner implements RelOptPlanner {
       throw new IllegalStateException("RelDecorrelator has not been set");
     }
     return decorrelator;
+  }
+
+  // e6data change - to allow old decorrelator
+  @Override public <T> void setOldDecorrelator(@Nullable T oldDecorrelator) {
+    this.oldDecorrelator = oldDecorrelator;
+  }
+
+  @Override @SuppressWarnings("unchecked")
+  public <T> T getOldDecorrelator()
+  {
+    if (oldDecorrelator == null)
+    {
+      throw new IllegalStateException("Old RelDecorrelator has not been set");
+    }
+    return (T) oldDecorrelator;
   }
 
   @Override public void onCopy(RelNode rel, RelNode newRel) {

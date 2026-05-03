@@ -38,6 +38,8 @@ import java.util.List;
 
 import static java.util.Objects.requireNonNull;
 
+// shaded for isValid method condition change
+
 /**
  * Relational expression that returns the contents of a relation expression as
  * it was at a given time in the past.
@@ -50,94 +52,94 @@ import static java.util.Objects.requireNonNull;
  * period (i.e. those that started before given period and ended after it).
  */
 public abstract class Snapshot extends SingleRel implements Hintable {
-  //~ Instance fields --------------------------------------------------------
+//~ Instance fields --------------------------------------------------------
 
-  private final RexNode period;
+private final RexNode period;
 
-  protected final ImmutableList<RelHint> hints;
+protected final ImmutableList<RelHint> hints;
 
-  //~ Constructors -----------------------------------------------------------
+//~ Constructors -----------------------------------------------------------
 
-  /**
-   * Creates a Snapshot by parsing serialized output.
-   */
-  public Snapshot(RelInput input) {
+/**
+ * Creates a Snapshot by parsing serialized output.
+ */
+public Snapshot(RelInput input) {
     this(input.getCluster(),
         input.getTraitSet(),
         ImmutableList.of(),
         input.getInput(),
         requireNonNull(input.getExpression("period"), "period"));
-  }
+}
 
-  /**
-   * Creates a Snapshot.
-   *
-   * @param cluster   Cluster that this relational expression belongs to
-   * @param traitSet  The traits of this relational expression
-   * @param hints     Hints for this node
-   * @param input     Input relational expression
-   * @param period    Timestamp expression which as the table was at the given
-   *                  time in the past
-   */
-  @SuppressWarnings("method.invocation.invalid")
-  protected Snapshot(RelOptCluster cluster, RelTraitSet traitSet, List<RelHint> hints,
-      RelNode input, RexNode period) {
+/**
+ * Creates a Snapshot.
+ *
+ * @param cluster   Cluster that this relational expression belongs to
+ * @param traitSet  The traits of this relational expression
+ * @param hints     Hints for this node
+ * @param input     Input relational expression
+ * @param period    Timestamp expression which as the table was at the given
+ *                  time in the past
+ */
+@SuppressWarnings("method.invocation.invalid")
+protected Snapshot(RelOptCluster cluster, RelTraitSet traitSet, List<RelHint> hints,
+    RelNode input, RexNode period) {
     super(cluster, traitSet, input);
     this.period = requireNonNull(period, "period");
     this.hints = ImmutableList.copyOf(hints);
     assert isValid(Litmus.THROW, null);
-  }
+}
 
-  /**
-   * Creates a Snapshot.
-   *
-   * @param cluster   Cluster that this relational expression belongs to
-   * @param traitSet  The traits of this relational expression
-   * @param input     Input relational expression
-   * @param period    Timestamp expression which as the table was at the given
-   *                  time in the past
-   */
-  @SuppressWarnings("method.invocation.invalid")
-  protected Snapshot(
-      RelOptCluster cluster, RelTraitSet traitSet, RelNode input, RexNode period) {
+/**
+ * Creates a Snapshot.
+ *
+ * @param cluster   Cluster that this relational expression belongs to
+ * @param traitSet  The traits of this relational expression
+ * @param input     Input relational expression
+ * @param period    Timestamp expression which as the table was at the given
+ *                  time in the past
+ */
+@SuppressWarnings("method.invocation.invalid")
+protected Snapshot(
+    RelOptCluster cluster, RelTraitSet traitSet, RelNode input, RexNode period) {
     this(cluster, traitSet, ImmutableList.of(), input, period);
-  }
+}
 
-  //~ Methods ----------------------------------------------------------------
+//~ Methods ----------------------------------------------------------------
 
-  @Override public final RelNode copy(RelTraitSet traitSet, List<RelNode> inputs) {
+@Override public final RelNode copy(RelTraitSet traitSet, List<RelNode> inputs) {
     return copy(traitSet, sole(inputs), getPeriod());
-  }
+}
 
-  public abstract Snapshot copy(RelTraitSet traitSet, RelNode input, RexNode period);
+public abstract Snapshot copy(RelTraitSet traitSet, RelNode input, RexNode period);
 
-  @Override public RelNode accept(RexShuttle shuttle) {
+@Override public RelNode accept(RexShuttle shuttle) {
     RexNode condition = shuttle.apply(this.period);
     if (this.period == condition) {
-      return this;
+        return this;
     }
     return copy(traitSet, getInput(), condition);
-  }
+}
 
-  @Override public RelWriter explainTerms(RelWriter pw) {
+@Override public RelWriter explainTerms(RelWriter pw) {
     return super.explainTerms(pw)
         .item("period", period);
-  }
+}
 
-  public RexNode getPeriod() {
+public RexNode getPeriod() {
     return period;
-  }
+}
 
-  @Override public boolean isValid(Litmus litmus, @Nullable Context context) {
+@Override public boolean isValid(Litmus litmus, @Nullable Context context) {
     RelDataType dataType = period.getType();
-    if (!SqlTypeUtil.isTimestamp(dataType)) {
-      return litmus.fail("The system time period specification expects Timestamp type but is '"
-          + dataType.getSqlTypeName() + "'");
+    if (!SqlTypeUtil.isTimestamp(dataType) && !SqlTypeUtil.isNumeric(dataType)) {
+        return litmus.fail("The system time period specification expects Timestamp type but is '"
+            + dataType.getSqlTypeName() + "'");
     }
     return litmus.succeed();
-  }
+}
 
-  @Override public ImmutableList<RelHint> getHints() {
+@Override public ImmutableList<RelHint> getHints() {
     return hints;
-  }
+}
 }

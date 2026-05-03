@@ -44,6 +44,9 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 import static java.util.Objects.requireNonNull;
 
+// Shaded from calcite commit - e810d8becb3544d141e7d4bf4fe65de24d0595c7 to port fixes to decorrelation
+// Remove when upgraded to 1.42
+
 /**
  * Call to an aggregate function within an
  * {@link org.apache.calcite.rel.core.Aggregate}.
@@ -143,7 +146,6 @@ public class AggregateCall {
 
   //~ Methods ----------------------------------------------------------------
 
-  @Deprecated // to be removed before 2.0
   public static AggregateCall create(SqlAggFunction aggFunction,
       boolean distinct, List<Integer> argList, int groupCount, RelNode input,
       @Nullable RelDataType type, @Nullable String name) {
@@ -152,7 +154,6 @@ public class AggregateCall {
         null, RelCollations.EMPTY, groupCount, input, type, name);
   }
 
-  @Deprecated // to be removed before 2.0
   public static AggregateCall create(SqlAggFunction aggFunction,
       boolean distinct, List<Integer> argList, int filterArg, int groupCount,
       RelNode input, @Nullable RelDataType type, @Nullable String name) {
@@ -193,7 +194,7 @@ public class AggregateCall {
         distinctKeys, collation, groupCount, input, type, name);
   }
 
-    /** Creates an AggregateCall, inferring its type if {@code type} is null. */
+  /** Creates an AggregateCall, inferring its type if {@code type} is null. */
   public static AggregateCall create(SqlAggFunction aggFunction,
       boolean distinct, boolean approximate, boolean ignoreNulls,
       List<RexNode> rexList, List<Integer> argList, int filterArg,
@@ -220,6 +221,49 @@ public class AggregateCall {
       final Aggregate.AggCallBinding callBinding =
           new Aggregate.AggCallBinding(typeFactory, aggFunction, preTypes,
               types, groupCount, filterArg >= 0);
+      type = aggFunction.inferReturnType(callBinding);
+    }
+    return create(pos, aggFunction, distinct, approximate, ignoreNulls,
+        rexList, argList, filterArg, distinctKeys, collation, type, name);
+  }
+
+  /** Creates an AggregateCall, inferring its type if {@code type} is null. */
+  public static AggregateCall create(SqlAggFunction aggFunction,
+      boolean distinct, boolean approximate, boolean ignoreNulls,
+      List<RexNode> rexList, List<Integer> argList, int filterArg,
+      @Nullable ImmutableBitSet distinctKeys, RelCollation collation,
+      boolean hasEmptyGroup,
+      RelNode input, @Nullable RelDataType type, @Nullable String name) {
+    return create(SqlParserPos.ZERO, aggFunction, distinct, approximate,
+        ignoreNulls, rexList, argList, filterArg, distinctKeys, collation, hasEmptyGroup,
+        input, type, name);
+  }
+
+  public static AggregateCall create(SqlParserPos pos, SqlAggFunction aggFunction,
+      boolean distinct, boolean approximate, boolean ignoreNulls,
+      List<RexNode> rexList, List<Integer> argList, int filterArg,
+      @Nullable ImmutableBitSet distinctKeys, RelCollation collation,
+      boolean hasEmptyGroup,
+      RelNode input, @Nullable RelDataType type, @Nullable String name) {
+    if (type == null) {
+      final RelDataTypeFactory typeFactory =
+          input.getCluster().getTypeFactory();
+      final List<RelDataType> preTypes = RexUtil.types(rexList);
+      final List<RelDataType> types =
+          SqlTypeUtil.projectTypes(input.getRowType(), argList);
+      final Aggregate.AggCallBinding callBinding;
+      if (aggFunction.getKind() == SqlKind.PERCENTILE_DISC
+          || aggFunction.getKind() == SqlKind.PERCENTILE_CONT) {
+        callBinding =
+            new Aggregate.PercentileDiscAggCallBinding(typeFactory, aggFunction,
+                SqlTypeUtil.projectTypes(input.getRowType(), argList),
+                SqlTypeUtil.projectTypes(input.getRowType(), collation.getKeys()).get(0),
+                hasEmptyGroup, filterArg >= 0);
+      } else {
+        callBinding =
+            new Aggregate.AggCallBinding(typeFactory, aggFunction, preTypes, types,
+                hasEmptyGroup, filterArg >= 0);
+      }
       type = aggFunction.inferReturnType(callBinding);
     }
     return create(pos, aggFunction, distinct, approximate, ignoreNulls,
@@ -518,11 +562,11 @@ public class AggregateCall {
       return new Aggregate.PercentileDiscAggCallBinding(typeFactory,
           aggFunction, SqlTypeUtil.projectTypes(rowType, argList),
           SqlTypeUtil.projectTypes(rowType, collation.getKeys()).get(0),
-          aggregateRelBase.getGroupCount(), hasFilter());
+          aggregateRelBase.hasEmptyGroup(), hasFilter());
     }
     return new Aggregate.AggCallBinding(typeFactory, aggFunction,
         RexUtil.types(rexList), SqlTypeUtil.projectTypes(rowType, argList),
-        aggregateRelBase.getGroupCount(), hasFilter());
+        aggregateRelBase.hasEmptyGroup(), hasFilter());
   }
 
   /**
@@ -586,6 +630,32 @@ public class AggregateCall {
     return create(pos, aggFunction, distinct, approximate, ignoreNulls,
         rexList, argList, filterArg, distinctKeys, collation,
         newGroupKeyCount, input, newType, getName());
+  }
+
+  /**
+   * Creates an equivalent AggregateCall that is adapted to a new input types
+   * and/or number of columns in GROUP BY.
+   *
+   * @param input            Relation that will be input of Aggregate
+   * @param argList          Argument indices of the new call in the input
+   * @param filterArg        Index of the filter, or -1
+   * @param oldHasEmptyGroup Whether old aggregate contains empty group
+   * @param newHasEmptyGroup Whether new aggregate contains empty group
+   * @return AggregateCall that suits new inputs and GROUP BY columns
+   */
+  public AggregateCall adaptTo(RelNode input, List<Integer> argList,
+      int filterArg, boolean oldHasEmptyGroup, boolean newHasEmptyGroup) {
+    // The return type of aggregate call need to be recomputed.
+    // Since it might depend on the number of columns in GROUP BY.
+    final RelDataType newType =
+        oldHasEmptyGroup == newHasEmptyGroup
+            && argList.equals(this.argList)
+            && filterArg == this.filterArg
+            ? type
+            : null;
+    return create(pos, aggFunction, distinct, approximate, ignoreNulls,
+        rexList, argList, filterArg, distinctKeys, collation,
+        newHasEmptyGroup, input, newType, getName());
   }
 
   /** Creates a copy of this aggregate call, applying a mapping to its

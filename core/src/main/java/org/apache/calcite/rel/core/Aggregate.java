@@ -61,6 +61,9 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 import static java.util.Objects.requireNonNull;
 
+// Shaded from calcite commit - e810d8becb3544d141e7d4bf4fe65de24d0595c7 to port fixes to decorrelation
+// Remove when upgraded to 1.42
+
 /**
  * Relational operator that eliminates
  * duplicates and computes totals.
@@ -296,6 +299,10 @@ public abstract class Aggregate extends SingleRel implements Hintable {
    */
   public int getGroupCount() {
     return groupSet.cardinality();
+  }
+
+  public boolean hasEmptyGroup() {
+    return groupSets.contains(ImmutableBitSet.of());
   }
 
   /**
@@ -580,6 +587,7 @@ public abstract class Aggregate extends SingleRel implements Hintable {
     private final List<RelDataType> operands;
     private final int groupCount;
     private final boolean filter;
+    private final boolean hasEmptyGroup;
 
     /**
      * Creates an AggCallBinding.
@@ -601,10 +609,35 @@ public abstract class Aggregate extends SingleRel implements Hintable {
           requireNonNull(operands,
               "operands of aggregate call should not be null");
       this.groupCount = groupCount;
+      this.hasEmptyGroup = groupCount == 0;
       this.filter = filter;
       checkArgument(groupCount >= 0,
           "number of group by columns should be greater than zero in "
               + "aggregate call. Got %s", groupCount);
+    }
+
+    /**
+     * Creates an AggCallBinding.
+     *
+     * @param typeFactory   Type factory
+     * @param aggFunction   Aggregate function
+     * @param preOperands   Data types of pre-operands
+     * @param operands      Data types of operands
+     * @param hasEmptyGroup Whether the aggregate has a empty group
+     * @param filter        Whether the aggregate function has a FILTER clause
+     */
+    public AggCallBinding(RelDataTypeFactory typeFactory,
+        SqlAggFunction aggFunction, List<RelDataType> preOperands,
+        List<RelDataType> operands, boolean hasEmptyGroup,
+        boolean filter) {
+      super(typeFactory, aggFunction);
+      this.preOperands = requireNonNull(preOperands, "preOperands");
+      this.operands =
+          requireNonNull(operands,
+              "operands of aggregate call should not be null");
+      this.filter = filter;
+      this.hasEmptyGroup = hasEmptyGroup;
+      this.groupCount = hasEmptyGroup ? 0 : 1;
     }
 
     @Deprecated // to be removed before 2.0
@@ -617,6 +650,10 @@ public abstract class Aggregate extends SingleRel implements Hintable {
 
     @Override public int getGroupCount() {
       return groupCount;
+    }
+
+    @Override public boolean hasEmptyGroup() {
+      return hasEmptyGroup;
     }
 
     @Override public boolean hasFilter() {
@@ -648,9 +685,9 @@ public abstract class Aggregate extends SingleRel implements Hintable {
     private final RelDataType collationType;
 
     PercentileDiscAggCallBinding(RelDataTypeFactory typeFactory, SqlAggFunction aggFunction,
-        List<RelDataType> operands, RelDataType collationType, int groupCount,
+        List<RelDataType> operands, RelDataType collationType, boolean hasEmptyGroup,
         boolean filter) {
-      super(typeFactory, aggFunction, operands, groupCount, filter);
+      super(typeFactory, aggFunction, ImmutableList.of(), operands, hasEmptyGroup, filter);
       assert aggFunction.isPercentile();
       this.collationType = collationType;
     }
