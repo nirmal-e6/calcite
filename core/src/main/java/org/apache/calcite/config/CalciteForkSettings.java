@@ -49,6 +49,10 @@ public final class CalciteForkSettings {
     return provider.optimizeFilterWithOr();
   }
 
+  public static boolean allowDuplicateAliasInProjection() {
+    return provider.allowDuplicateAliasInProjection();
+  }
+
   public static boolean databricks() {
     return provider.databricks();
   }
@@ -84,6 +88,10 @@ public final class CalciteForkSettings {
     }
 
     default boolean optimizeFilterWithOr() {
+      return false;
+    }
+
+    default boolean allowDuplicateAliasInProjection() {
       return false;
     }
 

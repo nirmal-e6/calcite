@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.rel.core;
 
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.linq4j.Ord;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelOptCost;
@@ -267,7 +268,7 @@ public final boolean containsOver() {
         }
     }
     // E6Data change for allowing duplicate alias in projection
-    if(allowsDuplicateAliasInProjection())
+    if (CalciteForkSettings.allowDuplicateAliasInProjection())
     {
         return litmus.succeed();
     }
@@ -285,13 +286,6 @@ public final boolean containsOver() {
         return litmus.fail("duplicate expressions: {}", exps);
     }
     return litmus.succeed();
-}
-
-private boolean allowsDuplicateAliasInProjection() {
-    final org.apache.calcite.plan.Context plannerContext =
-        getCluster().getPlanner().getContext();
-    final Config config = plannerContext.unwrap(Config.class);
-    return config != null && config.allowDuplicateAliasInProjection();
 }
 
 @Override public @Nullable RelOptCost computeSelfCost(RelOptPlanner planner,
@@ -504,11 +498,6 @@ public boolean isMapping() {
 }
 
 //~ Inner Classes ----------------------------------------------------------
-
-/** Config for Project validation. */
-public interface Config {
-    boolean allowDuplicateAliasInProjection();
-}
 
 /** No longer used. */
 @Deprecated // to be removed before 2.0
