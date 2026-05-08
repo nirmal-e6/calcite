@@ -17,13 +17,14 @@
 package org.apache.calcite.sql;
 
 import com.google.common.collect.Sets;
-
 import org.apiguardian.api.API;
 
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Set;
+
+// Shaded to add custom SqlKind enums line no.261
 
 /**
  * Enumerates the possible types of {@link SqlNode}.
@@ -79,9 +80,9 @@ import java.util.Set;
  * class, and we wouldn't need {@code SqlKind}. But we're not.)
  */
 public enum SqlKind {
-  //~ Static fields/initializers ---------------------------------------------
+//~ Static fields/initializers ---------------------------------------------
 
-  // the basics
+// the basics
 
   /**
    * Expression not covered by any other {@link SqlKind} value.
@@ -130,6 +131,8 @@ public enum SqlKind {
    */
   OTHER_FUNCTION,
 
+  RANGE,
+
   /**
    * Input tables have either row semantics or set semantics.
    * <ul>
@@ -164,6 +167,12 @@ public enum SqlKind {
 
   /** DESCRIBE TABLE statement. */
   DESCRIBE_TABLE,
+
+  /** DESCRIBE DETAIL statement. */
+  DESCRIBE_DETAIL,
+
+  /** DESCRIBE HISTORY statement. */
+  DESCRIBE_HISTORY,
 
   /** INSERT statement. */
   INSERT,
@@ -935,6 +944,31 @@ public enum SqlKind {
   LATERAL,
 
   /**
+   * <a href="https://docs.databricks.com/aws/en/sql/language-manual/functions/colonsign">Databricks' colon operator</a>
+   */
+  COLON,
+
+  /**
+   * Access to a JSON path in a variant value.
+   */
+  VARIANT_GET,
+
+  /**
+   * Access to a JSON path in a variant value. Type conversion errors are ignored.
+   */
+  TRY_VARIANT_GET,
+
+  /**
+   * Parse JSON into a Variant value.
+   */
+  PARSE_JSON,
+
+  /**
+   * Checks if a variant value is null.
+   */
+  IS_VARIANT_NULL,
+
+  /**
    * Table operator which converts user-defined transform into a relation, for
    * example, <code>select * from TABLE(udx(x, y, z))</code>. See also the
    * {@link #EXPLICIT_TABLE} prefix operator.
@@ -1015,7 +1049,7 @@ public enum SqlKind {
   // CHECKSTYLE: IGNORE 1
   /** @deprecated Use {@link #GROUPING}. */
   @Deprecated // to be removed before 2.0
-  GROUPING_ID,
+      GROUPING_ID,
 
   /** The {@code GROUP_ID()} function. */
   GROUP_ID,
@@ -1034,6 +1068,8 @@ public enum SqlKind {
 
   /** The {@code SUM} aggregate function. */
   SUM,
+  /** The {@code MIN_N} aggregate function. */
+  MIN_N,
 
   /** The {@code SUM0} aggregate function. */
   SUM0,
@@ -1058,6 +1094,8 @@ public enum SqlKind {
 
   /** The {@code ANY_VALUE} aggregate function. */
   ANY_VALUE,
+
+  BOOL_OR,
 
   /** The {@code COVAR_POP} aggregate function. */
   COVAR_POP,
@@ -1351,527 +1389,806 @@ public enum SqlKind {
    * commands for them. Use OTHER_DDL in the short term, but we are happy to add
    * new enum values for your object types. Just ask!
    */
-  OTHER_DDL;
+  OTHER_DDL,
+  CHAR,
 
-  //~ Static fields/initializers ---------------------------------------------
+  // Custom E6data Enum values
+  LEFT_SHIFT,
+  RIGHT_SHIFT,
+  BITWISE_AND,
+  CACHE,
+  LAST_DAY,
+  NEXT_DAY,
+  TO_UNIX_TIMESTAMP,
+  UNIX_TIMESTAMP,
+  FORMAT_TIMESTAMP,
+  JSON_VALUE,
+  JSON_OBJECT_KEYS,
+  PERCENTILE,
+  DATE_DIFF,
+  DROP_CACHE,
+  LOCATE,
+  LEFT,
+  RIGHT,
+  REGEXP_LIKE,
+  REGEXP_REPLACE,
+  SPLIT,
+  SOUNDEX,
+  PARSE_TIMESTAMP,
+  REGEXP_COUNT,
+  TANH,
+  SPLIT_PART,
+  APPROX_COUNT_DISTINCT,
+  SIGN,
+  CONVERT_TIMEZONE,
+  TO_TIMESTAMP,
+  TO_TIMESTAMP_LTZ,
+  TO_TIMESTAMP_NTZ,
+  TO_TIMESTAMP_TZ,
+  TRY_TO_TIMESTAMP,
+  TRY_TO_TIMESTAMP_LTZ,
+  TRY_TO_TIMESTAMP_NTZ,
+  TRY_TO_TIMESTAMP_TZ,
+  DAYNAME,
+  STARTSWITH,
+  ENDSWITH,
+  LEN,
+  COPY_INTO,
+  WRITE_INTO,
+  TO_DATE,
+  TO_CHAR,
+  TRY_CAST,
+  UPPER,
+  LOWER,
+  DATEDIFF,
+  DAYS,
+  TRUNC,
+  ELEMENT_AT,
+  SLICE_MAP,
+  CORR,
+  TRY_DIVIDE,
+  TRY_MULTIPLY,
+  TRY_ADD,
+  TRY_MOD,
+  SHOW_VIEW,
+  REFRESH_MATERIALIZED_VIEW,
+  REPLACE_MATERIALIZED_VIEW,
+  FILTER_ARRAY,
+  REDUCE,
+  IS_NULL_VALUE,
+  FROM_UTC_TIMESTAMP,
+  TO_UTC_TIMESTAMP,
+  SHOW_SCHEMAS,
+  SHOW_TABLES,
+  NULLIFZERO,
+  WEEKDAY,
+  TRY_TO_NUMBER,
+  TO_NUMBER,
+  CURRENT_TIMESTAMP,
+  TO_JSON,
+  FROM_JSON,
+  EQUAL_NULL,
+  VERSION,
+  ANALYZE_TABLE,
+  SLEEP,
+  WIDTH_BUCKET,
+  PMOD,
+  UDF,
+  UDF_CREATE,
+  UDF_SQL_BODY,
+  UDF_JAVA_BODY,
+  UDF_EXPRESSION,
+  UDF_BLOCK_STMT,
+  UDF_CONTINUE_STMT,
+  UDF_BREAK_STMT,
+  UDF_IF_STMT,
+  UDF_RETURN_STMT,
+  UDF_WHILE_STMT,
+  UDF_ASSIGN_STMT,
+  COSINE_DISTANCE,
+  UDF_REGISTER,
+  TRY,
+  DATE_PARSE,
+  MAKE_DATE,
+  UNBASE64,
+  UNBASE64_BINARY,
+  MONTHNAME,
+  MAKE_TIMESTAMP,
+  REGEXP_SUBSTR,
+  LEO_DROP_CACHE,
+  LIKE_ANY,
+  DAYOFWEEK,
+  MONTHS_BETWEEN,
+  APPROX_PERCENTILE,
+  ANY_MATCH,
+  SECRET,
+  AES_DECRYPT,
+  AES_ENCRYPT,
+  ENCODE,
+  BASE64,
+  CONCAT,
+  ALL_MATCH,
+  SET_SEARCH,
+  CURRENT_DATE,
+  NOW,
+  CONCAT_WS,
+  SUBSTR,
+  SUBSTRING,
+  GETUTCDATE,
+  POW,
+  REPLACE,
+  GENERATE_TIMESTAMP_ARRAY,
+  GENERATE_DATE_ARRAY,
+  BETA_CDF,
+  BINOMIAL_CDF,
+  BITWISE_ARITHMETIC_SHIFT_RIGHT,
+  BITWISE_LOGICAL_SHIFT_RIGHT,
+  BITWISE_NOT,
+  BITWISE_OR,
+  BITWISE_SHIFT_LEFT,
+  BITWISE_XOR,
+  BIT_COUNT,
+  CHAR2HEXINT,
+  CHI_SQUARED_CDF,
+  CHR,
+  CODEPOINT,
+  UNICODE,
+  COSEC,
+  COSH,
+  ACOSH,
+  CRC32,
+  E,
+  FROM_BASE,
+  FROM_BASE32,
+  FROM_BASE64,
+  FROM_BASE64URL,
+  FROM_HEX,
+  FROM_UNIXTIME,
+  FROM_UNIXTIME_WITHUNIT,
+  TIMESTAMP_SECONDS,
+  HAMMING_DISTANCE,
+  HMAC_MD5,
+  HMAC_SHA1,
+  HMAC_SHA256,
+  HMAC_SHA512,
+  INDEX,
+  INFINITY,
+  INITCAP,
+  ROUND,
+  H3_LATLNG_TO_CELL,
+  H3_LATLNG_TO_CELLADDRESS,
+  H3_POINT_TO_CELL,
+  H3_POINT_TO_CELLADDRESS,
+  H3_CELL_TO_LATLNG,
+  H3_CELLADDRESS_TO_LATLNG,
+  H3_CELL_TO_CELLADDRESS,
+  H3_CELLADDRESS_TO_CELL,
+  H3_CELL_TO_PARENT,
+  H3_CELLADDRESS_TO_PARENT,
+  H3_CELL_TO_BOUNDARY_AS_GEOJSON,
+  H3_POLYGON_TO_CELLS,
+  H3_POLYGON_TO_CELLADDRESSES,
+  H3_GRID_DISK,
+  BING_TILE_QUADKEY,
+  BING_TILE_AT,
+  INSTR,
+  IS_FINITE,
+  IS_INFINITE,
+  IS_NAN,
+  ISNAN,
+  LCASE,
+  LEVENSHTEIN,
+  LOG10,
+  LOG2,
+  LPAD,
+  MD5,
+  MID,
+  NAN,
+  NEGATIVE,
+  NORMALIZE,
+  PARSE_PRESTO_DATA_SIZE,
+  POISSON_CDF,
+  POSITIVE,
+  TYPEOF,
+  RAND,
+  UUID,
+  REGEXP_EXTRACT,
+  REGEXP_EXTRACT_ALL,
+  REGEXP_SPLIT,
+  REPEAT,
+  RPAD,
+  SEC,
+  SECOND,
+  SECURE_RAND,
+  SECURE_RANDOM,
+  SHA,
+  SHA1,
+  SHA256,
+  SHA512,
+  SIGNUM,
+  SINH,
+  ATANH,
+  ASINH,
+  SQUARE,
+  STRPOS,
+  STRRPOS,
+  STUFF,
+  FACTORIAL,
+  TO_BASE,
+  TO_BASE32,
+  TO_BASE64,
+  TO_BASE64URL,
+  TO_HEX,
+  TO_IEEE_754_64,
+  TO_UTF8,
+  UCASE,
+  URL_DECODE,
+  URL_ENCODE,
+  URL_EXTRACT_FRAGMENT,
+  URL_EXTRACT_HOST,
+  URL_EXTRACT_PATH,
+  URL_EXTRACT_PORT,
+  URL_EXTRACT_PROTOCOL,
+  URL_EXTRACT_QUERY,
+  WEIBULL_CDF,
+  SLICE,
+  ARRAY_SORT,
+  DATETIME,
+  TIME_STAMP,
+  DATE_PART,
+  DATEPART,
+  CHARINDEX,
+  SIZE,
+  CARDINALITY,
+  JSON_ARRAY_LENGTH,
+  JSON_FORMAT,
+  JSON_EXTRACT_SCALAR,
+  JSON_EXTRACT,
+  MAX_BY,
+  MIN_BY,
+  FORMAT_TIME_PIVOT_UDF,
+  FORMAT_TIME_UDF,
+  APPLY_TIMEUNIT_UDF,
+  APPLY_TIMEFORMAT_UDF,
+  TRY_ELEMENT_AT,
+  GETBIT,
+  TO_UNIXTIME,
+  PARSE_DATE,
+  FORMAT,
+  FORMAT_DATE,
+  DATE_FORMAT,
+  PARSE_DATETIME,
+  FORMAT_DATETIME,
+  TO_BOOLEAN,
+  HEX_DECODE_STRING,
+  ASCII,
+  DAYOFWEEKISO,
+  WEEKOFYEAR,
+  WEEKISO,
+  YEAROFWEEK,
+  YEAROFWEEKISO,
+  IFF,
+  TRANSPILE;
 
-  // Most of the static fields are categories, aggregating several kinds into
-  // a set.
+//~ Static fields/initializers ---------------------------------------------
 
-  /**
-   * Category consisting of set-query node types.
-   *
-   * <p>Consists of:
-   * {@link #EXCEPT},
-   * {@link #INTERSECT},
-   * {@link #UNION}.
-   */
-  public static final EnumSet<SqlKind> SET_QUERY =
-      EnumSet.of(UNION, INTERSECT, EXCEPT);
+// Most of the static fields are categories, aggregating several kinds into
+// a set.
 
-  /**
-   * Category consisting of all built-in aggregate functions.
-   */
-  public static final EnumSet<SqlKind> AGGREGATE =
-      EnumSet.of(COUNT, SUM, SUM0, MIN, MAX, LEAD, LAG, FIRST_VALUE,
-          LAST_VALUE, COVAR_POP, COVAR_SAMP, REGR_COUNT, REGR_SXX, REGR_SYY,
-          AVG, STDDEV_POP, STDDEV_SAMP, VAR_POP, VAR_SAMP, NTILE, COLLECT,
-          MODE, FUSION, SINGLE_VALUE, ROW_NUMBER, RANK, PERCENT_RANK, DENSE_RANK,
-          CUME_DIST, JSON_ARRAYAGG, JSON_OBJECTAGG, BIT_AND, BIT_OR, BIT_XOR,
-          LISTAGG, STRING_AGG, ARRAY_AGG, ARRAY_CONCAT_AGG, GROUP_CONCAT, COUNTIF,
-          PERCENTILE_CONT, PERCENTILE_DISC,
-          INTERSECTION, ANY_VALUE);
+/**
+ * Category consisting of set-query node types.
+ *
+ * <p>Consists of:
+ * {@link #EXCEPT},
+ * {@link #INTERSECT},
+ * {@link #UNION}.
+ */
+public static final EnumSet<SqlKind> SET_QUERY =
+    EnumSet.of(UNION, INTERSECT, EXCEPT);
 
-  /**
-   * Category consisting of all DML operators.
-   *
-   * <p>Consists of:
-   * {@link #INSERT},
-   * {@link #UPDATE},
-   * {@link #DELETE},
-   * {@link #MERGE},
-   * {@link #PROCEDURE_CALL}.
-   *
-   * <p>NOTE jvs 1-June-2006: For now we treat procedure calls as DML;
-   * this makes it easy for JDBC clients to call execute or
-   * executeUpdate and not have to process dummy cursor results.  If
-   * in the future we support procedures which return results sets,
-   * we'll need to refine this.
-   */
-  public static final EnumSet<SqlKind> DML =
-      EnumSet.of(INSERT, DELETE, UPDATE, MERGE, PROCEDURE_CALL);
+/**
+ * Category consisting of all built-in aggregate functions.
+ */
+public static final EnumSet<SqlKind> AGGREGATE =
+    EnumSet.of(COUNT, SUM, SUM0, MIN, MAX, LEAD, LAG, FIRST_VALUE,
+        LAST_VALUE, BOOL_OR, COVAR_POP, COVAR_SAMP, REGR_COUNT, REGR_SXX, REGR_SYY,
+        AVG, STDDEV_POP, STDDEV_SAMP, VAR_POP, VAR_SAMP, NTILE, COLLECT,
+        MODE, FUSION, SINGLE_VALUE, ROW_NUMBER, RANK, PERCENT_RANK, DENSE_RANK,
+        CUME_DIST, JSON_ARRAYAGG, JSON_OBJECTAGG, BIT_AND, BIT_OR, BIT_XOR,
+        LISTAGG, STRING_AGG, ARRAY_AGG, ARRAY_CONCAT_AGG, GROUP_CONCAT, COUNTIF,
+        PERCENTILE_CONT, PERCENTILE_DISC, PERCENTILE,
+        INTERSECTION, ANY_VALUE,CORR, APPROX_PERCENTILE);
 
-  /**
-   * Category consisting of all DDL operators.
-   */
-  public static final EnumSet<SqlKind> DDL =
-      EnumSet.of(COMMIT, ROLLBACK, ALTER_SESSION,
-          CREATE_SCHEMA, CREATE_FOREIGN_SCHEMA, DROP_SCHEMA,
-          CREATE_TABLE, CREATE_TABLE_LIKE,
-          ALTER_TABLE, DROP_TABLE, TRUNCATE_TABLE,
-          CREATE_FUNCTION, DROP_FUNCTION,
-          CREATE_VIEW, ALTER_VIEW, DROP_VIEW,
-          CREATE_MATERIALIZED_VIEW, ALTER_MATERIALIZED_VIEW,
-          DROP_MATERIALIZED_VIEW,
-          CREATE_SEQUENCE, ALTER_SEQUENCE, DROP_SEQUENCE,
-          CREATE_INDEX, ALTER_INDEX, DROP_INDEX,
-          CREATE_TYPE, DROP_TYPE,
-          SET_OPTION, OTHER_DDL);
+/**
+ * Category consisting of all DML operators.
+ *
+ * <p>Consists of:
+ * {@link #INSERT},
+ * {@link #UPDATE},
+ * {@link #DELETE},
+ * {@link #MERGE},
+ * {@link #PROCEDURE_CALL}.
+ *
+ * <p>NOTE jvs 1-June-2006: For now we treat procedure calls as DML;
+ * this makes it easy for JDBC clients to call execute or
+ * executeUpdate and not have to process dummy cursor results.  If
+ * in the future we support procedures which return results sets,
+ * we'll need to refine this.
+ */
+public static final EnumSet<SqlKind> DML =
+    EnumSet.of(INSERT, DELETE, UPDATE, MERGE, PROCEDURE_CALL);
 
-  /**
-   * Category consisting of query node types.
-   *
-   * <p>Consists of:
-   * {@link #SELECT},
-   * {@link #EXCEPT},
-   * {@link #INTERSECT},
-   * {@link #UNION},
-   * {@link #VALUES},
-   * {@link #ORDER_BY},
-   * {@link #EXPLICIT_TABLE}.
-   */
-  public static final EnumSet<SqlKind> QUERY =
-      EnumSet.of(SELECT, UNION, INTERSECT, EXCEPT, VALUES, WITH, ORDER_BY,
-          EXPLICIT_TABLE);
+/**
+ * Category consisting of all DDL operators.
+ */
+public static final EnumSet<SqlKind> DDL =
+    EnumSet.of(COMMIT, ROLLBACK, ALTER_SESSION,
+        CREATE_SCHEMA, CREATE_FOREIGN_SCHEMA, DROP_SCHEMA,
+        CREATE_TABLE, CREATE_TABLE_LIKE,
+        ALTER_TABLE, DROP_TABLE, TRUNCATE_TABLE,
+        CREATE_FUNCTION, DROP_FUNCTION,
+        CREATE_VIEW, ALTER_VIEW, DROP_VIEW,
+        CREATE_MATERIALIZED_VIEW, ALTER_MATERIALIZED_VIEW,
+        DROP_MATERIALIZED_VIEW,
+        CREATE_SEQUENCE, ALTER_SEQUENCE, DROP_SEQUENCE,
+        CREATE_INDEX, ALTER_INDEX, DROP_INDEX,
+        CREATE_TYPE, DROP_TYPE,
+        UDF_CREATE, SET_OPTION, OTHER_DDL);
 
-  /**
-   * Category consisting of all expression operators.
-   *
-   * <p>A node is an expression if it is NOT one of the following:
-   * {@link #AS},
-   * {@link #ARGUMENT_ASSIGNMENT},
-   * {@link #DEFAULT},
-   * {@link #DESCENDING},
-   * {@link #SELECT},
-   * {@link #JOIN},
-   * {@link #OTHER_FUNCTION},
-   * {@link #CAST},
-   * {@link #CONVERT},
-   * {@link #TRIM},
-   * {@link #LITERAL_CHAIN},
-   * {@link #JDBC_FN},
-   * {@link #PRECEDING},
-   * {@link #FOLLOWING},
-   * {@link #ORDER_BY},
-   * {@link #COLLECTION_TABLE},
-   * {@link #TABLESAMPLE},
-   * {@link #UNNEST}
-   * or an aggregate function, DML or DDL.
-   */
-  public static final Set<SqlKind> EXPRESSION =
-      EnumSet.complementOf(
-          concat(
-              EnumSet.of(AS, ARGUMENT_ASSIGNMENT, CONVERT, CONVERT_ORACLE, TRANSLATE,
-                  DEFAULT, RUNNING, FINAL, LAST, FIRST, PREV, NEXT,
-                  FILTER, WITHIN_GROUP, IGNORE_NULLS, RESPECT_NULLS, SEPARATOR,
-                  DESCENDING, CUBE, ROLLUP, GROUPING_SETS, EXTEND, LATERAL,
-                  SELECT, JOIN, OTHER_FUNCTION, POSITION, CAST, TRIM, FLOOR, CEIL,
-                  DATE_ADD, DATE_SUB, TIME_ADD, TIME_SUB,
-                  TIMESTAMP_ADD, TIMESTAMP_DIFF, TIMESTAMP_SUB,
-                  EXTRACT, INTERVAL,
-                  LITERAL_CHAIN, JDBC_FN, PRECEDING, FOLLOWING, ORDER_BY,
-                  NULLS_FIRST, NULLS_LAST, COLLECTION_TABLE, TABLESAMPLE,
-                  VALUES, WITH, WITH_ITEM, ITEM, SKIP_TO_FIRST, SKIP_TO_LAST,
-                  JSON_VALUE_EXPRESSION, UNNEST),
-              SET_QUERY, AGGREGATE, DML, DDL));
+/**
+ * Category consisting of query node types.
+ *
+ * <p>Consists of:
+ * {@link #SELECT},
+ * {@link #EXCEPT},
+ * {@link #INTERSECT},
+ * {@link #UNION},
+ * {@link #VALUES},
+ * {@link #ORDER_BY},
+ * {@link #EXPLICIT_TABLE}.
+ */
+public static final EnumSet<SqlKind> QUERY =
+    EnumSet.of(SELECT, UNION, INTERSECT, EXCEPT, VALUES, WITH, ORDER_BY,
+        EXPLICIT_TABLE);
 
-  /**
-   * Category of all SQL statement types.
-   *
-   * <p>Consists of all types in {@link #QUERY}, {@link #DML} and {@link #DDL}.
-   */
-  public static final EnumSet<SqlKind> TOP_LEVEL = concat(QUERY, DML, DDL);
+/**
+ * Category consisting of all expression operators.
+ *
+ * <p>A node is an expression if it is NOT one of the following:
+ * {@link #AS},
+ * {@link #ARGUMENT_ASSIGNMENT},
+ * {@link #DEFAULT},
+ * {@link #DESCENDING},
+ * {@link #SELECT},
+ * {@link #JOIN},
+ * {@link #OTHER_FUNCTION},
+ * {@link #CAST},
+ * {@link #CONVERT},
+ * {@link #TRIM},
+ * {@link #LITERAL_CHAIN},
+ * {@link #JDBC_FN},
+ * {@link #PRECEDING},
+ * {@link #FOLLOWING},
+ * {@link #ORDER_BY},
+ * {@link #COLLECTION_TABLE},
+ * {@link #TABLESAMPLE},
+ * {@link #UNNEST}
+ * or an aggregate function, DML or DDL.
+ */
+public static final Set<SqlKind> EXPRESSION =
+    EnumSet.complementOf(
+        concat(
+            EnumSet.of(AS, ARGUMENT_ASSIGNMENT, CONVERT, CONVERT_ORACLE, TRANSLATE,
+                DEFAULT, RUNNING, FINAL, LAST, FIRST, PREV, NEXT,
+                FILTER, WITHIN_GROUP, IGNORE_NULLS, RESPECT_NULLS, SEPARATOR,
+                DESCENDING, CUBE, ROLLUP, GROUPING_SETS, EXTEND, LATERAL,
+                SELECT, JOIN, OTHER_FUNCTION, POSITION, CAST, TRIM, FLOOR, CEIL,
+                DATE_ADD, DATE_SUB, TIME_ADD, TIME_SUB,
+                TIMESTAMP_ADD, TIMESTAMP_DIFF, TIMESTAMP_SUB,
+                EXTRACT, INTERVAL,
+                LITERAL_CHAIN, JDBC_FN, PRECEDING, FOLLOWING, ORDER_BY,
+                NULLS_FIRST, NULLS_LAST, COLLECTION_TABLE, TABLESAMPLE,
+                VALUES, WITH, WITH_ITEM, ITEM, SKIP_TO_FIRST, SKIP_TO_LAST,
+                JSON_VALUE_EXPRESSION, UNNEST),
+            SET_QUERY, AGGREGATE, DML, DDL));
 
-  /**
-   * Category consisting of regular and special functions.
-   *
-   * <p>Consists of regular functions {@link #OTHER_FUNCTION} and special
-   * functions {@link #ROW}, {@link #TRIM}, {@link #CAST}, {@link #REVERSE},
-   * {@link #JDBC_FN}.
-   */
-  public static final Set<SqlKind> FUNCTION =
-      EnumSet.of(OTHER_FUNCTION, ROW, TRIM, LTRIM, RTRIM, CAST, REVERSE,
-          JDBC_FN, POSITION, CONVERT);
+/**
+ * Category of all SQL statement types.
+ *
+ * <p>Consists of all types in {@link #QUERY}, {@link #DML} and {@link #DDL}.
+ */
+public static final EnumSet<SqlKind> TOP_LEVEL = concat(QUERY, DML, DDL);
 
-  /**
-   * Category of SqlAvgAggFunction.
-   *
-   * <p>Consists of {@link #AVG}, {@link #STDDEV_POP}, {@link #STDDEV_SAMP},
-   * {@link #VAR_POP}, {@link #VAR_SAMP}.
-   */
-  public static final Set<SqlKind> AVG_AGG_FUNCTIONS =
-      EnumSet.of(AVG, STDDEV_POP, STDDEV_SAMP, VAR_POP, VAR_SAMP);
+/**
+ * Category consisting of regular and special functions.
+ *
+ * <p>Consists of regular functions {@link #OTHER_FUNCTION} and special
+ * functions {@link #ROW}, {@link #TRIM}, {@link #CAST}, {@link #REVERSE},
+ * {@link #JDBC_FN}.
+ */
+public static final Set<SqlKind> FUNCTION =
+    EnumSet.of(OTHER_FUNCTION, ROW, TRIM, LTRIM, RTRIM, CAST, REVERSE,
+        JDBC_FN, POSITION, CONVERT);
 
-  /**
-   * Category of SqlCovarAggFunction.
-   *
-   * <p>Consists of {@link #COVAR_POP}, {@link #COVAR_SAMP}, {@link #REGR_SXX},
-   * {@link #REGR_SYY}.
-   */
-  public static final Set<SqlKind> COVAR_AVG_AGG_FUNCTIONS =
-      EnumSet.of(COVAR_POP, COVAR_SAMP, REGR_COUNT, REGR_SXX, REGR_SYY);
+/**
+ * Category of SqlAvgAggFunction.
+ *
+ * <p>Consists of {@link #AVG}, {@link #STDDEV_POP}, {@link #STDDEV_SAMP},
+ * {@link #VAR_POP}, {@link #VAR_SAMP}.
+ */
+public static final Set<SqlKind> AVG_AGG_FUNCTIONS =
+    EnumSet.of(AVG, STDDEV_POP, STDDEV_SAMP, VAR_POP, VAR_SAMP);
 
-  /**
-   * Category of comparison operators.
-   *
-   * <p>Consists of:
-   * {@link #IN},
-   * {@link #NOT_IN},
-   * {@link #EQUALS},
-   * {@link #NOT_EQUALS},
-   * {@link #LESS_THAN},
-   * {@link #GREATER_THAN},
-   * {@link #LESS_THAN_OR_EQUAL},
-   * {@link #GREATER_THAN_OR_EQUAL}.
-   */
-  public static final Set<SqlKind> COMPARISON =
-      EnumSet.of(
-          IN, NOT_IN, EQUALS, NOT_EQUALS,
-          LESS_THAN, GREATER_THAN,
-          GREATER_THAN_OR_EQUAL, LESS_THAN_OR_EQUAL);
+/**
+ * Category of SqlCovarAggFunction.
+ *
+ * <p>Consists of {@link #COVAR_POP}, {@link #COVAR_SAMP}, {@link #REGR_SXX},
+ * {@link #REGR_SYY}.
+ */
+public static final Set<SqlKind> COVAR_AVG_AGG_FUNCTIONS =
+    EnumSet.of(CORR, COVAR_POP, COVAR_SAMP, REGR_COUNT, REGR_SXX, REGR_SYY);
 
-  /**
-   * Comparison operators that order values.
-   *
-   * <p>Consists of:
-   * {@link #LESS_THAN},
-   * {@link #GREATER_THAN},
-   * {@link #LESS_THAN_OR_EQUAL},
-   * {@link #GREATER_THAN_OR_EQUAL}.
-   */
-  public static final Set<SqlKind> ORDER_COMPARISON =
-      EnumSet.of(
-          LESS_THAN, GREATER_THAN,
-          GREATER_THAN_OR_EQUAL, LESS_THAN_OR_EQUAL);
+/**
+ * Category of comparison operators.
+ *
+ * <p>Consists of:
+ * {@link #IN},
+ * {@link #NOT_IN},
+ * {@link #EQUALS},
+ * {@link #NOT_EQUALS},
+ * {@link #LESS_THAN},
+ * {@link #GREATER_THAN},
+ * {@link #LESS_THAN_OR_EQUAL},
+ * {@link #GREATER_THAN_OR_EQUAL}.
+ */
+public static final Set<SqlKind> COMPARISON =
+    EnumSet.of(
+        IN, NOT_IN, EQUALS, NOT_EQUALS,
+        LESS_THAN, GREATER_THAN,
+        GREATER_THAN_OR_EQUAL, LESS_THAN_OR_EQUAL);
 
-  /**
-   * Category of binary arithmetic.
-   *
-   * <p>Consists of:
-   * {@link #PLUS}
-   * {@link #MINUS}
-   * {@link #TIMES}
-   * {@link #DIVIDE}
-   * {@link #MOD}
-   * and the corresponding checked arithmetic operations.
-   */
-  public static final Set<SqlKind> BINARY_ARITHMETIC =
-      EnumSet.of(PLUS, MINUS, TIMES, DIVIDE, MOD,
-          CHECKED_PLUS, CHECKED_MINUS, CHECKED_TIMES, CHECKED_DIVIDE);
+/**
+ * Comparison operators that order values.
+ *
+ * <p>Consists of:
+ * {@link #LESS_THAN},
+ * {@link #GREATER_THAN},
+ * {@link #LESS_THAN_OR_EQUAL},
+ * {@link #GREATER_THAN_OR_EQUAL}.
+ */
+public static final Set<SqlKind> ORDER_COMPARISON =
+    EnumSet.of(
+        LESS_THAN, GREATER_THAN,
+        GREATER_THAN_OR_EQUAL, LESS_THAN_OR_EQUAL);
 
-  public static final Set<SqlKind> CHECKED_ARITHMETIC =
-      EnumSet.of(CHECKED_PLUS, CHECKED_MINUS, CHECKED_TIMES, CHECKED_DIVIDE, CHECKED_MINUS_PREFIX);
+/**
+ * Category of binary arithmetic.
+ *
+ * <p>Consists of:
+ * {@link #PLUS}
+ * {@link #MINUS}
+ * {@link #TIMES}
+ * {@link #DIVIDE}
+ * {@link #MOD}
+ * and the corresponding checked arithmetic operations.
+ */
+public static final Set<SqlKind> BINARY_ARITHMETIC =
+    EnumSet.of(PLUS, MINUS, TIMES, DIVIDE, MOD,
+        CHECKED_PLUS, CHECKED_MINUS, CHECKED_TIMES, CHECKED_DIVIDE);
+
+public static final Set<SqlKind> CHECKED_ARITHMETIC =
+    EnumSet.of(CHECKED_PLUS, CHECKED_MINUS, CHECKED_TIMES, CHECKED_DIVIDE, CHECKED_MINUS_PREFIX);
 
 
-  /**
-   * Category of binary equality.
-   *
-   * <p>Consists of:
-   * {@link #EQUALS}
-   * {@link #NOT_EQUALS}
-   */
-  public static final Set<SqlKind> BINARY_EQUALITY =
-      EnumSet.of(EQUALS, NOT_EQUALS);
+/**
+ * Category of binary equality.
+ *
+ * <p>Consists of:
+ * {@link #EQUALS}
+ * {@link #NOT_EQUALS}
+ */
+public static final Set<SqlKind> BINARY_EQUALITY =
+    EnumSet.of(EQUALS, NOT_EQUALS);
 
-  /**
-   * Category of binary comparison.
-   *
-   * <p>Consists of:
-   * {@link #EQUALS}
-   * {@link #NOT_EQUALS}
-   * {@link #GREATER_THAN}
-   * {@link #GREATER_THAN_OR_EQUAL}
-   * {@link #LESS_THAN}
-   * {@link #LESS_THAN_OR_EQUAL}
-   * {@link #IS_DISTINCT_FROM}
-   * {@link #IS_NOT_DISTINCT_FROM}
-   */
-  public static final Set<SqlKind> BINARY_COMPARISON =
-      EnumSet.of(
-          EQUALS, NOT_EQUALS,
-          GREATER_THAN, GREATER_THAN_OR_EQUAL,
-          LESS_THAN, LESS_THAN_OR_EQUAL,
-          IS_DISTINCT_FROM, IS_NOT_DISTINCT_FROM);
+/**
+ * Category of binary comparison.
+ *
+ * <p>Consists of:
+ * {@link #EQUALS}
+ * {@link #NOT_EQUALS}
+ * {@link #GREATER_THAN}
+ * {@link #GREATER_THAN_OR_EQUAL}
+ * {@link #LESS_THAN}
+ * {@link #LESS_THAN_OR_EQUAL}
+ * {@link #IS_DISTINCT_FROM}
+ * {@link #IS_NOT_DISTINCT_FROM}
+ */
+public static final Set<SqlKind> BINARY_COMPARISON =
+    EnumSet.of(
+        EQUALS, NOT_EQUALS,
+        GREATER_THAN, GREATER_THAN_OR_EQUAL,
+        LESS_THAN, LESS_THAN_OR_EQUAL,
+        IS_DISTINCT_FROM, IS_NOT_DISTINCT_FROM);
 
-  /**
-   * Category of operators that do not depend on the argument order.
-   *
-   * <p>For instance: {@link #AND}, {@link #OR}, {@link #EQUALS},
-   * {@link #LEAST}.
-   *
-   * <p>Note: {@link #PLUS} does depend on the argument oder if argument types
-   * are different.
-   */
-  @API(since = "1.22", status = API.Status.EXPERIMENTAL)
-  public static final Set<SqlKind> SYMMETRICAL =
-      EnumSet.of(AND, OR, EQUALS, NOT_EQUALS,
-          IS_DISTINCT_FROM, IS_NOT_DISTINCT_FROM,
-          GREATEST, LEAST);
+/**
+ * Category of operators that do not depend on the argument order.
+ *
+ * <p>For instance: {@link #AND}, {@link #OR}, {@link #EQUALS},
+ * {@link #LEAST}.
+ *
+ * <p>Note: {@link #PLUS} does depend on the argument oder if argument types
+ * are different.
+ */
+@API(since = "1.22", status = API.Status.EXPERIMENTAL)
+public static final Set<SqlKind> SYMMETRICAL =
+    EnumSet.of(AND, OR, EQUALS, NOT_EQUALS,
+        IS_DISTINCT_FROM, IS_NOT_DISTINCT_FROM,
+        GREATEST, LEAST);
 
-  /**
-   * Category of operators that do not depend on the argument order if argument
-   * types are equal.
-   *
-   * <p>For instance: {@link #PLUS}, {@link #TIMES}.
-   */
-  @API(since = "1.22", status = API.Status.EXPERIMENTAL)
-  public static final Set<SqlKind> SYMMETRICAL_SAME_ARG_TYPE =
-      EnumSet.of(PLUS, TIMES, CHECKED_PLUS, CHECKED_TIMES);
+/**
+ * Category of operators that do not depend on the argument order if argument
+ * types are equal.
+ *
+ * <p>For instance: {@link #PLUS}, {@link #TIMES}.
+ */
+@API(since = "1.22", status = API.Status.EXPERIMENTAL)
+public static final Set<SqlKind> SYMMETRICAL_SAME_ARG_TYPE =
+    EnumSet.of(PLUS, TIMES, CHECKED_PLUS, CHECKED_TIMES);
 
-  /**
-   * Simple binary operators are those operators which expects operands from the same Domain.
-   *
-   * <p>Example: simple comparisons ({@code =}, {@code <}).
-   *
-   * <p>Note: it does not contain {@code IN} because that is defined on D x D^n.
-   */
-  @API(since = "1.24", status = API.Status.EXPERIMENTAL)
-  public static final Set<SqlKind> SIMPLE_BINARY_OPS;
+/**
+ * Simple binary operators are those operators which expects operands from the same Domain.
+ *
+ * <p>Example: simple comparisons ({@code =}, {@code <}).
+ *
+ * <p>Note: it does not contain {@code IN} because that is defined on D x D^n.
+ */
+@API(since = "1.24", status = API.Status.EXPERIMENTAL)
+public static final Set<SqlKind> SIMPLE_BINARY_OPS;
 
-  static {
-    EnumSet<SqlKind> kinds = EnumSet.copyOf(SqlKind.BINARY_ARITHMETIC);
-    kinds.remove(SqlKind.MOD);
-    kinds.addAll(SqlKind.BINARY_COMPARISON);
-    SIMPLE_BINARY_OPS = Sets.immutableEnumSet(kinds);
+static {
+  EnumSet<SqlKind> kinds = EnumSet.copyOf(SqlKind.BINARY_ARITHMETIC);
+  kinds.remove(SqlKind.MOD);
+  kinds.addAll(SqlKind.BINARY_COMPARISON);
+  SIMPLE_BINARY_OPS = Sets.immutableEnumSet(kinds);
+}
+
+/** Lower-case name. */
+public final String lowerName = name().toLowerCase(Locale.ROOT);
+public final String sql;
+
+SqlKind() {
+  sql = name();
+}
+
+SqlKind(String sql) {
+  this.sql = sql;
+}
+
+/** Returns the kind that corresponds to this operator but in the opposite
+ * direction. Or returns this, if this kind is not reversible.
+ *
+ * <p>For example, {@code GREATER_THAN.reverse()} returns {@link #LESS_THAN}.
+ */
+public SqlKind reverse() {
+  switch (this) {
+  case GREATER_THAN:
+    return LESS_THAN;
+  case GREATER_THAN_OR_EQUAL:
+    return LESS_THAN_OR_EQUAL;
+  case LESS_THAN:
+    return GREATER_THAN;
+  case LESS_THAN_OR_EQUAL:
+    return GREATER_THAN_OR_EQUAL;
+  default:
+    return this;
   }
+}
 
-  /** Lower-case name. */
-  public final String lowerName = name().toLowerCase(Locale.ROOT);
-  public final String sql;
-
-  SqlKind() {
-    sql = name();
+/** Returns the kind that you get if you apply NOT to this kind.
+ *
+ * <p>For example, {@code IS_NOT_NULL.negate()} returns {@link #IS_NULL}.
+ *
+ * <p>For {@link #IS_TRUE}, {@link #IS_FALSE}, {@link #IS_NOT_TRUE},
+ * {@link #IS_NOT_FALSE}, nullable inputs need to be treated carefully.
+ *
+ * <p>{@code NOT(IS_TRUE(null))} = {@code NOT false} = {@code true},
+ * while {@code IS_FALSE(null)} = {@code false},
+ * so {@code NOT(IS_TRUE(X))} should be {@code IS_NOT_TRUE(X)}.
+ * On the other hand,
+ * {@code IS_TRUE(NOT(null))} = {@code IS_TRUE(null)} = {@code false}.
+ *
+ * <p>This is why negate() != negateNullSafe() for these operators.
+ */
+public SqlKind negate() {
+  switch (this) {
+  case IS_TRUE:
+    return IS_NOT_TRUE;
+  case IS_FALSE:
+    return IS_NOT_FALSE;
+  case IS_NULL:
+    return IS_NOT_NULL;
+  case IS_NOT_TRUE:
+    return IS_TRUE;
+  case IS_NOT_FALSE:
+    return IS_FALSE;
+  case IS_NOT_NULL:
+    return IS_NULL;
+  case IS_DISTINCT_FROM:
+    return IS_NOT_DISTINCT_FROM;
+  case IS_NOT_DISTINCT_FROM:
+    return IS_DISTINCT_FROM;
+  default:
+    return this;
   }
+}
 
-  SqlKind(String sql) {
-    this.sql = sql;
+/** Returns the kind that you get if you negate this kind.
+ * To conform to null semantics, null value should not be compared.
+ *
+ * <p>For {@link #IS_TRUE}, {@link #IS_FALSE}, {@link #IS_NOT_TRUE} and
+ * {@link #IS_NOT_FALSE}, nullable inputs need to be treated carefully:
+ *
+ * <ul>
+ * <li>NOT(IS_TRUE(null)) = NOT(false) = true
+ * <li>IS_TRUE(NOT(null)) = IS_TRUE(null) = false
+ * <li>IS_FALSE(null) = false
+ * <li>IS_NOT_TRUE(null) = true
+ * </ul>
+ */
+public SqlKind negateNullSafe() {
+  switch (this) {
+  case EQUALS:
+    return NOT_EQUALS;
+  case NOT_EQUALS:
+    return EQUALS;
+  case LESS_THAN:
+    return GREATER_THAN_OR_EQUAL;
+  case GREATER_THAN:
+    return LESS_THAN_OR_EQUAL;
+  case LESS_THAN_OR_EQUAL:
+    return GREATER_THAN;
+  case GREATER_THAN_OR_EQUAL:
+    return LESS_THAN;
+  case IN:
+    return NOT_IN;
+  case NOT_IN:
+    return IN;
+  case DRUID_IN:
+    return DRUID_NOT_IN;
+  case DRUID_NOT_IN:
+    return DRUID_IN;
+  case IS_TRUE:
+    return IS_FALSE;
+  case IS_FALSE:
+    return IS_TRUE;
+  case IS_NOT_TRUE:
+    return IS_NOT_FALSE;
+  case IS_NOT_FALSE:
+    return IS_NOT_TRUE;
+  // (NOT x) IS NULL => x IS NULL
+  // Similarly (NOT x) IS NOT NULL => x IS NOT NULL
+  case IS_NOT_NULL:
+  case IS_NULL:
+    return this;
+  default:
+    return this.negate();
   }
+}
 
-  /** Returns the kind that corresponds to this operator but in the opposite
-   * direction. Or returns this, if this kind is not reversible.
-   *
-   * <p>For example, {@code GREATER_THAN.reverse()} returns {@link #LESS_THAN}.
-   */
-  public SqlKind reverse() {
-    switch (this) {
-    case GREATER_THAN:
-      return LESS_THAN;
-    case GREATER_THAN_OR_EQUAL:
-      return LESS_THAN_OR_EQUAL;
-    case LESS_THAN:
-      return GREATER_THAN;
-    case LESS_THAN_OR_EQUAL:
-      return GREATER_THAN_OR_EQUAL;
-    default:
-      return this;
-    }
-  }
+/**
+ * Returns whether this {@code SqlKind} belongs to a given category.
+ *
+ * <p>A category is a collection of kinds, not necessarily disjoint. For
+ * example, QUERY is { SELECT, UNION, INTERSECT, EXCEPT, VALUES, ORDER_BY,
+ * EXPLICIT_TABLE }.
+ *
+ * @param category Category
+ * @return Whether this kind belongs to the given category
+ */
+public final boolean belongsTo(Collection<SqlKind> category) {
+  return category.contains(this);
+}
 
-  /** Returns the kind that you get if you apply NOT to this kind.
-   *
-   * <p>For example, {@code IS_NOT_NULL.negate()} returns {@link #IS_NULL}.
-   *
-   * <p>For {@link #IS_TRUE}, {@link #IS_FALSE}, {@link #IS_NOT_TRUE},
-   * {@link #IS_NOT_FALSE}, nullable inputs need to be treated carefully.
-   *
-   * <p>{@code NOT(IS_TRUE(null))} = {@code NOT false} = {@code true},
-   * while {@code IS_FALSE(null)} = {@code false},
-   * so {@code NOT(IS_TRUE(X))} should be {@code IS_NOT_TRUE(X)}.
-   * On the other hand,
-   * {@code IS_TRUE(NOT(null))} = {@code IS_TRUE(null)} = {@code false}.
-   *
-   * <p>This is why negate() != negateNullSafe() for these operators.
-   */
-  public SqlKind negate() {
-    switch (this) {
-    case IS_TRUE:
-      return IS_NOT_TRUE;
-    case IS_FALSE:
-      return IS_NOT_FALSE;
-    case IS_NULL:
-      return IS_NOT_NULL;
-    case IS_NOT_TRUE:
-      return IS_TRUE;
-    case IS_NOT_FALSE:
-      return IS_FALSE;
-    case IS_NOT_NULL:
-      return IS_NULL;
-    case IS_DISTINCT_FROM:
-      return IS_NOT_DISTINCT_FROM;
-    case IS_NOT_DISTINCT_FROM:
-      return IS_DISTINCT_FROM;
-    default:
-      return this;
-    }
+/**
+ * If this kind represents a non-standard function, return OTHER_FUNCTION, otherwise
+ * return this.  Do not add standard functions here.
+ */
+public SqlKind getFunctionKind() {
+  switch (this) {
+  case CONVERT:
+  case TRANSLATE:
+  case POSITION:
+  case DECODE:
+  case NVL:
+  case NVL2:
+  case GREATEST:
+  case GREATEST_PG:
+  case CONCAT2:
+  case CONCAT_WITH_NULL:
+  case CONCAT_WS_MSSQL:
+  case CONCAT_WS_POSTGRESQL:
+  case CONCAT_WS_SPARK:
+  case IF:
+  case LEAST:
+  case LEAST_PG:
+  case LOG:
+  case DATE_ADD:
+  case DATE_TRUNC:
+  case DATE_SUB:
+  case TIME_ADD:
+  case TIME_SUB:
+  case TIMESTAMP_ADD:
+  case TIMESTAMP_DIFF:
+  case TIMESTAMP_SUB:
+  case SAFE_CAST:
+  case FLOOR:
+  case CEIL:
+  case TRIM:
+  case LTRIM:
+  case RTRIM:
+  case ARRAY_APPEND:
+  case ARRAY_COMPACT:
+  case ARRAY_CONCAT:
+  case ARRAY_CONTAINS:
+  case ARRAY_DISTINCT:
+  case ARRAY_EXCEPT:
+  case ARRAY_INSERT:
+  case ARRAY_INTERSECT:
+  case ARRAY_JOIN:
+  case ARRAY_LENGTH:
+  case ARRAY_MAX:
+  case ARRAY_MIN:
+  case ARRAY_POSITION:
+  case ARRAY_PREPEND:
+  case ARRAY_REMOVE:
+  case ARRAY_REPEAT:
+  case ARRAY_REVERSE:
+  case ARRAY_SIZE:
+  case ARRAY_SLICE:
+  case ARRAY_TO_STRING:
+  case ARRAY_UNION:
+  case ARRAYS_OVERLAP:
+  case ARRAYS_ZIP:
+  case SORT_ARRAY:
+  case MAP_CONCAT:
+  case MAP_ENTRIES:
+  case MAP_KEYS:
+  case MAP_VALUES:
+  case MAP_CONTAINS_KEY:
+  case MAP_FROM_ARRAYS:
+  case MAP_FROM_ENTRIES:
+  case STR_TO_MAP:
+  case REVERSE:
+  case REVERSE_SPARK:
+  case SOUNDEX_SPARK:
+  case SUBSTR_BIG_QUERY:
+  case SUBSTR_MYSQL:
+  case SUBSTR_ORACLE:
+  case SUBSTR_POSTGRESQL:
+  case CHAR_LENGTH:
+  case ENDS_WITH:
+  case STARTS_WITH:
+  case JSON_TYPE:
+  case CONTAINS_SUBSTR:
+  case ST_DWITHIN:
+  case ST_POINT:
+  case ST_POINT3:
+  case ST_MAKE_LINE:
+  case ST_CONTAINS:
+  case HILBERT:
+    return OTHER_FUNCTION;
+  default:
+    return this;
   }
+}
 
-  /** Returns the kind that you get if you negate this kind.
-   * To conform to null semantics, null value should not be compared.
-   *
-   * <p>For {@link #IS_TRUE}, {@link #IS_FALSE}, {@link #IS_NOT_TRUE} and
-   * {@link #IS_NOT_FALSE}, nullable inputs need to be treated carefully:
-   *
-   * <ul>
-   * <li>NOT(IS_TRUE(null)) = NOT(false) = true
-   * <li>IS_TRUE(NOT(null)) = IS_TRUE(null) = false
-   * <li>IS_FALSE(null) = false
-   * <li>IS_NOT_TRUE(null) = true
-   * </ul>
-   */
-  public SqlKind negateNullSafe() {
-    switch (this) {
-    case EQUALS:
-      return NOT_EQUALS;
-    case NOT_EQUALS:
-      return EQUALS;
-    case LESS_THAN:
-      return GREATER_THAN_OR_EQUAL;
-    case GREATER_THAN:
-      return LESS_THAN_OR_EQUAL;
-    case LESS_THAN_OR_EQUAL:
-      return GREATER_THAN;
-    case GREATER_THAN_OR_EQUAL:
-      return LESS_THAN;
-    case IN:
-      return NOT_IN;
-    case NOT_IN:
-      return IN;
-    case DRUID_IN:
-      return DRUID_NOT_IN;
-    case DRUID_NOT_IN:
-      return DRUID_IN;
-    case IS_TRUE:
-      return IS_FALSE;
-    case IS_FALSE:
-      return IS_TRUE;
-    case IS_NOT_TRUE:
-      return IS_NOT_FALSE;
-    case IS_NOT_FALSE:
-      return IS_NOT_TRUE;
-     // (NOT x) IS NULL => x IS NULL
-     // Similarly (NOT x) IS NOT NULL => x IS NOT NULL
-    case IS_NOT_NULL:
-    case IS_NULL:
-      return this;
-    default:
-      return this.negate();
-    }
+@SafeVarargs
+private static <E extends Enum<E>> EnumSet<E> concat(EnumSet<E> set0,
+    EnumSet<E>... sets) {
+  EnumSet<E> set = set0.clone();
+  for (EnumSet<E> s : sets) {
+    set.addAll(s);
   }
-
-  /**
-   * Returns whether this {@code SqlKind} belongs to a given category.
-   *
-   * <p>A category is a collection of kinds, not necessarily disjoint. For
-   * example, QUERY is { SELECT, UNION, INTERSECT, EXCEPT, VALUES, ORDER_BY,
-   * EXPLICIT_TABLE }.
-   *
-   * @param category Category
-   * @return Whether this kind belongs to the given category
-   */
-  public final boolean belongsTo(Collection<SqlKind> category) {
-    return category.contains(this);
-  }
-
-  /**
-   * If this kind represents a non-standard function, return OTHER_FUNCTION, otherwise
-   * return this.  Do not add standard functions here.
-   */
-  public SqlKind getFunctionKind() {
-    switch (this) {
-    case CONVERT:
-    case TRANSLATE:
-    case POSITION:
-    case DECODE:
-    case NVL:
-    case NVL2:
-    case GREATEST:
-    case GREATEST_PG:
-    case CONCAT2:
-    case CONCAT_WITH_NULL:
-    case CONCAT_WS_MSSQL:
-    case CONCAT_WS_POSTGRESQL:
-    case CONCAT_WS_SPARK:
-    case IF:
-    case LEAST:
-    case LEAST_PG:
-    case LOG:
-    case DATE_ADD:
-    case DATE_TRUNC:
-    case DATE_SUB:
-    case TIME_ADD:
-    case TIME_SUB:
-    case TIMESTAMP_ADD:
-    case TIMESTAMP_DIFF:
-    case TIMESTAMP_SUB:
-    case SAFE_CAST:
-    case FLOOR:
-    case CEIL:
-    case TRIM:
-    case LTRIM:
-    case RTRIM:
-    case ARRAY_APPEND:
-    case ARRAY_COMPACT:
-    case ARRAY_CONCAT:
-    case ARRAY_CONTAINS:
-    case ARRAY_DISTINCT:
-    case ARRAY_EXCEPT:
-    case ARRAY_INSERT:
-    case ARRAY_INTERSECT:
-    case ARRAY_JOIN:
-    case ARRAY_LENGTH:
-    case ARRAY_MAX:
-    case ARRAY_MIN:
-    case ARRAY_POSITION:
-    case ARRAY_PREPEND:
-    case ARRAY_REMOVE:
-    case ARRAY_REPEAT:
-    case ARRAY_REVERSE:
-    case ARRAY_SIZE:
-    case ARRAY_SLICE:
-    case ARRAY_TO_STRING:
-    case ARRAY_UNION:
-    case ARRAYS_OVERLAP:
-    case ARRAYS_ZIP:
-    case SORT_ARRAY:
-    case MAP_CONCAT:
-    case MAP_ENTRIES:
-    case MAP_KEYS:
-    case MAP_VALUES:
-    case MAP_CONTAINS_KEY:
-    case MAP_FROM_ARRAYS:
-    case MAP_FROM_ENTRIES:
-    case STR_TO_MAP:
-    case REVERSE:
-    case REVERSE_SPARK:
-    case SOUNDEX_SPARK:
-    case SUBSTR_BIG_QUERY:
-    case SUBSTR_MYSQL:
-    case SUBSTR_ORACLE:
-    case SUBSTR_POSTGRESQL:
-    case CHAR_LENGTH:
-    case ENDS_WITH:
-    case STARTS_WITH:
-    case JSON_TYPE:
-    case CONTAINS_SUBSTR:
-    case ST_DWITHIN:
-    case ST_POINT:
-    case ST_POINT3:
-    case ST_MAKE_LINE:
-    case ST_CONTAINS:
-    case HILBERT:
-      return OTHER_FUNCTION;
-    default:
-      return this;
-    }
-  }
-
-  @SafeVarargs
-  private static <E extends Enum<E>> EnumSet<E> concat(EnumSet<E> set0,
-      EnumSet<E>... sets) {
-    EnumSet<E> set = set0.clone();
-    for (EnumSet<E> s : sets) {
-      set.addAll(s);
-    }
-    return set;
-  }
+  return set;
+}
 }
