@@ -27,7 +27,6 @@ import org.apache.calcite.rel.core.Filter;
 import org.apache.calcite.rel.core.Join;
 import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.rel.core.RelFactories;
-import org.apache.calcite.rel.metadata.RelMetadataQuery;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rex.*;
 import org.apache.calcite.sql.SqlKind;
@@ -86,7 +85,8 @@ protected void perform(RelOptRuleCall call, @Nullable Filter filter,
 
     if (CalciteForkSettings.optimizeFilterWithOr() && filter != null)
     {
-        Filter newFilter = optimizeFilterWithOR(filter, call.getMetadataQuery());
+        OptimizeFilterWithOR extractOrExpressionUtil = new OptimizeFilterWithOR();
+        Filter newFilter = extractOrExpressionUtil.OptimizeFilterWithOR(filter, call.getMetadataQuery());
         if(newFilter != null)
         {
             filter = newFilter;
@@ -238,180 +238,6 @@ protected void perform(RelOptRuleCall call, @Nullable Filter filter,
         RexUtil.fixUp(rexBuilder, aboveFilters,
             RelOptUtil.getFieldTypeList(relBuilder.peek().getRowType())));
     call.transformTo(relBuilder.build());
-}
-
-private static Filter optimizeFilterWithOR(Filter filter, RelMetadataQuery mq)
-{
-    Filter filterCopy = filter.copy(filter.getTraitSet(), filter.getInput(), filter.getCondition());
-    Set<RexTableInputRef.RelTableRef> tableSet = mq.getTableReferences(filterCopy);
-    if (tableSet == null)
-    {
-        return null;
-    }
-    Set<String> tableNames = getTableNames(tableSet);
-    List<RexNode> newExpressions = new ArrayList<>();
-    if (filter.getCondition().isA(SqlKind.OR))
-    {
-        RexNode orClause = filter.getCondition();
-        if (orClause.isA(SqlKind.OR))
-        {
-            for (String tableName : tableNames)
-            {
-                if (tableName == null)
-                {
-                    continue;
-                }
-                RexNode newExpression = extractOrClause(filter, orClause, tableName, mq);
-                if (newExpression != null)
-                {
-                    newExpressions.add(newExpression);
-                }
-            }
-        }
-    }
-    else if (filter.getCondition().isA(SqlKind.AND))
-    {
-        List<RexNode> conjuncts = RelOptUtil.conjunctions(filter.getCondition());
-        for (RexNode conjunct : conjuncts)
-        {
-            if (conjunct.isA(SqlKind.OR))
-            {
-                for (String tableName : tableNames)
-                {
-                    if (tableName == null)
-                    {
-                        continue;
-                    }
-                    RexNode newExpression = extractOrClause(filter, conjunct, tableName, mq);
-                    if (newExpression != null)
-                    {
-                        newExpressions.add(newExpression);
-                    }
-                }
-            }
-        }
-    }
-
-    // Don't create a new Filter node if newExpressions is a singleton expression
-    if (!newExpressions.isEmpty() && newExpressions.size() > 1)
-    {
-        List<RexNode> finalRexNodeList = new ArrayList<>();
-        finalRexNodeList.add(filter.getCondition());
-        finalRexNodeList.addAll(newExpressions);
-        RexNode newRexNode = RexUtil.composeConjunction(filter.getCluster().getRexBuilder(), finalRexNodeList, true);
-        // Create a new filter with the rewritten condition
-        Filter newFilter = filter.copy(filter.getTraitSet(), filter.getInput(), newRexNode);
-        // Replace the original filter with the new filter
-        return newFilter;
-    }
-    return null;
-}
-
-private static RexNode extractOrClause(Filter filter, RexNode orClause, String table, RelMetadataQuery mq)
-{
-    List<RexNode> orArgs = RelOptUtil.disjunctions(orClause);
-    List<RexNode> clauselist = new ArrayList<>();
-    for (RexNode orArg : orArgs)
-    {
-        List<RexNode> subClauses = new ArrayList<>();
-        RexNode subclause = null;
-        /* OR arguments should be ANDs or expression from same table*/
-        if (orArg.isA(SqlKind.AND))
-        {
-            List<RexNode> andArgs = RelOptUtil.conjunctions(orArg);
-            for (RexNode andArg : andArgs)
-            {
-                Filter filterCopy = filter.copy(filter.getTraitSet(), filter.getInput(), andArg);
-                Set<RexNode> expressionWithTableNames = mq.getExpressionLineage(filterCopy, filterCopy.getCondition());
-                if (expressionWithTableNames == null)
-                {
-                    continue;
-                }
-                Set<String> namesOfTablesInvolved = getTablesInvolved(expressionWithTableNames);
-                if (namesOfTablesInvolved.size() == 1 && namesOfTablesInvolved.iterator().next().equals(table))
-                {
-                    subClauses.add(andArg);
-                }
-            }
-        }
-        else
-        {
-            Filter filterCopy = filter.copy(filter.getTraitSet(), filter.getInput(), orArg);
-            Set<RexNode> expressionWithTableNames = mq.getExpressionLineage(filterCopy, filterCopy.getCondition());
-            if (expressionWithTableNames == null)
-            {
-                continue;
-            }
-            Set<String> namesOfTablesInvolved = getTablesInvolved(expressionWithTableNames);
-            if (namesOfTablesInvolved.size() == 1 && namesOfTablesInvolved.iterator().next().equals(table))
-            {
-                subClauses.add(orArg);
-            }
-        }
-        if (subClauses.isEmpty())
-        {
-            return null;
-        }
-        /*
-         * OK, add subclause(s) to the result OR.  If we found more than one,
-         * we need an AND node.  But if we found only one, and it is itself an
-         * OR node, add its subclauses to the result instead; this is needed
-         * to preserve AND/OR flatness (ie, no OR directly underneath OR).
-         */
-        subclause = RexUtil.composeConjunction(filter.getCluster().getRexBuilder(), subClauses, true);
-        if (subclause.isA(SqlKind.OR))
-        {
-            clauselist.add(subclause);
-        }
-        else
-        {
-            clauselist.add(subclause);
-        }
-    }
-    /*
-     * If we got a restriction clause from every arm, wrap them up in an OR
-     * node.  (In theory the OR node might be unnecessary, if there was only
-     * one arm --- but then the input OR node was also redundant.)
-     */
-
-    if (!clauselist.isEmpty())
-    {
-        return RexUtil.composeDisjunction(filter.getCluster().getRexBuilder(), clauselist, true);
-    }
-    else
-    {
-        return null;
-    }
-}
-
-private static Set<String> getTableNames(Set<RexTableInputRef.RelTableRef> tableSet)
-{
-    Set<String> tableNames = new HashSet<>();
-    for (RexTableInputRef.RelTableRef table : tableSet)
-    {
-        tableNames.add(table.toString());
-    }
-    return tableNames;
-}
-
-private static Set<String> getTablesInvolved(Set<RexNode> expressionWithTableNames)
-{
-    Set<String> namesOfTablesInvolved = new HashSet<>();
-    for (RexNode ex : expressionWithTableNames)
-    {
-        if (ex instanceof RexCall)
-        {
-            List<RexNode> operands = ((RexCall) ex).getOperands();
-            for (RexNode component : operands)
-            {
-                if (component instanceof RexTableInputRef)
-                {
-                    namesOfTablesInvolved.add(((RexTableInputRef) component).getTableRef().toString());
-                }
-            }
-        }
-    }
-    return namesOfTablesInvolved;
 }
 
 /**
