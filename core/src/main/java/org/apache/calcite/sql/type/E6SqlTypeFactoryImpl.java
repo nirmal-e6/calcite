@@ -12,7 +12,6 @@ package org.apache.calcite.sql.type;
 import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFamily;
-import org.apache.calcite.rel.type.RelDataTypeImpl;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.sql.SqlCollation;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -525,51 +524,6 @@ private static void assertBasic(SqlTypeName typeName)
     assert typeName != SqlTypeName.MAP : "use createMapType() instead";
     assert typeName != SqlTypeName.ROW : "use createStructType() instead";
     assert !SqlTypeName.INTERVAL_TYPES.contains(typeName) : "use createSqlIntervalType() instead";
-}
-
-private static class EmbeddingVectorType extends RelDataTypeImpl
-{
-    EmbeddingVectorType()
-    {
-        super();
-    }
-
-    @Override
-    public SqlTypeName getSqlTypeName()
-    {
-        return SqlTypeName.OTHER;
-    }
-
-    @Override
-    public boolean isNullable()
-    {
-        return true;
-    }
-
-    @Override
-    public int getPrecision()
-    {
-        return -1;
-    }
-
-    @Override
-    public int getScale()
-    {
-        return -1;
-    }
-
-    @Override
-    public String getFullTypeString()
-    {
-        return "EMBEDDING_VECTOR";
-    }
-
-    @Override
-    protected void generateTypeString(StringBuilder sb, boolean withDetail)
-    {
-        sb.append(getFullTypeString());
-        sb.append(" Embedding Vector");
-    }
 }
 
 } /// ////// End of class
