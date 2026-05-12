@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.calcite.sql;
 
 import org.apache.calcite.sql.fun.SqlInternalOperators;
@@ -30,291 +31,312 @@ import java.util.List;
 
 import static java.util.Objects.requireNonNull;
 
+// Shaded to support Except() Clause in select
+
 /**
  * A <code>SqlSelect</code> is a node of a parse tree which represents a select
  * statement. It warrants its own node type just because we have a lot of
  * methods to put somewhere.
  */
 public class SqlSelect extends SqlCall {
-  //~ Static fields/initializers ---------------------------------------------
+//~ Static fields/initializers ---------------------------------------------
 
-  // constants representing operand positions
-  public static final int FROM_OPERAND = 2;
-  public static final int WHERE_OPERAND = 3;
-  public static final int HAVING_OPERAND = 5;
-  public static final int QUALIFY_OPERAND = 7;
+// constants representing operand positions
+public static final int FROM_OPERAND = 3;
+public static final int WHERE_OPERAND = 4;
+public static final int HAVING_OPERAND = 6;
+public static final int QUALIFY_OPERAND = 8;
 
-  SqlNodeList keywordList;
-  SqlNodeList selectList;
-  @Nullable SqlNode from;
-  @Nullable SqlNode where;
-  @Nullable SqlNodeList groupBy;
-  @Nullable SqlNode having;
-  SqlNodeList windowDecls;
-  @Nullable SqlNode qualify;
-  @Nullable SqlNodeList orderBy;
-  @Nullable SqlNode offset;
-  @Nullable SqlNode fetch;
-  @Nullable SqlNodeList hints;
+SqlNodeList keywordList;
+SqlNodeList selectList;
+SqlNodeList exceptList; // E6data Variable for Except
+@Nullable SqlNode from;
+@Nullable SqlNode where;
+@Nullable SqlNodeList groupBy;
+@Nullable SqlNode having;
+SqlNodeList windowDecls;
+@Nullable SqlNode qualify;
+@Nullable SqlNodeList orderBy;
+@Nullable SqlNode offset;
+@Nullable SqlNode fetch;
+@Nullable SqlNodeList hints;
 
-  //~ Constructors -----------------------------------------------------------
+//~ Constructors -----------------------------------------------------------
 
-  public SqlSelect(SqlParserPos pos,
-      @Nullable SqlNodeList keywordList,
-      SqlNodeList selectList,
-      @Nullable SqlNode from,
-      @Nullable SqlNode where,
-      @Nullable SqlNodeList groupBy,
-      @Nullable SqlNode having,
-      @Nullable SqlNodeList windowDecls,
-      @Nullable SqlNode qualify,
-      @Nullable SqlNodeList orderBy,
-      @Nullable SqlNode offset,
-      @Nullable SqlNode fetch,
-      @Nullable SqlNodeList hints) {
+public SqlSelect(SqlParserPos pos,
+    @Nullable SqlNodeList keywordList,
+    SqlNodeList selectList,
+    @Nullable SqlNodeList exceptList,
+    @Nullable SqlNode from,
+    @Nullable SqlNode where,
+    @Nullable SqlNodeList groupBy,
+    @Nullable SqlNode having,
+    @Nullable SqlNodeList windowDecls,
+    @Nullable SqlNode qualify,
+    @Nullable SqlNodeList orderBy,
+    @Nullable SqlNode offset,
+    @Nullable SqlNode fetch,
+    @Nullable SqlNodeList hints) {
     super(pos);
     this.keywordList = requireNonNull(keywordList != null
-        ? keywordList : new SqlNodeList(pos));
+                                      ? keywordList : new SqlNodeList(pos));
     this.selectList = requireNonNull(selectList, "selectList");
+    this.exceptList = exceptList;
     this.from = from;
     this.where = where;
     this.groupBy = groupBy;
     this.having = having;
     this.windowDecls = requireNonNull(windowDecls != null
-        ? windowDecls : new SqlNodeList(pos));
+                                      ? windowDecls : new SqlNodeList(pos));
     this.qualify = qualify;
     this.orderBy = orderBy;
     this.offset = offset;
     this.fetch = fetch;
     this.hints = hints;
-  }
+}
 
-  /** deprecated, without {@code qualify}. */
-  @Deprecated // to be removed before 2.0
-  public SqlSelect(SqlParserPos pos,
-      @Nullable SqlNodeList keywordList,
-      SqlNodeList selectList,
-      @Nullable SqlNode from,
-      @Nullable SqlNode where,
-      @Nullable SqlNodeList groupBy,
-      @Nullable SqlNode having,
-      @Nullable SqlNodeList windowDecls,
-      @Nullable SqlNodeList orderBy,
-      @Nullable SqlNode offset,
-      @Nullable SqlNode fetch,
-      @Nullable SqlNodeList hints) {
-    this(pos, keywordList, selectList, from, where, groupBy, having,
-        windowDecls, null, orderBy, offset, fetch, hints);
-  }
+/** Legacy constructor without {@code exceptList}. */
+public SqlSelect(SqlParserPos pos,
+    @Nullable SqlNodeList keywordList,
+    SqlNodeList selectList,
+    @Nullable SqlNode from,
+    @Nullable SqlNode where,
+    @Nullable SqlNodeList groupBy,
+    @Nullable SqlNode having,
+    @Nullable SqlNodeList windowDecls,
+    @Nullable SqlNode qualify,
+    @Nullable SqlNodeList orderBy,
+    @Nullable SqlNode offset,
+    @Nullable SqlNode fetch,
+    @Nullable SqlNodeList hints) {
+    this(pos, keywordList, selectList, null, from, where, groupBy, having,
+        windowDecls, qualify, orderBy, offset, fetch, hints);
+}
 
-  //~ Methods ----------------------------------------------------------------
+//~ Methods ----------------------------------------------------------------
 
-  @Override public SqlOperator getOperator() {
+@Override public SqlOperator getOperator() {
     return SqlSelectOperator.INSTANCE;
-  }
+}
 
-  @Override public SqlKind getKind() {
+@Override public SqlKind getKind() {
     return SqlKind.SELECT;
-  }
+}
 
-  @SuppressWarnings("nullness")
-  @Override public List<SqlNode> getOperandList() {
-    return ImmutableNullableList.of(keywordList, selectList, from, where,
+@SuppressWarnings("nullness")
+@Override public List<SqlNode> getOperandList() {
+    return ImmutableNullableList.of(keywordList, selectList, exceptList,from, where,
         groupBy, having, windowDecls, qualify, orderBy, offset, fetch, hints);
-  }
+}
 
-  @Override public void setOperand(int i, @Nullable SqlNode operand) {
+@Override public void setOperand(int i, @Nullable SqlNode operand) {
     switch (i) {
-    case 0:
-      keywordList = requireNonNull((SqlNodeList) operand);
-      break;
-    case 1:
-      selectList = requireNonNull((SqlNodeList) operand);
-      break;
-    case 2:
-      from = operand;
-      break;
-    case 3:
-      where = operand;
-      break;
-    case 4:
-      groupBy = (SqlNodeList) operand;
-      break;
-    case 5:
-      having = operand;
-      break;
-    case 6:
-      windowDecls = requireNonNull((SqlNodeList) operand);
-      break;
-    case 7:
-      qualify = operand;
-      break;
-    case 8:
-      orderBy = (SqlNodeList) operand;
-      break;
-    case 9:
-      offset = operand;
-      break;
-    case 10:
-      fetch = operand;
-      break;
-    default:
-      throw new AssertionError(i);
+        case 0:
+            keywordList = requireNonNull((SqlNodeList) operand);
+            break;
+        case 1:
+            selectList = requireNonNull((SqlNodeList) operand);
+            break;
+        // E6data change for Except clause
+        case 2:
+            exceptList = (SqlNodeList) operand;
+            break;
+        case 3:
+            from = operand;
+            break;
+        case 4:
+            where = operand;
+            break;
+        case 5:
+            groupBy = (SqlNodeList) operand;
+            break;
+        case 6:
+            having = operand;
+            break;
+        case 7:
+            windowDecls = requireNonNull((SqlNodeList) operand);
+            break;
+        case 8:
+            qualify = operand;
+            break;
+        case 9:
+            orderBy = (SqlNodeList) operand;
+            break;
+        case 10:
+            offset = operand;
+            break;
+        case 11:
+            fetch = operand;
+            break;
+        default:
+            throw new AssertionError(i);
     }
-  }
+}
 
-  public final boolean isDistinct() {
+public final boolean isDistinct() {
     return getModifierNode(SqlSelectKeyword.DISTINCT) != null;
-  }
+}
 
-  public final @Nullable SqlNode getModifierNode(SqlSelectKeyword modifier) {
+public final @Nullable SqlNode getModifierNode(SqlSelectKeyword modifier) {
     for (SqlNode keyword : keywordList) {
-      SqlSelectKeyword keyword2 =
-          ((SqlLiteral) keyword).symbolValue(SqlSelectKeyword.class);
-      if (keyword2 == modifier) {
-        return keyword;
-      }
+        SqlSelectKeyword keyword2 =
+            ((SqlLiteral) keyword).symbolValue(SqlSelectKeyword.class);
+        if (keyword2 == modifier) {
+            return keyword;
+        }
     }
     return null;
-  }
+}
 
-  @Pure
-  public final @Nullable SqlNode getFrom() {
+@Pure
+public final @Nullable SqlNode getFrom() {
     return from;
-  }
+}
 
-  public void setFrom(@Nullable SqlNode from) {
+public void setFrom(@Nullable SqlNode from) {
     this.from = from;
-  }
+}
 
-  @Pure
-  public final @Nullable SqlNodeList getGroup() {
+@Pure
+public final @Nullable SqlNodeList getGroup() {
     return groupBy;
-  }
+}
 
-  public void setGroupBy(@Nullable SqlNodeList groupBy) {
+public void setGroupBy(@Nullable SqlNodeList groupBy) {
     this.groupBy = groupBy;
-  }
+}
 
-  @Pure
-  public final @Nullable SqlNode getHaving() {
+@Pure
+public final @Nullable SqlNode getHaving() {
     return having;
-  }
+}
 
-  public void setHaving(@Nullable SqlNode having) {
+public void setHaving(@Nullable SqlNode having) {
     this.having = having;
-  }
+}
 
-  @Pure
-  public final SqlNodeList getSelectList() {
+@Pure
+public final SqlNodeList getSelectList() {
     return selectList;
-  }
+}
 
-  public void setSelectList(SqlNodeList selectList) {
+public void setSelectList(SqlNodeList selectList) {
     this.selectList = selectList;
-  }
+}
 
-  @Pure
-  public final @Nullable SqlNode getWhere() {
+// E6data methods : getExcept, setExcept
+@Pure
+public final @Nullable SqlNodeList getExcept()
+{
+    return exceptList;
+}
+
+public void setExcept(@Nullable SqlNodeList except)
+{
+    this.exceptList = except;
+}
+
+@Pure
+public final @Nullable SqlNode getWhere() {
     return where;
-  }
+}
 
-  public void setWhere(@Nullable SqlNode whereClause) {
+public void setWhere(@Nullable SqlNode whereClause) {
     this.where = whereClause;
-  }
+}
 
-  public final SqlNodeList getWindowList() {
+public final SqlNodeList getWindowList() {
     return windowDecls;
-  }
+}
 
-  @Pure
-  public final @Nullable SqlNode getQualify() {
+@Pure
+public final @Nullable SqlNode getQualify() {
     return qualify;
-  }
+}
 
-  public void setQualify(@Nullable SqlNode qualify) {
+public void setQualify(@Nullable SqlNode qualify) {
     this.qualify = qualify;
-  }
+}
 
-  @Pure
-  public final @Nullable SqlNodeList getOrderList() {
+@Pure
+public final @Nullable SqlNodeList getOrderList() {
     return orderBy;
-  }
+}
 
-  public void setOrderBy(@Nullable SqlNodeList orderBy) {
+public void setOrderBy(@Nullable SqlNodeList orderBy) {
     this.orderBy = orderBy;
-  }
+}
 
-  @Pure
-  public final @Nullable SqlNode getOffset() {
+@Pure
+public final @Nullable SqlNode getOffset() {
     return offset;
-  }
+}
 
-  public void setOffset(@Nullable SqlNode offset) {
+public void setOffset(@Nullable SqlNode offset) {
     this.offset = offset;
-  }
+}
 
-  @Pure
-  public final @Nullable SqlNode getFetch() {
+@Pure
+public final @Nullable SqlNode getFetch() {
     return fetch;
-  }
+}
 
-  public void setFetch(@Nullable SqlNode fetch) {
+public void setFetch(@Nullable SqlNode fetch) {
     this.fetch = fetch;
-  }
+}
 
-  public void setHints(@Nullable SqlNodeList hints) {
+public void setHints(@Nullable SqlNodeList hints) {
     this.hints = hints;
-  }
+}
 
-  @Pure
-  public @Nullable SqlNodeList getHints() {
+@Pure
+public @Nullable SqlNodeList getHints() {
     return this.hints;
-  }
+}
 
-  @EnsuresNonNullIf(expression = "hints", result = true)
-  public boolean hasHints() {
+@EnsuresNonNullIf(expression = "hints", result = true)
+public boolean hasHints() {
     // The hints may be passed as null explicitly.
     return this.hints != null && !this.hints.isEmpty();
-  }
+}
 
-  @Override public void validate(SqlValidator validator, SqlValidatorScope scope) {
+@Override public void validate(SqlValidator validator, SqlValidatorScope scope) {
     validator.validateQuery(this, scope, validator.getUnknownType());
-  }
+}
 
-  // Override SqlCall, to introduce a sub-query frame.
-  @Override public void unparse(SqlWriter writer, int leftPrec, int rightPrec) {
+// Override SqlCall, to introduce a sub-query frame.
+@Override public void unparse(SqlWriter writer, int leftPrec, int rightPrec) {
     if (!writer.inQuery()
         || getFetch() != null
-            && (leftPrec > SqlInternalOperators.FETCH.getLeftPrec()
-                || rightPrec > SqlInternalOperators.FETCH.getLeftPrec())
+        && (leftPrec > SqlInternalOperators.FETCH.getLeftPrec()
+        || rightPrec > SqlInternalOperators.FETCH.getLeftPrec())
         || getOffset() != null
-            && (leftPrec > SqlInternalOperators.OFFSET.getLeftPrec()
-                || rightPrec > SqlInternalOperators.OFFSET.getLeftPrec())
+        && (leftPrec > SqlInternalOperators.OFFSET.getLeftPrec()
+        || rightPrec > SqlInternalOperators.OFFSET.getLeftPrec())
         || getOrderList() != null
-            && (leftPrec > SqlOrderBy.OPERATOR.getLeftPrec()
-                || rightPrec > SqlOrderBy.OPERATOR.getRightPrec())) {
-      // If this SELECT is the topmost item in a sub-query, introduce a new
-      // frame. (The topmost item in the sub-query might be a UNION or
-      // ORDER. In this case, we don't need a wrapper frame.)
-      final SqlWriter.Frame frame =
-          writer.startList(SqlWriter.FrameTypeEnum.SUB_QUERY, "(", ")");
-      writer.getDialect().unparseCall(writer, this, 0, 0);
-      writer.endList(frame);
+        && (leftPrec > SqlOrderBy.OPERATOR.getLeftPrec()
+        || rightPrec > SqlOrderBy.OPERATOR.getRightPrec())) {
+        // If this SELECT is the topmost item in a sub-query, introduce a new
+        // frame. (The topmost item in the sub-query might be a UNION or
+        // ORDER. In this case, we don't need a wrapper frame.)
+        final SqlWriter.Frame frame =
+            writer.startList(SqlWriter.FrameTypeEnum.SUB_QUERY, "(", ")");
+        writer.getDialect().unparseCall(writer, this, 0, 0);
+        writer.endList(frame);
     } else {
-      writer.getDialect().unparseCall(writer, this, leftPrec, rightPrec);
+        writer.getDialect().unparseCall(writer, this, leftPrec, rightPrec);
     }
-  }
+}
 
-  public boolean hasOrderBy() {
+public boolean hasOrderBy() {
     return orderBy != null && !orderBy.isEmpty();
-  }
+}
 
-  public boolean hasWhere() {
+public boolean hasWhere() {
     return where != null;
-  }
+}
 
-  public boolean isKeywordPresent(SqlSelectKeyword targetKeyWord) {
+public boolean isKeywordPresent(SqlSelectKeyword targetKeyWord) {
     return getModifierNode(targetKeyWord) != null;
-  }
+}
 }

@@ -84,1591 +84,1591 @@ public enum SqlKind {
 
 // the basics
 
-  /**
-   * Expression not covered by any other {@link SqlKind} value.
-   *
-   * @see #OTHER_FUNCTION
-   */
-  OTHER,
-
-  /**
-   * SELECT statement or sub-query.
-   */
-  SELECT,
-
-  /**
-   * Sql Hint statement.
-   */
-  HINT,
-
-  /**
-   * Table reference.
-   */
-  TABLE_REF,
-
-  /**
-   * JOIN operator or compound FROM clause.
-   *
-   * <p>A FROM clause with more than one table is represented as if it were a
-   * join. For example, "FROM x, y, z" is represented as
-   * "JOIN(x, JOIN(x, y))".
-   */
-  JOIN,
-
-  /** An identifier. */
-  IDENTIFIER,
-
-  /** A literal. */
-  LITERAL,
-
-  /** Interval qualifier. */
-  INTERVAL_QUALIFIER,
-
-  /**
-   * Function that is not a special function.
-   *
-   * @see #FUNCTION
-   */
-  OTHER_FUNCTION,
-
-  RANGE,
+    /**
+     * Expression not covered by any other {@link SqlKind} value.
+     *
+     * @see #OTHER_FUNCTION
+     */
+    OTHER,
+
+    /**
+     * SELECT statement or sub-query.
+     */
+    SELECT,
+
+    /**
+     * Sql Hint statement.
+     */
+    HINT,
+
+    /**
+     * Table reference.
+     */
+    TABLE_REF,
+
+    /**
+     * JOIN operator or compound FROM clause.
+     *
+     * <p>A FROM clause with more than one table is represented as if it were a
+     * join. For example, "FROM x, y, z" is represented as
+     * "JOIN(x, JOIN(x, y))".
+     */
+    JOIN,
+
+    /** An identifier. */
+    IDENTIFIER,
+
+    /** A literal. */
+    LITERAL,
+
+    /** Interval qualifier. */
+    INTERVAL_QUALIFIER,
+
+    /**
+     * Function that is not a special function.
+     *
+     * @see #FUNCTION
+     */
+    OTHER_FUNCTION,
+
+    RANGE,
 
-  /**
-   * Input tables have either row semantics or set semantics.
-   * <ul>
-   * <li>Row semantics means that the result of the table function is
-   * decided on a row-by-row basis.
-   * <li>Set semantics means that the outcome of the function depends on how
-   * the data is partitioned.
-   * When the table function is called from a query, the table parameter can
-   * optionally be extended with either a PARTITION BY clause or
-   * an ORDER BY clause or both.
-   * </ul>
-   */
-  SET_SEMANTICS_TABLE,
+    /**
+     * Input tables have either row semantics or set semantics.
+     * <ul>
+     * <li>Row semantics means that the result of the table function is
+     * decided on a row-by-row basis.
+     * <li>Set semantics means that the outcome of the function depends on how
+     * the data is partitioned.
+     * When the table function is called from a query, the table parameter can
+     * optionally be extended with either a PARTITION BY clause or
+     * an ORDER BY clause or both.
+     * </ul>
+     */
+    SET_SEMANTICS_TABLE,
 
-  /** {@code CONVERT} function. */
-  CONVERT,
+    /** {@code CONVERT} function. */
+    CONVERT,
 
-  /** Oracle's {@code CONVERT} function. */
-  CONVERT_ORACLE,
+    /** Oracle's {@code CONVERT} function. */
+    CONVERT_ORACLE,
 
-  /** {@code TRANSLATE} function. */
-  TRANSLATE,
+    /** {@code TRANSLATE} function. */
+    TRANSLATE,
 
-  /** POSITION function. */
-  POSITION,
+    /** POSITION function. */
+    POSITION,
 
-  /** EXPLAIN statement. */
-  EXPLAIN,
+    /** EXPLAIN statement. */
+    EXPLAIN,
 
-  /** DESCRIBE SCHEMA statement. */
-  DESCRIBE_SCHEMA,
+    /** DESCRIBE SCHEMA statement. */
+    DESCRIBE_SCHEMA,
 
-  /** DESCRIBE TABLE statement. */
-  DESCRIBE_TABLE,
+    /** DESCRIBE TABLE statement. */
+    DESCRIBE_TABLE,
 
-  /** DESCRIBE DETAIL statement. */
-  DESCRIBE_DETAIL,
+    /** DESCRIBE DETAIL statement. */
+    DESCRIBE_DETAIL,
 
-  /** DESCRIBE HISTORY statement. */
-  DESCRIBE_HISTORY,
+    /** DESCRIBE HISTORY statement. */
+    DESCRIBE_HISTORY,
 
-  /** INSERT statement. */
-  INSERT,
+    /** INSERT statement. */
+    INSERT,
 
-  /** DELETE statement. */
-  DELETE,
+    /** DELETE statement. */
+    DELETE,
 
-  /** UPDATE statement. */
-  UPDATE,
+    /** UPDATE statement. */
+    UPDATE,
 
-  /** "{@code ALTER scope SET option = value}" statement. */
-  SET_OPTION,
+    /** "{@code ALTER scope SET option = value}" statement. */
+    SET_OPTION,
 
-  /** A dynamic parameter. */
-  DYNAMIC_PARAM,
+    /** A dynamic parameter. */
+    DYNAMIC_PARAM,
 
-  /** The DISTINCT keyword of the GROUP BY clause. */
-  GROUP_BY_DISTINCT,
+    /** The DISTINCT keyword of the GROUP BY clause. */
+    GROUP_BY_DISTINCT,
 
-  /**
-   * ORDER BY clause.
-   *
-   * @see #DESCENDING
-   * @see #NULLS_FIRST
-   * @see #NULLS_LAST
-   */
-  ORDER_BY,
+    /**
+     * ORDER BY clause.
+     *
+     * @see #DESCENDING
+     * @see #NULLS_FIRST
+     * @see #NULLS_LAST
+     */
+    ORDER_BY,
 
-  /** WITH clause. */
-  WITH,
+    /** WITH clause. */
+    WITH,
 
-  /** Item in WITH clause. */
-  WITH_ITEM,
+    /** Item in WITH clause. */
+    WITH_ITEM,
 
-  /** Represents a recursive CTE as a table ref. */
-  WITH_ITEM_TABLE_REF,
+    /** Represents a recursive CTE as a table ref. */
+    WITH_ITEM_TABLE_REF,
 
-  /** Item expression. */
-  ITEM,
+    /** Item expression. */
+    ITEM,
 
-  /** {@code UNION} relational operator. */
-  UNION,
+    /** {@code UNION} relational operator. */
+    UNION,
 
-  /** {@code EXCEPT} relational operator (known as {@code MINUS} in some SQL
-   * dialects). */
-  EXCEPT,
+    /** {@code EXCEPT} relational operator (known as {@code MINUS} in some SQL
+     * dialects). */
+    EXCEPT,
 
-  /** {@code INTERSECT} relational operator. */
-  INTERSECT,
+    /** {@code INTERSECT} relational operator. */
+    INTERSECT,
 
-  /** {@code AS} operator. */
-  AS,
+    /** {@code AS} operator. */
+    AS,
 
-  /** {@code MEASURE} operator. */
-  MEASURE,
+    /** {@code MEASURE} operator. */
+    MEASURE,
 
-  /** {@code V2M} (value-to-measure) internal operator. */
-  V2M,
+    /** {@code V2M} (value-to-measure) internal operator. */
+    V2M,
 
-  /** {@code M2V} (measure-to-value) internal operator. */
-  M2V,
+    /** {@code M2V} (measure-to-value) internal operator. */
+    M2V,
 
-  /** {@code M2X} (evaluate measure in context) internal operator. */
-  M2X,
+    /** {@code M2X} (evaluate measure in context) internal operator. */
+    M2X,
 
-  /** {@code AGG_M2M} (aggregate measure to measure) internal aggregate
-   * function. */
-  AGG_M2M,
+    /** {@code AGG_M2M} (aggregate measure to measure) internal aggregate
+     * function. */
+    AGG_M2M,
 
-  /** {@code AGG_M2V} (aggregate measure to value) internal aggregate
-   * function. */
-  AGG_M2V,
+    /** {@code AGG_M2V} (aggregate measure to value) internal aggregate
+     * function. */
+    AGG_M2V,
 
-  /** {@code SAME_PARTITION} pseudo-function. */
-  SAME_PARTITION,
+    /** {@code SAME_PARTITION} pseudo-function. */
+    SAME_PARTITION,
 
-  /** Argument assignment operator, {@code =>}. */
-  ARGUMENT_ASSIGNMENT,
+    /** Argument assignment operator, {@code =>}. */
+    ARGUMENT_ASSIGNMENT,
 
-  /** {@code DEFAULT} operator. */
-  DEFAULT,
+    /** {@code DEFAULT} operator. */
+    DEFAULT,
 
-  /** {@code OVER} operator. */
-  OVER,
+    /** {@code OVER} operator. */
+    OVER,
 
-  /** {@code RESPECT NULLS} operator. */
-  RESPECT_NULLS("RESPECT NULLS"),
+    /** {@code RESPECT NULLS} operator. */
+    RESPECT_NULLS("RESPECT NULLS"),
 
-  /** {@code IGNORE NULLS} operator. */
-  IGNORE_NULLS("IGNORE NULLS"),
+    /** {@code IGNORE NULLS} operator. */
+    IGNORE_NULLS("IGNORE NULLS"),
 
-  /** {@code FILTER} operator. */
-  FILTER,
+    /** {@code FILTER} operator. */
+    FILTER,
 
-  /** {@code WITHIN GROUP} operator. */
-  WITHIN_GROUP,
+    /** {@code WITHIN GROUP} operator. */
+    WITHIN_GROUP,
 
-  /** {@code WITHIN DISTINCT} operator. */
-  WITHIN_DISTINCT,
+    /** {@code WITHIN DISTINCT} operator. */
+    WITHIN_DISTINCT,
 
-  /** Window specification. */
-  WINDOW,
+    /** Window specification. */
+    WINDOW,
 
-  /** MERGE statement. */
-  MERGE,
+    /** MERGE statement. */
+    MERGE,
 
-  /** TABLESAMPLE relational operator. */
-  TABLESAMPLE,
+    /** TABLESAMPLE relational operator. */
+    TABLESAMPLE,
 
-  /** PIVOT clause. */
-  PIVOT,
+    /** PIVOT clause. */
+    PIVOT,
 
-  /** UNPIVOT clause. */
-  UNPIVOT,
+    /** UNPIVOT clause. */
+    UNPIVOT,
 
-  /** MATCH_RECOGNIZE clause. */
-  MATCH_RECOGNIZE,
+    /** MATCH_RECOGNIZE clause. */
+    MATCH_RECOGNIZE,
 
-  /** SNAPSHOT operator. */
-  SNAPSHOT,
+    /** SNAPSHOT operator. */
+    SNAPSHOT,
 
-  // binary operators
+    // binary operators
 
-  /** Arithmetic multiplication operator, "*". */
-  TIMES,
+    /** Arithmetic multiplication operator, "*". */
+    TIMES,
 
-  /** Arithmetic division operator, "/". */
-  DIVIDE,
+    /** Arithmetic division operator, "/". */
+    DIVIDE,
 
-  /** Arithmetic remainder operator, "MOD" (and "%" in some dialects). */
-  MOD,
+    /** Arithmetic remainder operator, "MOD" (and "%" in some dialects). */
+    MOD,
 
-  /**
-   * Arithmetic plus operator, "+".
-   *
-   * @see #PLUS_PREFIX
-   */
-  PLUS,
+    /**
+     * Arithmetic plus operator, "+".
+     *
+     * @see #PLUS_PREFIX
+     */
+    PLUS,
 
-  /**
-   * Arithmetic minus operator, "-".
-   *
-   * @see #MINUS_PREFIX
-   */
-  MINUS,
+    /**
+     * Arithmetic minus operator, "-".
+     *
+     * @see #MINUS_PREFIX
+     */
+    MINUS,
 
-  /**
-   * Checked version of PLUS, which produces a runtime error on overflow.
-   * Not used for date/time arithmetic.
-   */
-  CHECKED_PLUS,
+    /**
+     * Checked version of PLUS, which produces a runtime error on overflow.
+     * Not used for date/time arithmetic.
+     */
+    CHECKED_PLUS,
 
-  /**
-   * Checked version of MINUS, which produces a runtime error on overflow.
-   * Not used for date/time arithmetic.
-   */
-  CHECKED_MINUS,
+    /**
+     * Checked version of MINUS, which produces a runtime error on overflow.
+     * Not used for date/time arithmetic.
+     */
+    CHECKED_MINUS,
 
-  /**
-   * Checked version of TIMES, which produces a runtime error on overflow.
-   * Not used for date/time arithmetic.
-   */
-  CHECKED_TIMES,
+    /**
+     * Checked version of TIMES, which produces a runtime error on overflow.
+     * Not used for date/time arithmetic.
+     */
+    CHECKED_TIMES,
 
-  /**
-   * Checked version of DIVIDE, which produces a runtime error on overflow.
-   * For example, INT_MIN / -1.
-   * Not used for date/time arithmetic.
-   */
-  CHECKED_DIVIDE,
+    /**
+     * Checked version of DIVIDE, which produces a runtime error on overflow.
+     * For example, INT_MIN / -1.
+     * Not used for date/time arithmetic.
+     */
+    CHECKED_DIVIDE,
 
-  /**
-   * Alternation operator in a pattern expression within a
-   * {@code MATCH_RECOGNIZE} clause.
-   */
-  PATTERN_ALTER,
+    /**
+     * Alternation operator in a pattern expression within a
+     * {@code MATCH_RECOGNIZE} clause.
+     */
+    PATTERN_ALTER,
 
-  /**
-   * Concatenation operator in a pattern expression within a
-   * {@code MATCH_RECOGNIZE} clause.
-   */
-  PATTERN_CONCAT,
+    /**
+     * Concatenation operator in a pattern expression within a
+     * {@code MATCH_RECOGNIZE} clause.
+     */
+    PATTERN_CONCAT,
 
-  // comparison operators
+    // comparison operators
 
-  /** {@code IN} operator. */
-  IN,
+    /** {@code IN} operator. */
+    IN,
 
-  /**
-   * {@code NOT IN} operator.
-   *
-   * <p>Only occurs in SqlNode trees. Is expanded to NOT(IN ...) before
-   * entering RelNode land.
-   */
-  NOT_IN("NOT IN"),
+    /**
+     * {@code NOT IN} operator.
+     *
+     * <p>Only occurs in SqlNode trees. Is expanded to NOT(IN ...) before
+     * entering RelNode land.
+     */
+    NOT_IN("NOT IN"),
 
-  /** Variant of {@code IN} for the Druid adapter. */
-  DRUID_IN,
+    /** Variant of {@code IN} for the Druid adapter. */
+    DRUID_IN,
 
-  /** Variant of {@code NOT_IN} for the Druid adapter. */
-  DRUID_NOT_IN,
+    /** Variant of {@code NOT_IN} for the Druid adapter. */
+    DRUID_NOT_IN,
 
-  /** Less-than operator, "&lt;". */
-  LESS_THAN("<"),
+    /** Less-than operator, "&lt;". */
+    LESS_THAN("<"),
 
-  /** Greater-than operator, "&gt;". */
-  GREATER_THAN(">"),
+    /** Greater-than operator, "&gt;". */
+    GREATER_THAN(">"),
 
-  /** Less-than-or-equal operator, "&lt;=". */
-  LESS_THAN_OR_EQUAL("<="),
+    /** Less-than-or-equal operator, "&lt;=". */
+    LESS_THAN_OR_EQUAL("<="),
 
-  /** Greater-than-or-equal operator, "&gt;=". */
-  GREATER_THAN_OR_EQUAL(">="),
+    /** Greater-than-or-equal operator, "&gt;=". */
+    GREATER_THAN_OR_EQUAL(">="),
 
-  /** Equals operator, "=". */
-  EQUALS("="),
+    /** Equals operator, "=". */
+    EQUALS("="),
 
-  /**
-   * Not-equals operator, "&#33;=" or "&lt;&gt;".
-   * The latter is standard, and preferred.
-   */
-  NOT_EQUALS("<>"),
+    /**
+     * Not-equals operator, "&#33;=" or "&lt;&gt;".
+     * The latter is standard, and preferred.
+     */
+    NOT_EQUALS("<>"),
 
-  /** {@code IS DISTINCT FROM} operator. */
-  IS_DISTINCT_FROM,
+    /** {@code IS DISTINCT FROM} operator. */
+    IS_DISTINCT_FROM,
 
-  /** {@code IS NOT DISTINCT FROM} operator. */
-  IS_NOT_DISTINCT_FROM,
+    /** {@code IS NOT DISTINCT FROM} operator. */
+    IS_NOT_DISTINCT_FROM,
 
-  /** {@code SEARCH} operator. (Analogous to scalar {@code IN}, used only in
-   * RexNode, not SqlNode.) */
-  SEARCH,
+    /** {@code SEARCH} operator. (Analogous to scalar {@code IN}, used only in
+     * RexNode, not SqlNode.) */
+    SEARCH,
 
-  /** Logical "OR" operator. */
-  OR,
+    /** Logical "OR" operator. */
+    OR,
 
-  /** Logical "AND" operator. */
-  AND,
+    /** Logical "AND" operator. */
+    AND,
 
-  // other infix
+    // other infix
 
-  /** Dot. */
-  DOT,
+    /** Dot. */
+    DOT,
 
-  /** {@code OVERLAPS} operator for periods. */
-  OVERLAPS,
+    /** {@code OVERLAPS} operator for periods. */
+    OVERLAPS,
 
-  /** {@code CONTAINS} operator for periods. */
-  CONTAINS,
+    /** {@code CONTAINS} operator for periods. */
+    CONTAINS,
 
-  /** {@code PRECEDES} operator for periods. */
-  PRECEDES,
+    /** {@code PRECEDES} operator for periods. */
+    PRECEDES,
 
-  /** {@code IMMEDIATELY PRECEDES} operator for periods. */
-  IMMEDIATELY_PRECEDES("IMMEDIATELY PRECEDES"),
+    /** {@code IMMEDIATELY PRECEDES} operator for periods. */
+    IMMEDIATELY_PRECEDES("IMMEDIATELY PRECEDES"),
 
-  /** {@code SUCCEEDS} operator for periods. */
-  SUCCEEDS,
+    /** {@code SUCCEEDS} operator for periods. */
+    SUCCEEDS,
 
-  /** {@code IMMEDIATELY SUCCEEDS} operator for periods. */
-  IMMEDIATELY_SUCCEEDS("IMMEDIATELY SUCCEEDS"),
+    /** {@code IMMEDIATELY SUCCEEDS} operator for periods. */
+    IMMEDIATELY_SUCCEEDS("IMMEDIATELY SUCCEEDS"),
 
-  /** {@code EQUALS} operator for periods. */
-  PERIOD_EQUALS("EQUALS"),
+    /** {@code EQUALS} operator for periods. */
+    PERIOD_EQUALS("EQUALS"),
 
-  /** {@code LIKE} operator. */
-  LIKE,
+    /** {@code LIKE} operator. */
+    LIKE,
 
-  /** {@code RLIKE} operator. */
-  RLIKE,
+    /** {@code RLIKE} operator. */
+    RLIKE,
 
-  /** {@code SIMILAR} operator. */
-  SIMILAR,
+    /** {@code SIMILAR} operator. */
+    SIMILAR,
 
-  /** {@code ~} operator (for POSIX-style regular expressions). */
-  POSIX_REGEX_CASE_SENSITIVE,
+    /** {@code ~} operator (for POSIX-style regular expressions). */
+    POSIX_REGEX_CASE_SENSITIVE,
 
-  /** {@code ~*} operator (for case-insensitive POSIX-style regular
-   * expressions). */
-  POSIX_REGEX_CASE_INSENSITIVE,
+    /** {@code ~*} operator (for case-insensitive POSIX-style regular
+     * expressions). */
+    POSIX_REGEX_CASE_INSENSITIVE,
 
-  /** {@code BETWEEN} operator. */
-  BETWEEN,
+    /** {@code BETWEEN} operator. */
+    BETWEEN,
 
-  /** Variant of {@code BETWEEN} for the Druid adapter. */
-  DRUID_BETWEEN,
+    /** Variant of {@code BETWEEN} for the Druid adapter. */
+    DRUID_BETWEEN,
 
-  /** {@code CASE} expression. */
-  CASE,
+    /** {@code CASE} expression. */
+    CASE,
 
-  /** {@code LAMBDA} expression. */
-  LAMBDA,
+    /** {@code LAMBDA} expression. */
+    LAMBDA,
 
-  /** {@code INTERVAL} expression. */
-  INTERVAL,
+    /** {@code INTERVAL} expression. */
+    INTERVAL,
 
-  /** {@code SEPARATOR} expression. */
-  SEPARATOR,
+    /** {@code SEPARATOR} expression. */
+    SEPARATOR,
 
-  /** {@code NULLIF} operator. */
-  NULLIF,
+    /** {@code NULLIF} operator. */
+    NULLIF,
 
-  /** {@code COALESCE} operator. */
-  COALESCE,
+    /** {@code COALESCE} operator. */
+    COALESCE,
 
-  /** {@code DECODE} function (Oracle). */
-  DECODE,
+    /** {@code DECODE} function (Oracle). */
+    DECODE,
 
-  /** {@code NVL} function (Oracle, Spark). */
-  NVL,
+    /** {@code NVL} function (Oracle, Spark). */
+    NVL,
 
-  /** {@code NVL2} function (Oracle, Spark). */
-  NVL2,
+    /** {@code NVL2} function (Oracle, Spark). */
+    NVL2,
 
-  /** {@code GREATEST} function (Oracle). */
-  GREATEST,
+    /** {@code GREATEST} function (Oracle). */
+    GREATEST,
 
-  /** {@code GREATEST} function (PostgreSQL, Spark). */
-  GREATEST_PG,
+    /** {@code GREATEST} function (PostgreSQL, Spark). */
+    GREATEST_PG,
 
-  /** The two-argument {@code CONCAT} function (Oracle). */
-  CONCAT2,
+    /** The two-argument {@code CONCAT} function (Oracle). */
+    CONCAT2,
 
-  /** The {@code CONCAT} function (Postgresql and MSSQL) that ignores NULL. */
-  CONCAT_WITH_NULL,
+    /** The {@code CONCAT} function (Postgresql and MSSQL) that ignores NULL. */
+    CONCAT_WITH_NULL,
 
-  /** The {@code CONCAT_WS} function (MSSQL). */
-  CONCAT_WS_MSSQL,
+    /** The {@code CONCAT_WS} function (MSSQL). */
+    CONCAT_WS_MSSQL,
 
-  /** The {@code CONCAT_WS} function (Postgresql). */
-  CONCAT_WS_POSTGRESQL,
+    /** The {@code CONCAT_WS} function (Postgresql). */
+    CONCAT_WS_POSTGRESQL,
 
 
-  /** The {@code CONCAT_WS} function (Spark). */
-  CONCAT_WS_SPARK,
+    /** The {@code CONCAT_WS} function (Spark). */
+    CONCAT_WS_SPARK,
 
-  /** The "IF" function (BigQuery, Hive, Spark). */
-  IF,
+    /** The "IF" function (BigQuery, Hive, Spark). */
+    IF,
 
-  /** {@code LEAST} function (Oracle). */
-  LEAST,
+    /** {@code LEAST} function (Oracle). */
+    LEAST,
 
-  /** {@code LEAST} function (PostgreSQL, Spark). */
-  LEAST_PG,
+    /** {@code LEAST} function (PostgreSQL, Spark). */
+    LEAST_PG,
 
-  /** {@code LOG} function. (Mysql, Spark). */
-  LOG,
+    /** {@code LOG} function. (Mysql, Spark). */
+    LOG,
 
-  /** {@code DATE_ADD} function (BigQuery Semantics). */
-  DATE_ADD,
+    /** {@code DATE_ADD} function (BigQuery Semantics). */
+    DATE_ADD,
 
-  /** {@code ADD_MONTHS} function (Oracle, Spark). */
-  ADD_MONTHS,
+    /** {@code ADD_MONTHS} function (Oracle, Spark). */
+    ADD_MONTHS,
 
-  /** {@code DATE_TRUNC} function (BigQuery). */
-  DATE_TRUNC,
+    /** {@code DATE_TRUNC} function (BigQuery). */
+    DATE_TRUNC,
 
-  /** {@code DATE_SUB} function (BigQuery). */
-  DATE_SUB,
+    /** {@code DATE_SUB} function (BigQuery). */
+    DATE_SUB,
 
-  /** {@code TIME_ADD} function (BigQuery). */
-  TIME_ADD,
+    /** {@code TIME_ADD} function (BigQuery). */
+    TIME_ADD,
 
-  /** {@code TIME_SUB} function (BigQuery). */
-  TIME_SUB,
+    /** {@code TIME_SUB} function (BigQuery). */
+    TIME_SUB,
 
-  /** {@code TIMESTAMP_ADD} function (ODBC, SQL Server, MySQL). */
-  TIMESTAMP_ADD,
+    /** {@code TIMESTAMP_ADD} function (ODBC, SQL Server, MySQL). */
+    TIMESTAMP_ADD,
 
-  /** {@code TIMESTAMP_DIFF} function (ODBC, SQL Server, MySQL). */
-  TIMESTAMP_DIFF,
+    /** {@code TIMESTAMP_DIFF} function (ODBC, SQL Server, MySQL). */
+    TIMESTAMP_DIFF,
 
-  /** {@code TIMESTAMP_SUB} function (BigQuery). */
-  TIMESTAMP_SUB,
+    /** {@code TIMESTAMP_SUB} function (BigQuery). */
+    TIMESTAMP_SUB,
 
-  // prefix operators
+    // prefix operators
 
-  /** Logical {@code NOT} operator. */
-  NOT,
+    /** Logical {@code NOT} operator. */
+    NOT,
 
-  /**
-   * Unary plus operator, as in "+1".
-   *
-   * @see #PLUS
-   */
-  PLUS_PREFIX,
+    /**
+     * Unary plus operator, as in "+1".
+     *
+     * @see #PLUS
+     */
+    PLUS_PREFIX,
 
-  /**
-   * Unary minus operator, as in "-1".
-   *
-   * @see #MINUS
-   */
-  MINUS_PREFIX,
+    /**
+     * Unary minus operator, as in "-1".
+     *
+     * @see #MINUS
+     */
+    MINUS_PREFIX,
 
-  /**
-   * Checked version of unary minus operator.
-   */
-  CHECKED_MINUS_PREFIX,
+    /**
+     * Checked version of unary minus operator.
+     */
+    CHECKED_MINUS_PREFIX,
 
-  /** {@code EXISTS} operator. */
-  EXISTS,
+    /** {@code EXISTS} operator. */
+    EXISTS,
 
-  /** {@code SOME} quantification operator (also called {@code ANY}). */
-  SOME,
+    /** {@code SOME} quantification operator (also called {@code ANY}). */
+    SOME,
 
-  /** {@code ALL} quantification operator. */
-  ALL,
+    /** {@code ALL} quantification operator. */
+    ALL,
 
-  /** {@code VALUES} relational operator. */
-  VALUES,
+    /** {@code VALUES} relational operator. */
+    VALUES,
 
-  /**
-   * Explicit table, e.g. <code>select * from (TABLE t)</code> or <code>TABLE
-   * t</code>. See also {@link #COLLECTION_TABLE}.
-   */
-  EXPLICIT_TABLE,
+    /**
+     * Explicit table, e.g. <code>select * from (TABLE t)</code> or <code>TABLE
+     * t</code>. See also {@link #COLLECTION_TABLE}.
+     */
+    EXPLICIT_TABLE,
 
-  /**
-   * Scalar query; that is, a sub-query used in an expression context, and
-   * returning one row and one column.
-   */
-  SCALAR_QUERY,
+    /**
+     * Scalar query; that is, a sub-query used in an expression context, and
+     * returning one row and one column.
+     */
+    SCALAR_QUERY,
 
-  /** Procedure call. */
-  PROCEDURE_CALL,
+    /** Procedure call. */
+    PROCEDURE_CALL,
 
-  /** New specification. */
-  NEW_SPECIFICATION,
+    /** New specification. */
+    NEW_SPECIFICATION,
 
-  // special functions in MATCH_RECOGNIZE
+    // special functions in MATCH_RECOGNIZE
 
-  /** {@code FINAL} operator in {@code MATCH_RECOGNIZE}. */
-  FINAL,
+    /** {@code FINAL} operator in {@code MATCH_RECOGNIZE}. */
+    FINAL,
 
-  /** {@code FINAL} operator in {@code MATCH_RECOGNIZE}. */
-  RUNNING,
+    /** {@code FINAL} operator in {@code MATCH_RECOGNIZE}. */
+    RUNNING,
 
-  /** {@code PREV} operator in {@code MATCH_RECOGNIZE}. */
-  PREV,
+    /** {@code PREV} operator in {@code MATCH_RECOGNIZE}. */
+    PREV,
 
-  /** {@code NEXT} operator in {@code MATCH_RECOGNIZE}. */
-  NEXT,
+    /** {@code NEXT} operator in {@code MATCH_RECOGNIZE}. */
+    NEXT,
 
-  /** {@code FIRST} operator in {@code MATCH_RECOGNIZE}. */
-  FIRST,
+    /** {@code FIRST} operator in {@code MATCH_RECOGNIZE}. */
+    FIRST,
 
-  /** {@code LAST} operator in {@code MATCH_RECOGNIZE}. */
-  LAST,
+    /** {@code LAST} operator in {@code MATCH_RECOGNIZE}. */
+    LAST,
 
-  /** {@code CLASSIFIER} operator in {@code MATCH_RECOGNIZE}. */
-  CLASSIFIER,
+    /** {@code CLASSIFIER} operator in {@code MATCH_RECOGNIZE}. */
+    CLASSIFIER,
 
-  /** {@code MATCH_NUMBER} operator in {@code MATCH_RECOGNIZE}. */
-  MATCH_NUMBER,
+    /** {@code MATCH_NUMBER} operator in {@code MATCH_RECOGNIZE}. */
+    MATCH_NUMBER,
 
-  /** {@code SKIP TO FIRST} qualifier of restarting point in a
-   * {@code MATCH_RECOGNIZE} clause. */
-  SKIP_TO_FIRST,
+    /** {@code SKIP TO FIRST} qualifier of restarting point in a
+     * {@code MATCH_RECOGNIZE} clause. */
+    SKIP_TO_FIRST,
 
-  /** {@code SKIP TO LAST} qualifier of restarting point in a
-   * {@code MATCH_RECOGNIZE} clause. */
-  SKIP_TO_LAST,
+    /** {@code SKIP TO LAST} qualifier of restarting point in a
+     * {@code MATCH_RECOGNIZE} clause. */
+    SKIP_TO_LAST,
 
-  // postfix operators
+    // postfix operators
 
-  /** {@code DESC} operator in {@code ORDER BY}. A parse tree, not a true
-   * expression. */
-  DESCENDING,
+    /** {@code DESC} operator in {@code ORDER BY}. A parse tree, not a true
+     * expression. */
+    DESCENDING,
 
-  /** {@code NULLS FIRST} clause in {@code ORDER BY}. A parse tree, not a true
-   * expression. */
-  NULLS_FIRST,
+    /** {@code NULLS FIRST} clause in {@code ORDER BY}. A parse tree, not a true
+     * expression. */
+    NULLS_FIRST,
 
-  /** {@code NULLS LAST} clause in {@code ORDER BY}. A parse tree, not a true
-   * expression. */
-  NULLS_LAST,
+    /** {@code NULLS LAST} clause in {@code ORDER BY}. A parse tree, not a true
+     * expression. */
+    NULLS_LAST,
 
-  /** {@code IS TRUE} operator. */
-  IS_TRUE,
+    /** {@code IS TRUE} operator. */
+    IS_TRUE,
 
-  /** {@code IS FALSE} operator. */
-  IS_FALSE,
+    /** {@code IS FALSE} operator. */
+    IS_FALSE,
 
-  /** {@code IS NOT TRUE} operator. */
-  IS_NOT_TRUE,
+    /** {@code IS NOT TRUE} operator. */
+    IS_NOT_TRUE,
 
-  /** {@code IS NOT FALSE} operator. */
-  IS_NOT_FALSE,
+    /** {@code IS NOT FALSE} operator. */
+    IS_NOT_FALSE,
 
-  /** {@code IS UNKNOWN} operator. */
-  IS_UNKNOWN,
+    /** {@code IS UNKNOWN} operator. */
+    IS_UNKNOWN,
 
-  /** {@code IS NULL} operator. */
-  IS_NULL,
+    /** {@code IS NULL} operator. */
+    IS_NULL,
 
-  /** {@code IS NOT NULL} operator. */
-  IS_NOT_NULL,
+    /** {@code IS NOT NULL} operator. */
+    IS_NOT_NULL,
 
-  /** {@code PRECEDING} qualifier of an interval end-point in a window
-   * specification. */
-  PRECEDING,
+    /** {@code PRECEDING} qualifier of an interval end-point in a window
+     * specification. */
+    PRECEDING,
 
-  /** {@code FOLLOWING} qualifier of an interval end-point in a window
-   * specification. */
-  FOLLOWING,
+    /** {@code FOLLOWING} qualifier of an interval end-point in a window
+     * specification. */
+    FOLLOWING,
 
-  /**
-   * The field access operator, ".".
-   *
-   * <p>(Only used at the RexNode level; at
-   * SqlNode level, a field-access is part of an identifier.)
-   */
-  FIELD_ACCESS,
+    /**
+     * The field access operator, ".".
+     *
+     * <p>(Only used at the RexNode level; at
+     * SqlNode level, a field-access is part of an identifier.)
+     */
+    FIELD_ACCESS,
 
-  /**
-   * Reference to an input field.
-   *
-   * <p>(Only used at the RexNode level.)
-   */
-  INPUT_REF,
+    /**
+     * Reference to an input field.
+     *
+     * <p>(Only used at the RexNode level.)
+     */
+    INPUT_REF,
 
-  /**
-   * Reference to an input field, with a qualified name and an identifier.
-   *
-   * <p>(Only used at the RexNode level.)
-   */
-  TABLE_INPUT_REF,
+    /**
+     * Reference to an input field, with a qualified name and an identifier.
+     *
+     * <p>(Only used at the RexNode level.)
+     */
+    TABLE_INPUT_REF,
 
-  /**
-   * Reference to an input field, with pattern var as modifier.
-   *
-   * <p>(Only used at the RexNode level.)
-   */
-  PATTERN_INPUT_REF,
-  /**
-   * Reference to a sub-expression computed within the current relational
-   * operator.
-   *
-   * <p>(Only used at the RexNode level.)
-   */
-  LOCAL_REF,
+    /**
+     * Reference to an input field, with pattern var as modifier.
+     *
+     * <p>(Only used at the RexNode level.)
+     */
+    PATTERN_INPUT_REF,
+    /**
+     * Reference to a sub-expression computed within the current relational
+     * operator.
+     *
+     * <p>(Only used at the RexNode level.)
+     */
+    LOCAL_REF,
 
-  /** Reference to lambda expression parameter.
-   *
-   * <p>(Only used at the RexNode level.)
-   */
-  LAMBDA_REF,
+    /** Reference to lambda expression parameter.
+     *
+     * <p>(Only used at the RexNode level.)
+     */
+    LAMBDA_REF,
 
-  /**
-   * Reference to correlation variable.
-   *
-   * <p>(Only used at the RexNode level.)
-   */
-  CORREL_VARIABLE,
+    /**
+     * Reference to correlation variable.
+     *
+     * <p>(Only used at the RexNode level.)
+     */
+    CORREL_VARIABLE,
 
-  /**
-   * the repetition quantifier of a pattern factor in a match_recognize clause.
-   */
-  PATTERN_QUANTIFIER,
+    /**
+     * the repetition quantifier of a pattern factor in a match_recognize clause.
+     */
+    PATTERN_QUANTIFIER,
 
-  // functions
+    // functions
 
-  /**
-   * The row-constructor function. May be explicit or implicit:
-   * {@code VALUES 1, ROW (2)}.
-   */
-  ROW,
+    /**
+     * The row-constructor function. May be explicit or implicit:
+     * {@code VALUES 1, ROW (2)}.
+     */
+    ROW,
 
-  /**
-   * The non-standard constructor used to pass a
-   * COLUMN_LIST parameter to a user-defined transform.
-   */
-  COLUMN_LIST,
+    /**
+     * The non-standard constructor used to pass a
+     * COLUMN_LIST parameter to a user-defined transform.
+     */
+    COLUMN_LIST,
 
-  /**
-   * The "CAST" operator, and also the PostgreSQL-style infix cast operator
-   * "::".
-   */
-  CAST,
+    /**
+     * The "CAST" operator, and also the PostgreSQL-style infix cast operator
+     * "::".
+     */
+    CAST,
 
-  /** The {@code SAFE_CAST} function, which is similar to {@link #CAST} but
-   * returns NULL rather than throwing an error if the conversion fails. */
-  SAFE_CAST,
+    /** The {@code SAFE_CAST} function, which is similar to {@link #CAST} but
+     * returns NULL rather than throwing an error if the conversion fails. */
+    SAFE_CAST,
 
-  /**
-   * The "NEXT VALUE OF sequence" operator.
-   */
-  NEXT_VALUE,
+    /**
+     * The "NEXT VALUE OF sequence" operator.
+     */
+    NEXT_VALUE,
 
-  /**
-   * The "CURRENT VALUE OF sequence" operator.
-   */
-  CURRENT_VALUE,
+    /**
+     * The "CURRENT VALUE OF sequence" operator.
+     */
+    CURRENT_VALUE,
 
-  /** {@code FLOOR} function. */
-  FLOOR,
+    /** {@code FLOOR} function. */
+    FLOOR,
 
-  /** {@code CEIL} function. */
-  CEIL,
+    /** {@code CEIL} function. */
+    CEIL,
 
-  /** {@code TRIM} function. */
-  TRIM,
+    /** {@code TRIM} function. */
+    TRIM,
 
-  /** {@code LTRIM} function (Oracle). */
-  LTRIM,
+    /** {@code LTRIM} function (Oracle). */
+    LTRIM,
 
-  /** {@code RTRIM} function (Oracle). */
-  RTRIM,
+    /** {@code RTRIM} function (Oracle). */
+    RTRIM,
 
-  /** {@code EXTRACT} function. */
-  EXTRACT,
+    /** {@code EXTRACT} function. */
+    EXTRACT,
 
-  /** {@code ARRAY_APPEND} function (Spark semantics). */
-  ARRAY_APPEND,
+    /** {@code ARRAY_APPEND} function (Spark semantics). */
+    ARRAY_APPEND,
 
-  /** {@code ARRAY_COMPACT} function (Spark semantics). */
-  ARRAY_COMPACT,
+    /** {@code ARRAY_COMPACT} function (Spark semantics). */
+    ARRAY_COMPACT,
 
-  /** {@code ARRAY_CONCAT} function (BigQuery semantics). */
-  ARRAY_CONCAT,
+    /** {@code ARRAY_CONCAT} function (BigQuery semantics). */
+    ARRAY_CONCAT,
 
-  /** {@code ARRAY_CONTAINS} function (Spark semantics). */
-  ARRAY_CONTAINS,
+    /** {@code ARRAY_CONTAINS} function (Spark semantics). */
+    ARRAY_CONTAINS,
 
-  /** {@code ARRAY_DISTINCT} function (Spark semantics). */
-  ARRAY_DISTINCT,
+    /** {@code ARRAY_DISTINCT} function (Spark semantics). */
+    ARRAY_DISTINCT,
 
-  /** {@code ARRAY_EXCEPT} function (Spark semantics). */
-  ARRAY_EXCEPT,
+    /** {@code ARRAY_EXCEPT} function (Spark semantics). */
+    ARRAY_EXCEPT,
 
-  /** {@code ARRAY_INSERT} function (Spark semantics). */
-  ARRAY_INSERT,
+    /** {@code ARRAY_INSERT} function (Spark semantics). */
+    ARRAY_INSERT,
 
-  /** {@code ARRAY_INTERSECT} function (Spark semantics). */
-  ARRAY_INTERSECT,
+    /** {@code ARRAY_INTERSECT} function (Spark semantics). */
+    ARRAY_INTERSECT,
 
-  /** {@code ARRAY_JOIN} function (Spark semantics). */
-  ARRAY_JOIN,
+    /** {@code ARRAY_JOIN} function (Spark semantics). */
+    ARRAY_JOIN,
 
-  /** {@code ARRAY_LENGTH} function (Spark semantics). */
-  ARRAY_LENGTH,
+    /** {@code ARRAY_LENGTH} function (Spark semantics). */
+    ARRAY_LENGTH,
 
-  /** {@code ARRAY_MAX} function (Spark semantics). */
-  ARRAY_MAX,
+    /** {@code ARRAY_MAX} function (Spark semantics). */
+    ARRAY_MAX,
 
-  /** {@code ARRAY_MIN} function (Spark semantics). */
-  ARRAY_MIN,
+    /** {@code ARRAY_MIN} function (Spark semantics). */
+    ARRAY_MIN,
 
-  /** {@code ARRAY_POSITION} function (Spark semantics). */
-  ARRAY_POSITION,
+    /** {@code ARRAY_POSITION} function (Spark semantics). */
+    ARRAY_POSITION,
 
-  /** {@code ARRAY_PREPEND} function (Spark semantics). */
-  ARRAY_PREPEND,
+    /** {@code ARRAY_PREPEND} function (Spark semantics). */
+    ARRAY_PREPEND,
 
-  /** {@code ARRAY_REMOVE} function (Spark semantics). */
-  ARRAY_REMOVE,
+    /** {@code ARRAY_REMOVE} function (Spark semantics). */
+    ARRAY_REMOVE,
 
-  /** {@code ARRAY_REPEAT} function (Spark semantics). */
-  ARRAY_REPEAT,
+    /** {@code ARRAY_REPEAT} function (Spark semantics). */
+    ARRAY_REPEAT,
 
-  /** {@code ARRAY_REVERSE} function (BigQuery semantics). */
-  ARRAY_REVERSE,
+    /** {@code ARRAY_REVERSE} function (BigQuery semantics). */
+    ARRAY_REVERSE,
 
-  /** {@code ARRAY_SIZE} function (Spark semantics). */
-  ARRAY_SIZE,
+    /** {@code ARRAY_SIZE} function (Spark semantics). */
+    ARRAY_SIZE,
 
-  /** {@code ARRAY_SLICE} function (Hive semantics). */
-  ARRAY_SLICE,
+    /** {@code ARRAY_SLICE} function (Hive semantics). */
+    ARRAY_SLICE,
 
-  /** {@code ARRAY_TO_STRING} function (BigQuery semantics). */
-  ARRAY_TO_STRING,
+    /** {@code ARRAY_TO_STRING} function (BigQuery semantics). */
+    ARRAY_TO_STRING,
 
-  /** {@code ARRAY_UNION} function (Spark semantics). */
-  ARRAY_UNION,
+    /** {@code ARRAY_UNION} function (Spark semantics). */
+    ARRAY_UNION,
 
-  /** {@code ARRAYS_OVERLAP} function (Spark semantics). */
-  ARRAYS_OVERLAP,
+    /** {@code ARRAYS_OVERLAP} function (Spark semantics). */
+    ARRAYS_OVERLAP,
 
-  /** {@code ARRAYS_ZIP} function (Spark semantics). */
-  ARRAYS_ZIP,
+    /** {@code ARRAYS_ZIP} function (Spark semantics). */
+    ARRAYS_ZIP,
 
-  /** {@code SORT_ARRAY} function (Spark semantics). */
-  SORT_ARRAY,
+    /** {@code SORT_ARRAY} function (Spark semantics). */
+    SORT_ARRAY,
 
-  /** {@code MAP_CONCAT} function (Spark semantics). */
-  MAP_CONCAT,
+    /** {@code MAP_CONCAT} function (Spark semantics). */
+    MAP_CONCAT,
 
-  /** {@code MAP_ENTRIES} function (Spark semantics). */
-  MAP_ENTRIES,
+    /** {@code MAP_ENTRIES} function (Spark semantics). */
+    MAP_ENTRIES,
 
-  /** {@code MAP_KEYS} function (Spark semantics). */
-  MAP_KEYS,
+    /** {@code MAP_KEYS} function (Spark semantics). */
+    MAP_KEYS,
 
-  /** {@code MAP_VALUES} function (Spark semantics). */
-  MAP_VALUES,
+    /** {@code MAP_VALUES} function (Spark semantics). */
+    MAP_VALUES,
 
-  /** {@code MAP_CONTAINS_KEY} function (Spark semantics). */
-  MAP_CONTAINS_KEY,
+    /** {@code MAP_CONTAINS_KEY} function (Spark semantics). */
+    MAP_CONTAINS_KEY,
 
-  /** {@code MAP_FROM_ARRAYS} function (Spark semantics). */
-  MAP_FROM_ARRAYS,
+    /** {@code MAP_FROM_ARRAYS} function (Spark semantics). */
+    MAP_FROM_ARRAYS,
 
-  /** {@code MAP_FROM_ENTRIES} function (Spark semantics). */
-  MAP_FROM_ENTRIES,
+    /** {@code MAP_FROM_ENTRIES} function (Spark semantics). */
+    MAP_FROM_ENTRIES,
 
-  /** {@code STR_TO_MAP} function (Spark semantics). */
-  STR_TO_MAP,
+    /** {@code STR_TO_MAP} function (Spark semantics). */
+    STR_TO_MAP,
 
-  /** {@code SUBSTRING_INDEX} function (Spark semantics). */
-  SUBSTRING_INDEX,
+    /** {@code SUBSTRING_INDEX} function (Spark semantics). */
+    SUBSTRING_INDEX,
 
-  /** {@code REVERSE} function (SQL Server, MySQL). */
-  REVERSE,
+    /** {@code REVERSE} function (SQL Server, MySQL). */
+    REVERSE,
 
-  /** {@code REVERSE} function (Spark semantics). */
-  REVERSE_SPARK,
+    /** {@code REVERSE} function (Spark semantics). */
+    REVERSE_SPARK,
 
-  /** {@code SOUNDEX} function (Spark semantics). */
-  SOUNDEX_SPARK,
+    /** {@code SOUNDEX} function (Spark semantics). */
+    SOUNDEX_SPARK,
 
-  /** {@code SUBSTR} function (BigQuery semantics). */
-  SUBSTR_BIG_QUERY,
+    /** {@code SUBSTR} function (BigQuery semantics). */
+    SUBSTR_BIG_QUERY,
 
-  /** {@code SUBSTR} function (MySQL semantics). */
-  SUBSTR_MYSQL,
+    /** {@code SUBSTR} function (MySQL semantics). */
+    SUBSTR_MYSQL,
 
-  /** {@code SUBSTR} function (Oracle semantics). */
-  SUBSTR_ORACLE,
+    /** {@code SUBSTR} function (Oracle semantics). */
+    SUBSTR_ORACLE,
 
-  /** {@code SUBSTR} function (PostgreSQL semantics). */
-  SUBSTR_POSTGRESQL,
+    /** {@code SUBSTR} function (PostgreSQL semantics). */
+    SUBSTR_POSTGRESQL,
 
-  /** {@code CHAR_LENGTH} function. */
-  CHAR_LENGTH,
+    /** {@code CHAR_LENGTH} function. */
+    CHAR_LENGTH,
 
-  /** {@code ENDS_WITH} function. */
-  ENDS_WITH,
+    /** {@code ENDS_WITH} function. */
+    ENDS_WITH,
 
-  /** {@code STARTS_WITH} function. */
-  STARTS_WITH,
+    /** {@code STARTS_WITH} function. */
+    STARTS_WITH,
 
-  /** Call to a function using JDBC function syntax. */
-  JDBC_FN,
+    /** Call to a function using JDBC function syntax. */
+    JDBC_FN,
 
-  /** {@code MULTISET} value constructor. */
-  MULTISET_VALUE_CONSTRUCTOR,
+    /** {@code MULTISET} value constructor. */
+    MULTISET_VALUE_CONSTRUCTOR,
 
-  /** {@code MULTISET} query constructor. */
-  MULTISET_QUERY_CONSTRUCTOR,
+    /** {@code MULTISET} query constructor. */
+    MULTISET_QUERY_CONSTRUCTOR,
 
-  /** {@code JSON} value expression. */
-  JSON_VALUE_EXPRESSION,
+    /** {@code JSON} value expression. */
+    JSON_VALUE_EXPRESSION,
 
-  /** {@code JSON_ARRAYAGG} aggregate function. */
-  JSON_ARRAYAGG,
+    /** {@code JSON_ARRAYAGG} aggregate function. */
+    JSON_ARRAYAGG,
 
-  /** {@code JSON_OBJECTAGG} aggregate function. */
-  JSON_OBJECTAGG,
+    /** {@code JSON_OBJECTAGG} aggregate function. */
+    JSON_OBJECTAGG,
 
-  /** {@code JSON} type function. */
-  JSON_TYPE,
+    /** {@code JSON} type function. */
+    JSON_TYPE,
 
-  /** {@code UNNEST} operator. */
-  UNNEST,
+    /** {@code UNNEST} operator. */
+    UNNEST,
 
-  /**
-   * The "LATERAL" qualifier to relations in the FROM clause.
-   */
-  LATERAL,
+    /**
+     * The "LATERAL" qualifier to relations in the FROM clause.
+     */
+    LATERAL,
 
-  /**
-   * <a href="https://docs.databricks.com/aws/en/sql/language-manual/functions/colonsign">Databricks' colon operator</a>
-   */
-  COLON,
+    /**
+     * <a href="https://docs.databricks.com/aws/en/sql/language-manual/functions/colonsign">Databricks' colon operator</a>
+     */
+    COLON,
 
-  /**
-   * Access to a JSON path in a variant value.
-   */
-  VARIANT_GET,
+    /**
+     * Access to a JSON path in a variant value.
+     */
+    VARIANT_GET,
 
-  /**
-   * Access to a JSON path in a variant value. Type conversion errors are ignored.
-   */
-  TRY_VARIANT_GET,
+    /**
+     * Access to a JSON path in a variant value. Type conversion errors are ignored.
+     */
+    TRY_VARIANT_GET,
 
-  /**
-   * Parse JSON into a Variant value.
-   */
-  PARSE_JSON,
+    /**
+     * Parse JSON into a Variant value.
+     */
+    PARSE_JSON,
 
-  /**
-   * Checks if a variant value is null.
-   */
-  IS_VARIANT_NULL,
+    /**
+     * Checks if a variant value is null.
+     */
+    IS_VARIANT_NULL,
 
-  /**
-   * Table operator which converts user-defined transform into a relation, for
-   * example, <code>select * from TABLE(udx(x, y, z))</code>. See also the
-   * {@link #EXPLICIT_TABLE} prefix operator.
-   */
-  COLLECTION_TABLE,
+    /**
+     * Table operator which converts user-defined transform into a relation, for
+     * example, <code>select * from TABLE(udx(x, y, z))</code>. See also the
+     * {@link #EXPLICIT_TABLE} prefix operator.
+     */
+    COLLECTION_TABLE,
 
-  /**
-   * Array Value Constructor, e.g. {@code Array[1, 2, 3]}.
-   */
-  ARRAY_VALUE_CONSTRUCTOR,
+    /**
+     * Array Value Constructor, e.g. {@code Array[1, 2, 3]}.
+     */
+    ARRAY_VALUE_CONSTRUCTOR,
 
-  /**
-   * Array Query Constructor, e.g. {@code Array(select deptno from dept)}.
-   */
-  ARRAY_QUERY_CONSTRUCTOR,
+    /**
+     * Array Query Constructor, e.g. {@code Array(select deptno from dept)}.
+     */
+    ARRAY_QUERY_CONSTRUCTOR,
 
-  /** MAP value constructor, e.g. {@code MAP ['washington', 1, 'obama', 44]}. */
-  MAP_VALUE_CONSTRUCTOR,
+    /** MAP value constructor, e.g. {@code MAP ['washington', 1, 'obama', 44]}. */
+    MAP_VALUE_CONSTRUCTOR,
 
-  /** MAP query constructor,
-   * e.g. {@code MAP (SELECT empno, deptno FROM emp)}. */
-  MAP_QUERY_CONSTRUCTOR,
+    /** MAP query constructor,
+     * e.g. {@code MAP (SELECT empno, deptno FROM emp)}. */
+    MAP_QUERY_CONSTRUCTOR,
 
-  /** {@code CURSOR} constructor, for example, <code>SELECT * FROM
-   * TABLE(udx(CURSOR(SELECT ...), x, y, z))</code>. */
-  CURSOR,
+    /** {@code CURSOR} constructor, for example, <code>SELECT * FROM
+     * TABLE(udx(CURSOR(SELECT ...), x, y, z))</code>. */
+    CURSOR,
 
-  /** {@code CONTAINS_SUBSTR} function (BigQuery semantics). */
-  CONTAINS_SUBSTR,
+    /** {@code CONTAINS_SUBSTR} function (BigQuery semantics). */
+    CONTAINS_SUBSTR,
 
-  // internal operators (evaluated in validator) 200-299
+    // internal operators (evaluated in validator) 200-299
 
-  /** The {@code LITERAL_AGG} aggregate function that always returns the same
-   * literal (even if the group is empty).
-   *
-   * <p>Useful during optimization because it allows you to, say, generate a
-   * non-null value (to detect outer joins) in an Aggregate without an extra
-   * Project. */
-  LITERAL_AGG,
+    /** The {@code LITERAL_AGG} aggregate function that always returns the same
+     * literal (even if the group is empty).
+     *
+     * <p>Useful during optimization because it allows you to, say, generate a
+     * non-null value (to detect outer joins) in an Aggregate without an extra
+     * Project. */
+    LITERAL_AGG,
 
-  /**
-   * Literal chain operator (for composite string literals).
-   * An internal operator that does not appear in SQL syntax.
-   */
-  LITERAL_CHAIN,
+    /**
+     * Literal chain operator (for composite string literals).
+     * An internal operator that does not appear in SQL syntax.
+     */
+    LITERAL_CHAIN,
 
-  /**
-   * Escape operator (always part of LIKE or SIMILAR TO expression).
-   * An internal operator that does not appear in SQL syntax.
-   */
-  ESCAPE,
+    /**
+     * Escape operator (always part of LIKE or SIMILAR TO expression).
+     * An internal operator that does not appear in SQL syntax.
+     */
+    ESCAPE,
 
-  /**
-   * The internal REINTERPRET operator (meaning a reinterpret cast).
-   * An internal operator that does not appear in SQL syntax.
-   */
-  REINTERPRET,
+    /**
+     * The internal REINTERPRET operator (meaning a reinterpret cast).
+     * An internal operator that does not appear in SQL syntax.
+     */
+    REINTERPRET,
 
-  /** The internal {@code EXTEND} operator that qualifies a table name in the
-   * {@code FROM} clause. */
-  EXTEND,
+    /** The internal {@code EXTEND} operator that qualifies a table name in the
+     * {@code FROM} clause. */
+    EXTEND,
 
-  /** The internal {@code CUBE} operator that occurs within a {@code GROUP BY}
-   * clause. */
-  CUBE,
+    /** The internal {@code CUBE} operator that occurs within a {@code GROUP BY}
+     * clause. */
+    CUBE,
 
-  /** The internal {@code ROLLUP} operator that occurs within a {@code GROUP BY}
-   * clause. */
-  ROLLUP,
+    /** The internal {@code ROLLUP} operator that occurs within a {@code GROUP BY}
+     * clause. */
+    ROLLUP,
 
-  /** The internal {@code GROUPING SETS} operator that occurs within a
-   * {@code GROUP BY} clause. */
-  GROUPING_SETS,
+    /** The internal {@code GROUPING SETS} operator that occurs within a
+     * {@code GROUP BY} clause. */
+    GROUPING_SETS,
 
-  /** The {@code GROUPING(e, ...)} function. */
-  GROUPING,
+    /** The {@code GROUPING(e, ...)} function. */
+    GROUPING,
 
-  // CHECKSTYLE: IGNORE 1
-  /** @deprecated Use {@link #GROUPING}. */
-  @Deprecated // to be removed before 2.0
-      GROUPING_ID,
+    // CHECKSTYLE: IGNORE 1
+    /** @deprecated Use {@link #GROUPING}. */
+    @Deprecated // to be removed before 2.0
+        GROUPING_ID,
 
-  /** The {@code GROUP_ID()} function. */
-  GROUP_ID,
+    /** The {@code GROUP_ID()} function. */
+    GROUP_ID,
 
-  /** The internal "permute" function in a MATCH_RECOGNIZE clause. */
-  PATTERN_PERMUTE,
+    /** The internal "permute" function in a MATCH_RECOGNIZE clause. */
+    PATTERN_PERMUTE,
 
-  /** The special patterns to exclude enclosing pattern from output in a
-   * MATCH_RECOGNIZE clause. */
-  PATTERN_EXCLUDED,
+    /** The special patterns to exclude enclosing pattern from output in a
+     * MATCH_RECOGNIZE clause. */
+    PATTERN_EXCLUDED,
 
-  // Aggregate functions
+    // Aggregate functions
 
-  /** The {@code COUNT} aggregate function. */
-  COUNT,
+    /** The {@code COUNT} aggregate function. */
+    COUNT,
 
-  /** The {@code SUM} aggregate function. */
-  SUM,
-  /** The {@code MIN_N} aggregate function. */
-  MIN_N,
+    /** The {@code SUM} aggregate function. */
+    SUM,
+    /** The {@code MIN_N} aggregate function. */
+    MIN_N,
 
-  /** The {@code SUM0} aggregate function. */
-  SUM0,
+    /** The {@code SUM0} aggregate function. */
+    SUM0,
 
-  /** The {@code MIN} aggregate function. */
-  MIN,
+    /** The {@code MIN} aggregate function. */
+    MIN,
 
-  /** The {@code MAX} aggregate function. */
-  MAX,
+    /** The {@code MAX} aggregate function. */
+    MAX,
 
-  /** The {@code LEAD} aggregate function. */
-  LEAD,
+    /** The {@code LEAD} aggregate function. */
+    LEAD,
 
-  /** The {@code LAG} aggregate function. */
-  LAG,
+    /** The {@code LAG} aggregate function. */
+    LAG,
 
-  /** The {@code FIRST_VALUE} aggregate function. */
-  FIRST_VALUE,
+    /** The {@code FIRST_VALUE} aggregate function. */
+    FIRST_VALUE,
 
-  /** The {@code LAST_VALUE} aggregate function. */
-  LAST_VALUE,
+    /** The {@code LAST_VALUE} aggregate function. */
+    LAST_VALUE,
 
-  /** The {@code ANY_VALUE} aggregate function. */
-  ANY_VALUE,
+    /** The {@code ANY_VALUE} aggregate function. */
+    ANY_VALUE,
 
-  BOOL_OR,
+    BOOL_OR,
 
-  /** The {@code COVAR_POP} aggregate function. */
-  COVAR_POP,
+    /** The {@code COVAR_POP} aggregate function. */
+    COVAR_POP,
 
-  /** The {@code COVAR_SAMP} aggregate function. */
-  COVAR_SAMP,
+    /** The {@code COVAR_SAMP} aggregate function. */
+    COVAR_SAMP,
 
-  /** The {@code REGR_COUNT} aggregate function. */
-  REGR_COUNT,
+    /** The {@code REGR_COUNT} aggregate function. */
+    REGR_COUNT,
 
-  /** The {@code REGR_SXX} aggregate function. */
-  REGR_SXX,
+    /** The {@code REGR_SXX} aggregate function. */
+    REGR_SXX,
 
-  /** The {@code REGR_SYY} aggregate function. */
-  REGR_SYY,
+    /** The {@code REGR_SYY} aggregate function. */
+    REGR_SYY,
 
-  /** The {@code AVG} aggregate function. */
-  AVG,
+    /** The {@code AVG} aggregate function. */
+    AVG,
 
-  /** The {@code STDDEV_POP} aggregate function. */
-  STDDEV_POP,
+    /** The {@code STDDEV_POP} aggregate function. */
+    STDDEV_POP,
 
-  /** The {@code STDDEV_SAMP} aggregate function. */
-  STDDEV_SAMP,
+    /** The {@code STDDEV_SAMP} aggregate function. */
+    STDDEV_SAMP,
 
-  /** The {@code VAR_POP} aggregate function. */
-  VAR_POP,
+    /** The {@code VAR_POP} aggregate function. */
+    VAR_POP,
 
-  /** The {@code VAR_SAMP} aggregate function. */
-  VAR_SAMP,
+    /** The {@code VAR_SAMP} aggregate function. */
+    VAR_SAMP,
 
-  /** The {@code NTILE} aggregate function. */
-  NTILE,
+    /** The {@code NTILE} aggregate function. */
+    NTILE,
 
-  /** The {@code NTH_VALUE} aggregate function. */
-  NTH_VALUE,
+    /** The {@code NTH_VALUE} aggregate function. */
+    NTH_VALUE,
 
-  /** The {@code LISTAGG} aggregate function. */
-  LISTAGG,
+    /** The {@code LISTAGG} aggregate function. */
+    LISTAGG,
 
-  /** The {@code STRING_AGG} aggregate function. */
-  STRING_AGG,
+    /** The {@code STRING_AGG} aggregate function. */
+    STRING_AGG,
 
-  /** The {@code COUNTIF} aggregate function. */
-  COUNTIF,
+    /** The {@code COUNTIF} aggregate function. */
+    COUNTIF,
 
-  /** The {@code ARRAY_AGG} aggregate function. */
-  ARRAY_AGG,
+    /** The {@code ARRAY_AGG} aggregate function. */
+    ARRAY_AGG,
 
-  /** The {@code ARRAY_CONCAT_AGG} aggregate function. */
-  ARRAY_CONCAT_AGG,
+    /** The {@code ARRAY_CONCAT_AGG} aggregate function. */
+    ARRAY_CONCAT_AGG,
 
-  /** The {@code GROUP_CONCAT} aggregate function. */
-  GROUP_CONCAT,
+    /** The {@code GROUP_CONCAT} aggregate function. */
+    GROUP_CONCAT,
 
-  /** The {@code COLLECT} aggregate function. */
-  COLLECT,
+    /** The {@code COLLECT} aggregate function. */
+    COLLECT,
 
-  /** The {@code MODE} aggregate function. */
-  MODE,
+    /** The {@code MODE} aggregate function. */
+    MODE,
 
-  /** The {@code ARG_MAX} aggregate function. */
-  ARG_MAX,
+    /** The {@code ARG_MAX} aggregate function. */
+    ARG_MAX,
 
-  /** The {@code ARG_MIN} aggregate function. */
-  ARG_MIN,
+    /** The {@code ARG_MIN} aggregate function. */
+    ARG_MIN,
 
-  /** The {@code PERCENTILE_CONT} aggregate function. */
-  PERCENTILE_CONT,
+    /** The {@code PERCENTILE_CONT} aggregate function. */
+    PERCENTILE_CONT,
 
-  /** The {@code PERCENTILE_DISC} aggregate function. */
-  PERCENTILE_DISC,
+    /** The {@code PERCENTILE_DISC} aggregate function. */
+    PERCENTILE_DISC,
 
-  /** The {@code FUSION} aggregate function. */
-  FUSION,
+    /** The {@code FUSION} aggregate function. */
+    FUSION,
 
-  /** The {@code INTERSECTION} aggregate function. */
-  INTERSECTION,
+    /** The {@code INTERSECTION} aggregate function. */
+    INTERSECTION,
 
-  /** The {@code SINGLE_VALUE} aggregate function. */
-  SINGLE_VALUE,
+    /** The {@code SINGLE_VALUE} aggregate function. */
+    SINGLE_VALUE,
 
-  /** The {@code AGGREGATE} aggregate function. */
-  AGGREGATE_FN,
+    /** The {@code AGGREGATE} aggregate function. */
+    AGGREGATE_FN,
 
-  /** The {@code BITAND} scalar function. */
-  BITAND,
+    /** The {@code BITAND} scalar function. */
+    BITAND,
 
-  /** The {@code BITOR} scalar function. */
-  BITOR,
+    /** The {@code BITOR} scalar function. */
+    BITOR,
 
-  /** The {@code BITXOR} scalar function. */
-  BITXOR,
+    /** The {@code BITXOR} scalar function. */
+    BITXOR,
 
-  /** The {@code BITNOT} scalar function. */
-  BITNOT,
+    /** The {@code BITNOT} scalar function. */
+    BITNOT,
 
-  /** The {@code BIT_AND} aggregate function. */
-  BIT_AND,
+    /** The {@code BIT_AND} aggregate function. */
+    BIT_AND,
 
-  /** The {@code BIT_OR} aggregate function. */
-  BIT_OR,
+    /** The {@code BIT_OR} aggregate function. */
+    BIT_OR,
 
-  /** The {@code BIT_XOR} aggregate function. */
-  BIT_XOR,
+    /** The {@code BIT_XOR} aggregate function. */
+    BIT_XOR,
 
-  /** The {@code ROW_NUMBER} window function. */
-  ROW_NUMBER,
+    /** The {@code ROW_NUMBER} window function. */
+    ROW_NUMBER,
 
-  /** The {@code RANK} window function. */
-  RANK,
+    /** The {@code RANK} window function. */
+    RANK,
 
-  /** The {@code PERCENT_RANK} window function. */
-  PERCENT_RANK,
+    /** The {@code PERCENT_RANK} window function. */
+    PERCENT_RANK,
 
-  /** The {@code DENSE_RANK} window function. */
-  DENSE_RANK,
+    /** The {@code DENSE_RANK} window function. */
+    DENSE_RANK,
 
-  /** The {@code ROW_NUMBER} window function. */
-  CUME_DIST,
+    /** The {@code ROW_NUMBER} window function. */
+    CUME_DIST,
 
-  /** The {@code DESCRIPTOR(column_name, ...)}. */
-  DESCRIPTOR,
+    /** The {@code DESCRIPTOR(column_name, ...)}. */
+    DESCRIPTOR,
 
-  /** The {@code TUMBLE} group function. */
-  TUMBLE,
+    /** The {@code TUMBLE} group function. */
+    TUMBLE,
 
-  // Group functions
-  /** The {@code TUMBLE_START} auxiliary function of
-   * the {@link #TUMBLE} group function. */
-  // TODO: deprecate TUMBLE_START.
-  TUMBLE_START,
+    // Group functions
+    /** The {@code TUMBLE_START} auxiliary function of
+     * the {@link #TUMBLE} group function. */
+    // TODO: deprecate TUMBLE_START.
+    TUMBLE_START,
 
-  /** The {@code TUMBLE_END} auxiliary function of
-   * the {@link #TUMBLE} group function. */
-  // TODO: deprecate TUMBLE_END.
-  TUMBLE_END,
+    /** The {@code TUMBLE_END} auxiliary function of
+     * the {@link #TUMBLE} group function. */
+    // TODO: deprecate TUMBLE_END.
+    TUMBLE_END,
 
-  /** The {@code HOP} group function. */
-  HOP,
+    /** The {@code HOP} group function. */
+    HOP,
 
-  /** The {@code HOP_START} auxiliary function of
-   * the {@link #HOP} group function. */
-  HOP_START,
+    /** The {@code HOP_START} auxiliary function of
+     * the {@link #HOP} group function. */
+    HOP_START,
 
-  /** The {@code HOP_END} auxiliary function of
-   * the {@link #HOP} group function. */
-  HOP_END,
+    /** The {@code HOP_END} auxiliary function of
+     * the {@link #HOP} group function. */
+    HOP_END,
 
-  /** The {@code SESSION} group function. */
-  SESSION,
+    /** The {@code SESSION} group function. */
+    SESSION,
 
-  /** The {@code SESSION_START} auxiliary function of
-   * the {@link #SESSION} group function. */
-  SESSION_START,
+    /** The {@code SESSION_START} auxiliary function of
+     * the {@link #SESSION} group function. */
+    SESSION_START,
 
-  /** The {@code SESSION_END} auxiliary function of
-   * the {@link #SESSION} group function. */
-  SESSION_END,
+    /** The {@code SESSION_END} auxiliary function of
+     * the {@link #SESSION} group function. */
+    SESSION_END,
 
-  /** Column declaration. */
-  COLUMN_DECL,
+    /** Column declaration. */
+    COLUMN_DECL,
 
-  /** Attribute definition. */
-  ATTRIBUTE_DEF,
+    /** Attribute definition. */
+    ATTRIBUTE_DEF,
 
-  /** {@code CHECK} constraint. */
-  CHECK,
+    /** {@code CHECK} constraint. */
+    CHECK,
 
-  /** {@code UNIQUE} constraint. */
-  UNIQUE,
+    /** {@code UNIQUE} constraint. */
+    UNIQUE,
 
-  /** {@code PRIMARY KEY} constraint. */
-  PRIMARY_KEY,
+    /** {@code PRIMARY KEY} constraint. */
+    PRIMARY_KEY,
 
-  /** {@code FOREIGN KEY} constraint. */
-  FOREIGN_KEY,
+    /** {@code FOREIGN KEY} constraint. */
+    FOREIGN_KEY,
 
-  // Spatial functions. They are registered as "user-defined functions" but it
-  // is convenient to have a "kind" so that we can quickly match them in planner
-  // rules.
+    // Spatial functions. They are registered as "user-defined functions" but it
+    // is convenient to have a "kind" so that we can quickly match them in planner
+    // rules.
 
-  /** The {@code ST_DWithin} geo-spatial function. */
-  ST_DWITHIN,
+    /** The {@code ST_DWithin} geo-spatial function. */
+    ST_DWITHIN,
 
-  /** The {@code ST_Point} function. */
-  ST_POINT,
+    /** The {@code ST_Point} function. */
+    ST_POINT,
 
-  /** The {@code ST_Point} function that makes a 3D point. */
-  ST_POINT3,
+    /** The {@code ST_Point} function that makes a 3D point. */
+    ST_POINT3,
 
-  /** The {@code ST_MakeLine} function that makes a line. */
-  ST_MAKE_LINE,
+    /** The {@code ST_MakeLine} function that makes a line. */
+    ST_MAKE_LINE,
 
-  /** The {@code ST_Contains} function that tests whether one geometry contains
-   * another. */
-  ST_CONTAINS,
+    /** The {@code ST_Contains} function that tests whether one geometry contains
+     * another. */
+    ST_CONTAINS,
 
-  /** The {@code Hilbert} function that converts (x, y) to a position on a
-   * Hilbert space-filling curve. */
-  HILBERT,
+    /** The {@code Hilbert} function that converts (x, y) to a position on a
+     * Hilbert space-filling curve. */
+    HILBERT,
 
-  // DDL and session control statements follow. The list is not exhaustive: feel
-  // free to add more.
+    // DDL and session control statements follow. The list is not exhaustive: feel
+    // free to add more.
 
-  /** {@code COMMIT} session control statement. */
-  COMMIT,
+    /** {@code COMMIT} session control statement. */
+    COMMIT,
 
-  /** {@code ROLLBACK} session control statement. */
-  ROLLBACK,
+    /** {@code ROLLBACK} session control statement. */
+    ROLLBACK,
 
-  /** {@code ALTER SESSION} DDL statement. */
-  ALTER_SESSION,
+    /** {@code ALTER SESSION} DDL statement. */
+    ALTER_SESSION,
 
-  /** {@code CREATE SCHEMA} DDL statement. */
-  CREATE_SCHEMA,
+    /** {@code CREATE SCHEMA} DDL statement. */
+    CREATE_SCHEMA,
 
-  /** {@code CREATE FOREIGN SCHEMA} DDL statement. */
-  CREATE_FOREIGN_SCHEMA,
+    /** {@code CREATE FOREIGN SCHEMA} DDL statement. */
+    CREATE_FOREIGN_SCHEMA,
 
-  /** {@code DROP SCHEMA} DDL statement. */
-  DROP_SCHEMA,
+    /** {@code DROP SCHEMA} DDL statement. */
+    DROP_SCHEMA,
 
-  /** {@code CREATE TABLE} DDL statement. */
-  CREATE_TABLE,
+    /** {@code CREATE TABLE} DDL statement. */
+    CREATE_TABLE,
 
-  /** {@code CREATE TABLE LIKE} DDL statement. */
-  CREATE_TABLE_LIKE,
+    /** {@code CREATE TABLE LIKE} DDL statement. */
+    CREATE_TABLE_LIKE,
 
-  /** {@code ALTER TABLE} DDL statement. */
-  ALTER_TABLE,
+    /** {@code ALTER TABLE} DDL statement. */
+    ALTER_TABLE,
 
-  /** {@code DROP TABLE} DDL statement. */
-  DROP_TABLE,
+    /** {@code DROP TABLE} DDL statement. */
+    DROP_TABLE,
 
-  /** {@code TRUNCATE TABLE} DDL statement. */
-  TRUNCATE_TABLE,
+    /** {@code TRUNCATE TABLE} DDL statement. */
+    TRUNCATE_TABLE,
 
-  /** {@code CREATE VIEW} DDL statement. */
-  CREATE_VIEW,
+    /** {@code CREATE VIEW} DDL statement. */
+    CREATE_VIEW,
 
-  /** {@code ALTER VIEW} DDL statement. */
-  ALTER_VIEW,
+    /** {@code ALTER VIEW} DDL statement. */
+    ALTER_VIEW,
 
-  /** {@code DROP VIEW} DDL statement. */
-  DROP_VIEW,
+    /** {@code DROP VIEW} DDL statement. */
+    DROP_VIEW,
 
-  /** {@code CREATE MATERIALIZED VIEW} DDL statement. */
-  CREATE_MATERIALIZED_VIEW,
+    /** {@code CREATE MATERIALIZED VIEW} DDL statement. */
+    CREATE_MATERIALIZED_VIEW,
 
-  /** {@code ALTER MATERIALIZED VIEW} DDL statement. */
-  ALTER_MATERIALIZED_VIEW,
+    /** {@code ALTER MATERIALIZED VIEW} DDL statement. */
+    ALTER_MATERIALIZED_VIEW,
 
-  /** {@code DROP MATERIALIZED VIEW} DDL statement. */
-  DROP_MATERIALIZED_VIEW,
+    /** {@code DROP MATERIALIZED VIEW} DDL statement. */
+    DROP_MATERIALIZED_VIEW,
 
-  /** {@code CREATE SEQUENCE} DDL statement. */
-  CREATE_SEQUENCE,
+    /** {@code CREATE SEQUENCE} DDL statement. */
+    CREATE_SEQUENCE,
 
-  /** {@code ALTER SEQUENCE} DDL statement. */
-  ALTER_SEQUENCE,
+    /** {@code ALTER SEQUENCE} DDL statement. */
+    ALTER_SEQUENCE,
 
-  /** {@code DROP SEQUENCE} DDL statement. */
-  DROP_SEQUENCE,
+    /** {@code DROP SEQUENCE} DDL statement. */
+    DROP_SEQUENCE,
 
-  /** {@code CREATE INDEX} DDL statement. */
-  CREATE_INDEX,
+    /** {@code CREATE INDEX} DDL statement. */
+    CREATE_INDEX,
 
-  /** {@code ALTER INDEX} DDL statement. */
-  ALTER_INDEX,
+    /** {@code ALTER INDEX} DDL statement. */
+    ALTER_INDEX,
 
-  /** {@code DROP INDEX} DDL statement. */
-  DROP_INDEX,
+    /** {@code DROP INDEX} DDL statement. */
+    DROP_INDEX,
 
-  /** {@code CREATE TYPE} DDL statement. */
-  CREATE_TYPE,
+    /** {@code CREATE TYPE} DDL statement. */
+    CREATE_TYPE,
 
-  /** {@code DROP TYPE} DDL statement. */
-  DROP_TYPE,
+    /** {@code DROP TYPE} DDL statement. */
+    DROP_TYPE,
 
-  /** {@code CREATE FUNCTION} DDL statement. */
-  CREATE_FUNCTION,
+    /** {@code CREATE FUNCTION} DDL statement. */
+    CREATE_FUNCTION,
 
-  /** {@code DROP FUNCTION} DDL statement. */
-  DROP_FUNCTION,
+    /** {@code DROP FUNCTION} DDL statement. */
+    DROP_FUNCTION,
 
-  /** DDL statement not handled above.
-   *
-   * <p><b>Note to other projects</b>: If you are extending Calcite's SQL parser
-   * and have your own object types you no doubt want to define CREATE and DROP
-   * commands for them. Use OTHER_DDL in the short term, but we are happy to add
-   * new enum values for your object types. Just ask!
-   */
-  OTHER_DDL,
-  CHAR,
+    /** DDL statement not handled above.
+     *
+     * <p><b>Note to other projects</b>: If you are extending Calcite's SQL parser
+     * and have your own object types you no doubt want to define CREATE and DROP
+     * commands for them. Use OTHER_DDL in the short term, but we are happy to add
+     * new enum values for your object types. Just ask!
+     */
+    OTHER_DDL,
+    CHAR,
 
-  // Custom E6data Enum values
-  LEFT_SHIFT,
-  RIGHT_SHIFT,
-  BITWISE_AND,
-  CACHE,
-  LAST_DAY,
-  NEXT_DAY,
-  TO_UNIX_TIMESTAMP,
-  UNIX_TIMESTAMP,
-  FORMAT_TIMESTAMP,
-  JSON_VALUE,
-  JSON_OBJECT_KEYS,
-  PERCENTILE,
-  DATE_DIFF,
-  DROP_CACHE,
-  LOCATE,
-  LEFT,
-  RIGHT,
-  REGEXP_LIKE,
-  REGEXP_REPLACE,
-  SPLIT,
-  SOUNDEX,
-  PARSE_TIMESTAMP,
-  REGEXP_COUNT,
-  TANH,
-  SPLIT_PART,
-  APPROX_COUNT_DISTINCT,
-  SIGN,
-  CONVERT_TIMEZONE,
-  TO_TIMESTAMP,
-  TO_TIMESTAMP_LTZ,
-  TO_TIMESTAMP_NTZ,
-  TO_TIMESTAMP_TZ,
-  TRY_TO_TIMESTAMP,
-  TRY_TO_TIMESTAMP_LTZ,
-  TRY_TO_TIMESTAMP_NTZ,
-  TRY_TO_TIMESTAMP_TZ,
-  DAYNAME,
-  STARTSWITH,
-  ENDSWITH,
-  LEN,
-  COPY_INTO,
-  WRITE_INTO,
-  TO_DATE,
-  TO_CHAR,
-  TRY_CAST,
-  UPPER,
-  LOWER,
-  DATEDIFF,
-  DAYS,
-  TRUNC,
-  ELEMENT_AT,
-  SLICE_MAP,
-  CORR,
-  TRY_DIVIDE,
-  TRY_MULTIPLY,
-  TRY_ADD,
-  TRY_MOD,
-  SHOW_VIEW,
-  REFRESH_MATERIALIZED_VIEW,
-  REPLACE_MATERIALIZED_VIEW,
-  FILTER_ARRAY,
-  REDUCE,
-  IS_NULL_VALUE,
-  FROM_UTC_TIMESTAMP,
-  TO_UTC_TIMESTAMP,
-  SHOW_SCHEMAS,
-  SHOW_TABLES,
-  NULLIFZERO,
-  WEEKDAY,
-  TRY_TO_NUMBER,
-  TO_NUMBER,
-  CURRENT_TIMESTAMP,
-  TO_JSON,
-  FROM_JSON,
-  EQUAL_NULL,
-  VERSION,
-  ANALYZE_TABLE,
-  SLEEP,
-  WIDTH_BUCKET,
-  PMOD,
-  UDF,
-  UDF_CREATE,
-  UDF_SQL_BODY,
-  UDF_JAVA_BODY,
-  UDF_EXPRESSION,
-  UDF_BLOCK_STMT,
-  UDF_CONTINUE_STMT,
-  UDF_BREAK_STMT,
-  UDF_IF_STMT,
-  UDF_RETURN_STMT,
-  UDF_WHILE_STMT,
-  UDF_ASSIGN_STMT,
-  COSINE_DISTANCE,
-  UDF_REGISTER,
-  TRY,
-  DATE_PARSE,
-  MAKE_DATE,
-  UNBASE64,
-  UNBASE64_BINARY,
-  MONTHNAME,
-  MAKE_TIMESTAMP,
-  REGEXP_SUBSTR,
-  LEO_DROP_CACHE,
-  LIKE_ANY,
-  DAYOFWEEK,
-  MONTHS_BETWEEN,
-  APPROX_PERCENTILE,
-  ANY_MATCH,
-  SECRET,
-  AES_DECRYPT,
-  AES_ENCRYPT,
-  ENCODE,
-  BASE64,
-  CONCAT,
-  ALL_MATCH,
-  SET_SEARCH,
-  CURRENT_DATE,
-  NOW,
-  CONCAT_WS,
-  SUBSTR,
-  SUBSTRING,
-  GETUTCDATE,
-  POW,
-  REPLACE,
-  GENERATE_TIMESTAMP_ARRAY,
-  GENERATE_DATE_ARRAY,
-  BETA_CDF,
-  BINOMIAL_CDF,
-  BITWISE_ARITHMETIC_SHIFT_RIGHT,
-  BITWISE_LOGICAL_SHIFT_RIGHT,
-  BITWISE_NOT,
-  BITWISE_OR,
-  BITWISE_SHIFT_LEFT,
-  BITWISE_XOR,
-  BIT_COUNT,
-  CHAR2HEXINT,
-  CHI_SQUARED_CDF,
-  CHR,
-  CODEPOINT,
-  UNICODE,
-  COSEC,
-  COSH,
-  ACOSH,
-  CRC32,
-  E,
-  FROM_BASE,
-  FROM_BASE32,
-  FROM_BASE64,
-  FROM_BASE64URL,
-  FROM_HEX,
-  FROM_UNIXTIME,
-  FROM_UNIXTIME_WITHUNIT,
-  TIMESTAMP_SECONDS,
-  HAMMING_DISTANCE,
-  HMAC_MD5,
-  HMAC_SHA1,
-  HMAC_SHA256,
-  HMAC_SHA512,
-  INDEX,
-  INFINITY,
-  INITCAP,
-  ROUND,
-  H3_LATLNG_TO_CELL,
-  H3_LATLNG_TO_CELLADDRESS,
-  H3_POINT_TO_CELL,
-  H3_POINT_TO_CELLADDRESS,
-  H3_CELL_TO_LATLNG,
-  H3_CELLADDRESS_TO_LATLNG,
-  H3_CELL_TO_CELLADDRESS,
-  H3_CELLADDRESS_TO_CELL,
-  H3_CELL_TO_PARENT,
-  H3_CELLADDRESS_TO_PARENT,
-  H3_CELL_TO_BOUNDARY_AS_GEOJSON,
-  H3_POLYGON_TO_CELLS,
-  H3_POLYGON_TO_CELLADDRESSES,
-  H3_GRID_DISK,
-  BING_TILE_QUADKEY,
-  BING_TILE_AT,
-  INSTR,
-  IS_FINITE,
-  IS_INFINITE,
-  IS_NAN,
-  ISNAN,
-  LCASE,
-  LEVENSHTEIN,
-  LOG10,
-  LOG2,
-  LPAD,
-  MD5,
-  MID,
-  NAN,
-  NEGATIVE,
-  NORMALIZE,
-  PARSE_PRESTO_DATA_SIZE,
-  POISSON_CDF,
-  POSITIVE,
-  TYPEOF,
-  RAND,
-  UUID,
-  REGEXP_EXTRACT,
-  REGEXP_EXTRACT_ALL,
-  REGEXP_SPLIT,
-  REPEAT,
-  RPAD,
-  SEC,
-  SECOND,
-  SECURE_RAND,
-  SECURE_RANDOM,
-  SHA,
-  SHA1,
-  SHA256,
-  SHA512,
-  SIGNUM,
-  SINH,
-  ATANH,
-  ASINH,
-  SQUARE,
-  STRPOS,
-  STRRPOS,
-  STUFF,
-  FACTORIAL,
-  TO_BASE,
-  TO_BASE32,
-  TO_BASE64,
-  TO_BASE64URL,
-  TO_HEX,
-  TO_IEEE_754_64,
-  TO_UTF8,
-  UCASE,
-  URL_DECODE,
-  URL_ENCODE,
-  URL_EXTRACT_FRAGMENT,
-  URL_EXTRACT_HOST,
-  URL_EXTRACT_PATH,
-  URL_EXTRACT_PORT,
-  URL_EXTRACT_PROTOCOL,
-  URL_EXTRACT_QUERY,
-  WEIBULL_CDF,
-  SLICE,
-  ARRAY_SORT,
-  DATETIME,
-  TIME_STAMP,
-  DATE_PART,
-  DATEPART,
-  CHARINDEX,
-  SIZE,
-  CARDINALITY,
-  JSON_ARRAY_LENGTH,
-  JSON_FORMAT,
-  JSON_EXTRACT_SCALAR,
-  JSON_EXTRACT,
-  MAX_BY,
-  MIN_BY,
-  FORMAT_TIME_PIVOT_UDF,
-  FORMAT_TIME_UDF,
-  APPLY_TIMEUNIT_UDF,
-  APPLY_TIMEFORMAT_UDF,
-  TRY_ELEMENT_AT,
-  GETBIT,
-  TO_UNIXTIME,
-  PARSE_DATE,
-  FORMAT,
-  FORMAT_DATE,
-  DATE_FORMAT,
-  PARSE_DATETIME,
-  FORMAT_DATETIME,
-  TO_BOOLEAN,
-  HEX_DECODE_STRING,
-  ASCII,
-  DAYOFWEEKISO,
-  WEEKOFYEAR,
-  WEEKISO,
-  YEAROFWEEK,
-  YEAROFWEEKISO,
-  IFF,
-  TRANSPILE;
+    // Custom E6data Enum values
+    LEFT_SHIFT,
+    RIGHT_SHIFT,
+    BITWISE_AND,
+    CACHE,
+    LAST_DAY,
+    NEXT_DAY,
+    TO_UNIX_TIMESTAMP,
+    UNIX_TIMESTAMP,
+    FORMAT_TIMESTAMP,
+    JSON_VALUE,
+    JSON_OBJECT_KEYS,
+    PERCENTILE,
+    DATE_DIFF,
+    DROP_CACHE,
+    LOCATE,
+    LEFT,
+    RIGHT,
+    REGEXP_LIKE,
+    REGEXP_REPLACE,
+    SPLIT,
+    SOUNDEX,
+    PARSE_TIMESTAMP,
+    REGEXP_COUNT,
+    TANH,
+    SPLIT_PART,
+    APPROX_COUNT_DISTINCT,
+    SIGN,
+    CONVERT_TIMEZONE,
+    TO_TIMESTAMP,
+    TO_TIMESTAMP_LTZ,
+    TO_TIMESTAMP_NTZ,
+    TO_TIMESTAMP_TZ,
+    TRY_TO_TIMESTAMP,
+    TRY_TO_TIMESTAMP_LTZ,
+    TRY_TO_TIMESTAMP_NTZ,
+    TRY_TO_TIMESTAMP_TZ,
+    DAYNAME,
+    STARTSWITH,
+    ENDSWITH,
+    LEN,
+    COPY_INTO,
+    WRITE_INTO,
+    TO_DATE,
+    TO_CHAR,
+    TRY_CAST,
+    UPPER,
+    LOWER,
+    DATEDIFF,
+    DAYS,
+    TRUNC,
+    ELEMENT_AT,
+    SLICE_MAP,
+    CORR,
+    TRY_DIVIDE,
+    TRY_MULTIPLY,
+    TRY_ADD,
+    TRY_MOD,
+    SHOW_VIEW,
+    REFRESH_MATERIALIZED_VIEW,
+    REPLACE_MATERIALIZED_VIEW,
+    FILTER_ARRAY,
+    REDUCE,
+    IS_NULL_VALUE,
+    FROM_UTC_TIMESTAMP,
+    TO_UTC_TIMESTAMP,
+    SHOW_SCHEMAS,
+    SHOW_TABLES,
+    NULLIFZERO,
+    WEEKDAY,
+    TRY_TO_NUMBER,
+    TO_NUMBER,
+    CURRENT_TIMESTAMP,
+    TO_JSON,
+    FROM_JSON,
+    EQUAL_NULL,
+    VERSION,
+    ANALYZE_TABLE,
+    SLEEP,
+    WIDTH_BUCKET,
+    PMOD,
+    UDF,
+    UDF_CREATE,
+    UDF_SQL_BODY,
+    UDF_JAVA_BODY,
+    UDF_EXPRESSION,
+    UDF_BLOCK_STMT,
+    UDF_CONTINUE_STMT,
+    UDF_BREAK_STMT,
+    UDF_IF_STMT,
+    UDF_RETURN_STMT,
+    UDF_WHILE_STMT,
+    UDF_ASSIGN_STMT,
+    COSINE_DISTANCE,
+    UDF_REGISTER,
+    TRY,
+    DATE_PARSE,
+    MAKE_DATE,
+    UNBASE64,
+    UNBASE64_BINARY,
+    MONTHNAME,
+    MAKE_TIMESTAMP,
+    REGEXP_SUBSTR,
+    LEO_DROP_CACHE,
+    LIKE_ANY,
+    DAYOFWEEK,
+    MONTHS_BETWEEN,
+    APPROX_PERCENTILE,
+    ANY_MATCH,
+    SECRET,
+    AES_DECRYPT,
+    AES_ENCRYPT,
+    ENCODE,
+    BASE64,
+    CONCAT,
+    ALL_MATCH,
+    SET_SEARCH,
+    CURRENT_DATE,
+    NOW,
+    CONCAT_WS,
+    SUBSTR,
+    SUBSTRING,
+    GETUTCDATE,
+    POW,
+    REPLACE,
+    GENERATE_TIMESTAMP_ARRAY,
+    GENERATE_DATE_ARRAY,
+    BETA_CDF,
+    BINOMIAL_CDF,
+    BITWISE_ARITHMETIC_SHIFT_RIGHT,
+    BITWISE_LOGICAL_SHIFT_RIGHT,
+    BITWISE_NOT,
+    BITWISE_OR,
+    BITWISE_SHIFT_LEFT,
+    BITWISE_XOR,
+    BIT_COUNT,
+    CHAR2HEXINT,
+    CHI_SQUARED_CDF,
+    CHR,
+    CODEPOINT,
+    UNICODE,
+    COSEC,
+    COSH,
+    ACOSH,
+    CRC32,
+    E,
+    FROM_BASE,
+    FROM_BASE32,
+    FROM_BASE64,
+    FROM_BASE64URL,
+    FROM_HEX,
+    FROM_UNIXTIME,
+    FROM_UNIXTIME_WITHUNIT,
+    TIMESTAMP_SECONDS,
+    HAMMING_DISTANCE,
+    HMAC_MD5,
+    HMAC_SHA1,
+    HMAC_SHA256,
+    HMAC_SHA512,
+    INDEX,
+    INFINITY,
+    INITCAP,
+    ROUND,
+    H3_LATLNG_TO_CELL,
+    H3_LATLNG_TO_CELLADDRESS,
+    H3_POINT_TO_CELL,
+    H3_POINT_TO_CELLADDRESS,
+    H3_CELL_TO_LATLNG,
+    H3_CELLADDRESS_TO_LATLNG,
+    H3_CELL_TO_CELLADDRESS,
+    H3_CELLADDRESS_TO_CELL,
+    H3_CELL_TO_PARENT,
+    H3_CELLADDRESS_TO_PARENT,
+    H3_CELL_TO_BOUNDARY_AS_GEOJSON,
+    H3_POLYGON_TO_CELLS,
+    H3_POLYGON_TO_CELLADDRESSES,
+    H3_GRID_DISK,
+    BING_TILE_QUADKEY,
+    BING_TILE_AT,
+    INSTR,
+    IS_FINITE,
+    IS_INFINITE,
+    IS_NAN,
+    ISNAN,
+    LCASE,
+    LEVENSHTEIN,
+    LOG10,
+    LOG2,
+    LPAD,
+    MD5,
+    MID,
+    NAN,
+    NEGATIVE,
+    NORMALIZE,
+    PARSE_PRESTO_DATA_SIZE,
+    POISSON_CDF,
+    POSITIVE,
+    TYPEOF,
+    RAND,
+    UUID,
+    REGEXP_EXTRACT,
+    REGEXP_EXTRACT_ALL,
+    REGEXP_SPLIT,
+    REPEAT,
+    RPAD,
+    SEC,
+    SECOND,
+    SECURE_RAND,
+    SECURE_RANDOM,
+    SHA,
+    SHA1,
+    SHA256,
+    SHA512,
+    SIGNUM,
+    SINH,
+    ATANH,
+    ASINH,
+    SQUARE,
+    STRPOS,
+    STRRPOS,
+    STUFF,
+    FACTORIAL,
+    TO_BASE,
+    TO_BASE32,
+    TO_BASE64,
+    TO_BASE64URL,
+    TO_HEX,
+    TO_IEEE_754_64,
+    TO_UTF8,
+    UCASE,
+    URL_DECODE,
+    URL_ENCODE,
+    URL_EXTRACT_FRAGMENT,
+    URL_EXTRACT_HOST,
+    URL_EXTRACT_PATH,
+    URL_EXTRACT_PORT,
+    URL_EXTRACT_PROTOCOL,
+    URL_EXTRACT_QUERY,
+    WEIBULL_CDF,
+    SLICE,
+    ARRAY_SORT,
+    DATETIME,
+    TIME_STAMP,
+    DATE_PART,
+    DATEPART,
+    CHARINDEX,
+    SIZE,
+    CARDINALITY,
+    JSON_ARRAY_LENGTH,
+    JSON_FORMAT,
+    JSON_EXTRACT_SCALAR,
+    JSON_EXTRACT,
+    MAX_BY,
+    MIN_BY,
+    FORMAT_TIME_PIVOT_UDF,
+    FORMAT_TIME_UDF,
+    APPLY_TIMEUNIT_UDF,
+    APPLY_TIMEFORMAT_UDF,
+    TRY_ELEMENT_AT,
+    GETBIT,
+    TO_UNIXTIME,
+    PARSE_DATE,
+    FORMAT,
+    FORMAT_DATE,
+    DATE_FORMAT,
+    PARSE_DATETIME,
+    FORMAT_DATETIME,
+    TO_BOOLEAN,
+    HEX_DECODE_STRING,
+    ASCII,
+    DAYOFWEEKISO,
+    WEEKOFYEAR,
+    WEEKISO,
+    YEAROFWEEK,
+    YEAROFWEEKISO,
+    IFF,
+    TRANSPILE;
 
 //~ Static fields/initializers ---------------------------------------------
 
@@ -1946,10 +1946,10 @@ public static final Set<SqlKind> SYMMETRICAL_SAME_ARG_TYPE =
 public static final Set<SqlKind> SIMPLE_BINARY_OPS;
 
 static {
-  EnumSet<SqlKind> kinds = EnumSet.copyOf(SqlKind.BINARY_ARITHMETIC);
-  kinds.remove(SqlKind.MOD);
-  kinds.addAll(SqlKind.BINARY_COMPARISON);
-  SIMPLE_BINARY_OPS = Sets.immutableEnumSet(kinds);
+    EnumSet<SqlKind> kinds = EnumSet.copyOf(SqlKind.BINARY_ARITHMETIC);
+    kinds.remove(SqlKind.MOD);
+    kinds.addAll(SqlKind.BINARY_COMPARISON);
+    SIMPLE_BINARY_OPS = Sets.immutableEnumSet(kinds);
 }
 
 /** Lower-case name. */
@@ -1957,11 +1957,11 @@ public final String lowerName = name().toLowerCase(Locale.ROOT);
 public final String sql;
 
 SqlKind() {
-  sql = name();
+    sql = name();
 }
 
 SqlKind(String sql) {
-  this.sql = sql;
+    this.sql = sql;
 }
 
 /** Returns the kind that corresponds to this operator but in the opposite
@@ -1970,18 +1970,18 @@ SqlKind(String sql) {
  * <p>For example, {@code GREATER_THAN.reverse()} returns {@link #LESS_THAN}.
  */
 public SqlKind reverse() {
-  switch (this) {
-  case GREATER_THAN:
-    return LESS_THAN;
-  case GREATER_THAN_OR_EQUAL:
-    return LESS_THAN_OR_EQUAL;
-  case LESS_THAN:
-    return GREATER_THAN;
-  case LESS_THAN_OR_EQUAL:
-    return GREATER_THAN_OR_EQUAL;
-  default:
-    return this;
-  }
+    switch (this) {
+        case GREATER_THAN:
+            return LESS_THAN;
+        case GREATER_THAN_OR_EQUAL:
+            return LESS_THAN_OR_EQUAL;
+        case LESS_THAN:
+            return GREATER_THAN;
+        case LESS_THAN_OR_EQUAL:
+            return GREATER_THAN_OR_EQUAL;
+        default:
+            return this;
+    }
 }
 
 /** Returns the kind that you get if you apply NOT to this kind.
@@ -2000,26 +2000,26 @@ public SqlKind reverse() {
  * <p>This is why negate() != negateNullSafe() for these operators.
  */
 public SqlKind negate() {
-  switch (this) {
-  case IS_TRUE:
-    return IS_NOT_TRUE;
-  case IS_FALSE:
-    return IS_NOT_FALSE;
-  case IS_NULL:
-    return IS_NOT_NULL;
-  case IS_NOT_TRUE:
-    return IS_TRUE;
-  case IS_NOT_FALSE:
-    return IS_FALSE;
-  case IS_NOT_NULL:
-    return IS_NULL;
-  case IS_DISTINCT_FROM:
-    return IS_NOT_DISTINCT_FROM;
-  case IS_NOT_DISTINCT_FROM:
-    return IS_DISTINCT_FROM;
-  default:
-    return this;
-  }
+    switch (this) {
+        case IS_TRUE:
+            return IS_NOT_TRUE;
+        case IS_FALSE:
+            return IS_NOT_FALSE;
+        case IS_NULL:
+            return IS_NOT_NULL;
+        case IS_NOT_TRUE:
+            return IS_TRUE;
+        case IS_NOT_FALSE:
+            return IS_FALSE;
+        case IS_NOT_NULL:
+            return IS_NULL;
+        case IS_DISTINCT_FROM:
+            return IS_NOT_DISTINCT_FROM;
+        case IS_NOT_DISTINCT_FROM:
+            return IS_DISTINCT_FROM;
+        default:
+            return this;
+    }
 }
 
 /** Returns the kind that you get if you negate this kind.
@@ -2036,43 +2036,43 @@ public SqlKind negate() {
  * </ul>
  */
 public SqlKind negateNullSafe() {
-  switch (this) {
-  case EQUALS:
-    return NOT_EQUALS;
-  case NOT_EQUALS:
-    return EQUALS;
-  case LESS_THAN:
-    return GREATER_THAN_OR_EQUAL;
-  case GREATER_THAN:
-    return LESS_THAN_OR_EQUAL;
-  case LESS_THAN_OR_EQUAL:
-    return GREATER_THAN;
-  case GREATER_THAN_OR_EQUAL:
-    return LESS_THAN;
-  case IN:
-    return NOT_IN;
-  case NOT_IN:
-    return IN;
-  case DRUID_IN:
-    return DRUID_NOT_IN;
-  case DRUID_NOT_IN:
-    return DRUID_IN;
-  case IS_TRUE:
-    return IS_FALSE;
-  case IS_FALSE:
-    return IS_TRUE;
-  case IS_NOT_TRUE:
-    return IS_NOT_FALSE;
-  case IS_NOT_FALSE:
-    return IS_NOT_TRUE;
-  // (NOT x) IS NULL => x IS NULL
-  // Similarly (NOT x) IS NOT NULL => x IS NOT NULL
-  case IS_NOT_NULL:
-  case IS_NULL:
-    return this;
-  default:
-    return this.negate();
-  }
+    switch (this) {
+        case EQUALS:
+            return NOT_EQUALS;
+        case NOT_EQUALS:
+            return EQUALS;
+        case LESS_THAN:
+            return GREATER_THAN_OR_EQUAL;
+        case GREATER_THAN:
+            return LESS_THAN_OR_EQUAL;
+        case LESS_THAN_OR_EQUAL:
+            return GREATER_THAN;
+        case GREATER_THAN_OR_EQUAL:
+            return LESS_THAN;
+        case IN:
+            return NOT_IN;
+        case NOT_IN:
+            return IN;
+        case DRUID_IN:
+            return DRUID_NOT_IN;
+        case DRUID_NOT_IN:
+            return DRUID_IN;
+        case IS_TRUE:
+            return IS_FALSE;
+        case IS_FALSE:
+            return IS_TRUE;
+        case IS_NOT_TRUE:
+            return IS_NOT_FALSE;
+        case IS_NOT_FALSE:
+            return IS_NOT_TRUE;
+        // (NOT x) IS NULL => x IS NULL
+        // Similarly (NOT x) IS NOT NULL => x IS NOT NULL
+        case IS_NOT_NULL:
+        case IS_NULL:
+            return this;
+        default:
+            return this.negate();
+    }
 }
 
 /**
@@ -2086,7 +2086,7 @@ public SqlKind negateNullSafe() {
  * @return Whether this kind belongs to the given category
  */
 public final boolean belongsTo(Collection<SqlKind> category) {
-  return category.contains(this);
+    return category.contains(this);
 }
 
 /**
@@ -2094,101 +2094,101 @@ public final boolean belongsTo(Collection<SqlKind> category) {
  * return this.  Do not add standard functions here.
  */
 public SqlKind getFunctionKind() {
-  switch (this) {
-  case CONVERT:
-  case TRANSLATE:
-  case POSITION:
-  case DECODE:
-  case NVL:
-  case NVL2:
-  case GREATEST:
-  case GREATEST_PG:
-  case CONCAT2:
-  case CONCAT_WITH_NULL:
-  case CONCAT_WS_MSSQL:
-  case CONCAT_WS_POSTGRESQL:
-  case CONCAT_WS_SPARK:
-  case IF:
-  case LEAST:
-  case LEAST_PG:
-  case LOG:
-  case DATE_ADD:
-  case DATE_TRUNC:
-  case DATE_SUB:
-  case TIME_ADD:
-  case TIME_SUB:
-  case TIMESTAMP_ADD:
-  case TIMESTAMP_DIFF:
-  case TIMESTAMP_SUB:
-  case SAFE_CAST:
-  case FLOOR:
-  case CEIL:
-  case TRIM:
-  case LTRIM:
-  case RTRIM:
-  case ARRAY_APPEND:
-  case ARRAY_COMPACT:
-  case ARRAY_CONCAT:
-  case ARRAY_CONTAINS:
-  case ARRAY_DISTINCT:
-  case ARRAY_EXCEPT:
-  case ARRAY_INSERT:
-  case ARRAY_INTERSECT:
-  case ARRAY_JOIN:
-  case ARRAY_LENGTH:
-  case ARRAY_MAX:
-  case ARRAY_MIN:
-  case ARRAY_POSITION:
-  case ARRAY_PREPEND:
-  case ARRAY_REMOVE:
-  case ARRAY_REPEAT:
-  case ARRAY_REVERSE:
-  case ARRAY_SIZE:
-  case ARRAY_SLICE:
-  case ARRAY_TO_STRING:
-  case ARRAY_UNION:
-  case ARRAYS_OVERLAP:
-  case ARRAYS_ZIP:
-  case SORT_ARRAY:
-  case MAP_CONCAT:
-  case MAP_ENTRIES:
-  case MAP_KEYS:
-  case MAP_VALUES:
-  case MAP_CONTAINS_KEY:
-  case MAP_FROM_ARRAYS:
-  case MAP_FROM_ENTRIES:
-  case STR_TO_MAP:
-  case REVERSE:
-  case REVERSE_SPARK:
-  case SOUNDEX_SPARK:
-  case SUBSTR_BIG_QUERY:
-  case SUBSTR_MYSQL:
-  case SUBSTR_ORACLE:
-  case SUBSTR_POSTGRESQL:
-  case CHAR_LENGTH:
-  case ENDS_WITH:
-  case STARTS_WITH:
-  case JSON_TYPE:
-  case CONTAINS_SUBSTR:
-  case ST_DWITHIN:
-  case ST_POINT:
-  case ST_POINT3:
-  case ST_MAKE_LINE:
-  case ST_CONTAINS:
-  case HILBERT:
-    return OTHER_FUNCTION;
-  default:
-    return this;
-  }
+    switch (this) {
+        case CONVERT:
+        case TRANSLATE:
+        case POSITION:
+        case DECODE:
+        case NVL:
+        case NVL2:
+        case GREATEST:
+        case GREATEST_PG:
+        case CONCAT2:
+        case CONCAT_WITH_NULL:
+        case CONCAT_WS_MSSQL:
+        case CONCAT_WS_POSTGRESQL:
+        case CONCAT_WS_SPARK:
+        case IF:
+        case LEAST:
+        case LEAST_PG:
+        case LOG:
+        case DATE_ADD:
+        case DATE_TRUNC:
+        case DATE_SUB:
+        case TIME_ADD:
+        case TIME_SUB:
+        case TIMESTAMP_ADD:
+        case TIMESTAMP_DIFF:
+        case TIMESTAMP_SUB:
+        case SAFE_CAST:
+        case FLOOR:
+        case CEIL:
+        case TRIM:
+        case LTRIM:
+        case RTRIM:
+        case ARRAY_APPEND:
+        case ARRAY_COMPACT:
+        case ARRAY_CONCAT:
+        case ARRAY_CONTAINS:
+        case ARRAY_DISTINCT:
+        case ARRAY_EXCEPT:
+        case ARRAY_INSERT:
+        case ARRAY_INTERSECT:
+        case ARRAY_JOIN:
+        case ARRAY_LENGTH:
+        case ARRAY_MAX:
+        case ARRAY_MIN:
+        case ARRAY_POSITION:
+        case ARRAY_PREPEND:
+        case ARRAY_REMOVE:
+        case ARRAY_REPEAT:
+        case ARRAY_REVERSE:
+        case ARRAY_SIZE:
+        case ARRAY_SLICE:
+        case ARRAY_TO_STRING:
+        case ARRAY_UNION:
+        case ARRAYS_OVERLAP:
+        case ARRAYS_ZIP:
+        case SORT_ARRAY:
+        case MAP_CONCAT:
+        case MAP_ENTRIES:
+        case MAP_KEYS:
+        case MAP_VALUES:
+        case MAP_CONTAINS_KEY:
+        case MAP_FROM_ARRAYS:
+        case MAP_FROM_ENTRIES:
+        case STR_TO_MAP:
+        case REVERSE:
+        case REVERSE_SPARK:
+        case SOUNDEX_SPARK:
+        case SUBSTR_BIG_QUERY:
+        case SUBSTR_MYSQL:
+        case SUBSTR_ORACLE:
+        case SUBSTR_POSTGRESQL:
+        case CHAR_LENGTH:
+        case ENDS_WITH:
+        case STARTS_WITH:
+        case JSON_TYPE:
+        case CONTAINS_SUBSTR:
+        case ST_DWITHIN:
+        case ST_POINT:
+        case ST_POINT3:
+        case ST_MAKE_LINE:
+        case ST_CONTAINS:
+        case HILBERT:
+            return OTHER_FUNCTION;
+        default:
+            return this;
+    }
 }
 
 @SafeVarargs
 private static <E extends Enum<E>> EnumSet<E> concat(EnumSet<E> set0,
     EnumSet<E>... sets) {
-  EnumSet<E> set = set0.clone();
-  for (EnumSet<E> s : sets) {
-    set.addAll(s);
-  }
-  return set;
+    EnumSet<E> set = set0.clone();
+    for (EnumSet<E> s : sets) {
+        set.addAll(s);
+    }
+    return set;
 }
 }

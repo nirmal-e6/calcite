@@ -22,6 +22,8 @@ import org.apache.calcite.sql.validate.SqlValidatorException;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.text.MessageFormat;
+
 import static java.util.Objects.requireNonNull;
 import static org.apache.calcite.util.Static.RESOURCE;
 
@@ -116,6 +118,16 @@ public final class CalciteForkSettings {
   public static RuntimeException invalidCatalogException(SqlNode node,
       String catalogName) {
     return provider.invalidCatalogException(node, catalogName);
+  }
+
+  public static CalciteContextException validationException(SqlNode node,
+      String message) {
+    return contextException(node, new Throwable(message));
+  }
+
+  public static CalciteContextException validationException(SqlNode node,
+      String format, Object... args) {
+    return validationException(node, MessageFormat.format(format, args));
   }
 
   private static CalciteContextException contextException(SqlNode node,
