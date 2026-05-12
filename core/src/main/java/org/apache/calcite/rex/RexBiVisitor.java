@@ -1,3 +1,4 @@
+// E6data shade - Added for hypergraph backport from 1.41
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -58,6 +59,8 @@ public interface RexBiVisitor<R, P> {
   R visitPatternFieldRef(RexPatternFieldRef ref, P arg);
 
   R visitLambda(RexLambda lambda, P arg);
+
+  R visitNodeAndFieldIndex(RexNodeAndFieldIndex rexNodeAndFieldIndex, P arg);
 
   /** Visits a list and writes the results to another list. */
   default void visitList(Iterable<? extends RexNode> exprs, P arg,

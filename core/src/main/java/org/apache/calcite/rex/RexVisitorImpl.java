@@ -1,3 +1,4 @@
+// E6data shade - Added for hypergraph backport from 1.41
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -126,8 +127,12 @@ public class RexVisitorImpl<@Nullable R> implements RexVisitor<R> {
     return null;
   }
 
+  @Override public R visitNodeAndFieldIndex(RexNodeAndFieldIndex rexNodeAndFieldIndex) {
+    return null;
+  }
+
   /**
-   * Visits an array of expressions, returning the logical 'and' of their
+   * <p>Visits an array of expressions, returning the logical 'and' of their
    * results.
    *
    * <p>If any of them returns false, returns false immediately; if they all
@@ -149,7 +154,7 @@ public class RexVisitorImpl<@Nullable R> implements RexVisitor<R> {
   }
 
   /**
-   * Visits an array of expressions, returning the logical 'or' of their
+   * <p>Visits an array of expressions, returning the logical 'or' of their
    * results.
    *
    * <p>If any of them returns true, returns true immediately; if they all
