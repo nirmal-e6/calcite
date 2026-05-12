@@ -18,6 +18,7 @@ package org.apache.calcite.sql.validate;
 
 import org.apache.calcite.sql.fun.SqlLibrary;
 
+// e6data - Shaded to add our own conformance flags
 /**
  * Implementation of {@link SqlConformance} that delegates all methods to
  * another object. You can create a sub-class that overrides particular
@@ -81,6 +82,15 @@ public class SqlDelegatingConformance implements SqlConformance {
 
   @Override public boolean isBangEqualAllowed() {
     return delegate.isBangEqualAllowed();
+  }
+
+  // e6data change - Spark style PIVOT semantics
+  @Override public boolean allowPivotAggregateExpression() {
+    return delegate.allowPivotAggregateExpression();
+  }
+
+  @Override public boolean isPivotValueNullOnEmpty() {
+    return delegate.isPivotValueNullOnEmpty();
   }
 
   @Override public boolean isPercentRemainderAllowed() {
