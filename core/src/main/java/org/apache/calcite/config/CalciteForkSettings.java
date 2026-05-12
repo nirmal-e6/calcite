@@ -103,6 +103,10 @@ public final class CalciteForkSettings {
     return provider.enableDecorrelateTrace();
   }
 
+  public static boolean enableSubqueryInAgg() {
+    return provider.enableSubqueryInAgg();
+  }
+
   public static String defaultListaggSeparator() {
     return provider.defaultListaggSeparator();
   }
@@ -216,6 +220,10 @@ public final class CalciteForkSettings {
     }
 
     default boolean enableDecorrelateTrace() {
+      return false;
+    }
+
+    default boolean enableSubqueryInAgg() {
       return false;
     }
 
