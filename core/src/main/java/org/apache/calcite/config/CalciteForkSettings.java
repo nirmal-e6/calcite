@@ -67,6 +67,10 @@ public final class CalciteForkSettings {
     return provider.allowDuplicateAliasInProjection();
   }
 
+  public static boolean relBuilderFix() {
+    return provider.relBuilderFix();
+  }
+
   public static boolean databricks() {
     return provider.databricks();
   }
@@ -176,6 +180,10 @@ public final class CalciteForkSettings {
     }
 
     default boolean allowDuplicateAliasInProjection() {
+      return false;
+    }
+
+    default boolean relBuilderFix() {
       return false;
     }
 
