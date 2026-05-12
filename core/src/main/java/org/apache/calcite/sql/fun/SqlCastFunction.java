@@ -127,8 +127,8 @@ private static RelDataType createTypeWithNullabilityFromExpr(RelDataTypeFactory 
 {
     boolean isNullable = expressionType.isNullable() || safe;
 
-    // change by E6data: added the checkVariantType condition to support raw (unrecognized) variant type.
-    if (targetType.getSqlTypeName() == SqlTypeName.VARIANT || checkVariantType(targetType))
+    // change by E6data: added the VariantTypeUtil.checkVariantType condition to support raw (unrecognized) variant type.
+    if (targetType.getSqlTypeName() == SqlTypeName.VARIANT || VariantTypeUtil.checkVariantType(targetType))
     {
         // A variant can be cast from any other type, and it inherits
         // the nullability of the source.
@@ -136,7 +136,7 @@ private static RelDataType createTypeWithNullabilityFromExpr(RelDataTypeFactory 
         return typeFactory.createTypeWithNullability(targetType, expressionType.isNullable());
     }
 
-    if (expressionType.getSqlTypeName() == SqlTypeName.VARIANT || checkVariantType(expressionType))
+    if (expressionType.getSqlTypeName() == SqlTypeName.VARIANT || VariantTypeUtil.checkVariantType(expressionType))
     {
         // A variant can be cast to any other type, but the result
         // is always nullable, like in the case of a safe cast.
@@ -234,7 +234,7 @@ public boolean checkOperandTypes(SqlCallBinding callBinding, boolean throwOnFail
     final RelDataType returnType = SqlTypeUtil.deriveType(callBinding, right);
     final SqlTypeMappingRule mappingRule = validator.getTypeMappingRule();
 
-    if (checkVariantType(validatedNodeType) || checkVariantType(returnType))
+    if (VariantTypeUtil.checkVariantType(validatedNodeType) || VariantTypeUtil.checkVariantType(returnType))
     {
         // Any type can be cast to variant.
         // Variant can be cast to any type.
@@ -263,29 +263,6 @@ public boolean checkOperandTypes(SqlCallBinding callBinding, boolean throwOnFail
 
     // Validate format argument is string type if included
     return SqlUtil.isNullLiteral(format, false) || SqlLiteral.valueMatchesType(format.getValue(), SqlTypeName.CHAR);
-}
-
-private static boolean checkVariantType(RelDataType variantType)
-{
-    if (!variantType.isStruct())
-    {
-        return false;
-    }
-    else if (variantType.getFieldList().size() != 2)
-    {
-        return false;
-    }
-    else
-    {
-        SqlTypeName firstField = (variantType.getFieldList().get(0)).getType().getSqlTypeName();
-        if (firstField != SqlTypeName.BINARY)
-        {
-            return false;
-        }
-
-        SqlTypeName secondField = (variantType.getFieldList().get(1)).getType().getSqlTypeName();
-        return secondField == SqlTypeName.BINARY;
-    }
 }
 
 @Override
