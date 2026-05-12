@@ -17,6 +17,8 @@
 package org.apache.calcite.config;
 
 import org.apache.calcite.runtime.CalciteContextException;
+import org.apache.calcite.plan.Context;
+import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOperatorTable;
@@ -110,6 +112,35 @@ public final class CalciteForkSettings {
 
   public static boolean enableSubqueryInAgg() {
     return provider.enableSubqueryInAgg();
+  }
+
+  public static boolean decorrelateInClauseForProjection() {
+    return provider.decorrelateInClauseForProjection();
+  }
+
+  public static boolean decorrelateInClauseForJoin() {
+    return provider.decorrelateInClauseForJoin();
+  }
+
+  public static boolean enableNonNullableSubqueryOpt() {
+    return provider.enableNonNullableSubqueryOpt();
+  }
+
+  public static @Nullable Long columnNumNulls(RelOptTable table,
+      String columnName) {
+    return provider.columnNumNulls(table, columnName);
+  }
+
+  public static void incrementSubqueriesInProject(Context context) {
+    provider.incrementSubqueriesInProject(context);
+  }
+
+  public static void incrementSubqueryInFilter(Context context, int count) {
+    provider.incrementSubqueryInFilter(context, count);
+  }
+
+  public static void recordSubqueryInJoin(Context context) {
+    provider.recordSubqueryInJoin(context);
   }
 
   public static boolean castCharLiteralToVarchar() {
@@ -269,6 +300,32 @@ public final class CalciteForkSettings {
 
     default boolean enableSubqueryInAgg() {
       return false;
+    }
+
+    default boolean decorrelateInClauseForProjection() {
+      return false;
+    }
+
+    default boolean decorrelateInClauseForJoin() {
+      return false;
+    }
+
+    default boolean enableNonNullableSubqueryOpt() {
+      return false;
+    }
+
+    default @Nullable Long columnNumNulls(RelOptTable table,
+        String columnName) {
+      return null;
+    }
+
+    default void incrementSubqueriesInProject(Context context) {
+    }
+
+    default void incrementSubqueryInFilter(Context context, int count) {
+    }
+
+    default void recordSubqueryInJoin(Context context) {
     }
 
     default boolean castCharLiteralToVarchar() {
