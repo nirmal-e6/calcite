@@ -28,19 +28,19 @@ public static SqlAggFunction countIf(String name)
 
 public static SqlBinaryOperator leftShift(String name)
 {
-    return new SqlBinaryOperator(name, SqlKind.valueOf("LEFT_SHIFT"), 30, true, ReturnTypes.ARG0_NULLABLE, InferTypes.FIRST_KNOWN,
+    return new SqlBinaryOperator(name, SqlKind.LEFT_SHIFT, 30, true, ReturnTypes.ARG0_NULLABLE, InferTypes.FIRST_KNOWN,
         OperandTypes.NUMERIC_NUMERIC);
 }
 
 public static SqlBinaryOperator rightShift(String name)
 {
-    return new SqlBinaryOperator(name, SqlKind.valueOf("RIGHT_SHIFT"), 30, true, ReturnTypes.ARG0_NULLABLE, InferTypes.FIRST_KNOWN,
+    return new SqlBinaryOperator(name, SqlKind.RIGHT_SHIFT, 30, true, ReturnTypes.ARG0_NULLABLE, InferTypes.FIRST_KNOWN,
         OperandTypes.NUMERIC_NUMERIC);
 }
 
 public static SqlBinaryOperator bitAnd(String name)
 {
-    return new SqlBinaryOperator(name, SqlKind.valueOf("BITWISE_AND"), 30, true, ReturnTypes.ARG0_NULLABLE, InferTypes.FIRST_KNOWN,
+    return new SqlBinaryOperator(name, SqlKind.BITWISE_AND, 30, true, ReturnTypes.ARG0_NULLABLE, InferTypes.FIRST_KNOWN,
         OperandTypes.NUMERIC_NUMERIC);
 }
 
