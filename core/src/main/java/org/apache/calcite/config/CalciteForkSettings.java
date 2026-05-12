@@ -17,8 +17,13 @@
 package org.apache.calcite.config;
 
 import org.apache.calcite.runtime.CalciteContextException;
+import org.apache.calcite.schema.Table;
 import org.apache.calcite.sql.SqlNode;
+import org.apache.calcite.sql.SqlOperatorTable;
+import org.apache.calcite.sql.validate.SqlValidatorImpl;
 import org.apache.calcite.sql.validate.SqlValidatorException;
+import org.apache.calcite.sql.validate.SqlValidatorNamespace;
+import org.apache.calcite.sql.validate.SqlValidatorScope;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -107,6 +112,40 @@ public final class CalciteForkSettings {
     return provider.enableSubqueryInAgg();
   }
 
+  public static boolean castCharLiteralToVarchar() {
+    return provider.castCharLiteralToVarchar();
+  }
+
+  public static void checkStarExpansion(int expandedFieldCount) {
+    provider.checkStarExpansion(expandedFieldCount);
+  }
+
+  public static boolean isCustomOperatorTable(SqlOperatorTable opTab) {
+    return provider.isCustomOperatorTable(opTab);
+  }
+
+  public static SqlValidatorNamespace createFunctionNamespace(
+      SqlValidatorImpl validator, SqlNode functionNode) {
+    return provider.createFunctionNamespace(validator, functionNode);
+  }
+
+  public static SqlValidatorScope createFunctionScope(
+      SqlValidatorScope parentScope, SqlNode functionNode) {
+    return provider.createFunctionScope(parentScope, functionNode);
+  }
+
+  public static int functionBodyOperand(SqlNode functionNode) {
+    return provider.functionBodyOperand(functionNode);
+  }
+
+  public static boolean supportsTimeTravel(Table table) {
+    return provider.supportsTimeTravel(table);
+  }
+
+  public static String tableTypeName(Table table) {
+    return provider.tableTypeName(table);
+  }
+
   public static String defaultListaggSeparator() {
     return provider.defaultListaggSeparator();
   }
@@ -148,6 +187,11 @@ public final class CalciteForkSettings {
   public static CalciteContextException validationException(SqlNode node,
       String format, Object... args) {
     return validationException(node, MessageFormat.format(format, args));
+  }
+
+  public static CalciteContextException timeTravelNotSupportedException(
+      SqlNode node, String tableName, String tableType) {
+    return provider.timeTravelNotSupportedException(node, tableName, tableType);
   }
 
   private static CalciteContextException contextException(SqlNode node,
@@ -227,6 +271,41 @@ public final class CalciteForkSettings {
       return false;
     }
 
+    default boolean castCharLiteralToVarchar() {
+      return false;
+    }
+
+    default void checkStarExpansion(int expandedFieldCount) {
+    }
+
+    default boolean isCustomOperatorTable(SqlOperatorTable opTab) {
+      return false;
+    }
+
+    default SqlValidatorNamespace createFunctionNamespace(
+        SqlValidatorImpl validator, SqlNode functionNode) {
+      throw validationException(functionNode,
+          "UDF validation is not configured in this Calcite fork context");
+    }
+
+    default SqlValidatorScope createFunctionScope(SqlValidatorScope parentScope,
+        SqlNode functionNode) {
+      throw validationException(functionNode,
+          "UDF validation is not configured in this Calcite fork context");
+    }
+
+    default int functionBodyOperand(SqlNode functionNode) {
+      return 5;
+    }
+
+    default boolean supportsTimeTravel(Table table) {
+      return table.isRolledUp("DELTA") || table.isRolledUp("ICEBERG");
+    }
+
+    default String tableTypeName(Table table) {
+      return table.getJdbcTableType().name();
+    }
+
     default String defaultListaggSeparator() {
       return "-";
     }
@@ -246,6 +325,14 @@ public final class CalciteForkSettings {
         String catalogName) {
       return contextException(node, new SqlValidatorException(
           String.format(CATALOG_DOES_NOT_EXIST, catalogName), null));
+    }
+
+    default CalciteContextException timeTravelNotSupportedException(
+        SqlNode node, String tableName, String tableType) {
+      return validationException(node,
+          "Time travel is only supported for Delta and Iceberg tables. "
+              + "The table ''{0}'' is a ''{1}'' table and cannot be queried using time travel",
+          tableName, tableType);
     }
 
   }
