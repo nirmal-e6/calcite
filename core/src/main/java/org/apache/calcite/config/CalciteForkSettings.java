@@ -69,10 +69,6 @@ public final class CalciteForkSettings {
     return provider.decimalRoundOffScale();
   }
 
-  public static boolean databricksLeastRestrictive() {
-    return provider.databricksLeastRestrictive();
-  }
-
   /** Provides temporary fork settings. */
   public interface Provider {
     default boolean enableOuterJoinOpt() {
@@ -111,8 +107,5 @@ public final class CalciteForkSettings {
       return 6;
     }
 
-    default boolean databricksLeastRestrictive() {
-      return false;
-    }
   }
 }

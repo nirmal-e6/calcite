@@ -581,7 +581,7 @@ private static @Nullable RelDataType leastRestrictiveByCast(SqlOperatorBinding o
         }
         else
         {
-            if(CalciteForkSettings.databricksLeastRestrictive())
+            if(CalciteForkSettings.databricks())
             {
                 {
                     //Apply custom rules for incompatible types according to databricks
