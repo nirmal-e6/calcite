@@ -87,6 +87,10 @@ public final class CalciteForkSettings {
     return provider.immediateConsistencyEnabled();
   }
 
+  public static int inSubquerySetThreshold() {
+    return provider.inSubquerySetThreshold();
+  }
+
   public static String defaultListaggSeparator() {
     return provider.defaultListaggSeparator();
   }
@@ -185,6 +189,10 @@ public final class CalciteForkSettings {
 
     default boolean immediateConsistencyEnabled() {
       return false;
+    }
+
+    default int inSubquerySetThreshold() {
+      return 5;
     }
 
     default String defaultListaggSeparator() {

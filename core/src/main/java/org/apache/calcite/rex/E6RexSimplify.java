@@ -1,24 +1,7 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to you under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package org.apache.calcite.rex;
 
 import org.apache.calcite.avatica.util.TimeUnit;
 import org.apache.calcite.avatica.util.TimeUnitRange;
-import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.plan.RelOptPredicateList;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.plan.Strong;
@@ -69,14 +52,13 @@ import static org.apache.calcite.rex.RexUnknownAs.UNKNOWN;
 
 import static java.util.Objects.requireNonNull;
 
-// TODO : REMOVE THIS CLASS AND USE E6RexSimplifyInstead VIA USING E6RelBuilder
 /**
  * Context required to simplify a row-expression.
  */
-public class RexSimplify
+public class E6RexSimplify extends RexSimplify
 {
+
 private final boolean paranoid;
-public final RexBuilder rexBuilder;
 private final RelOptPredicateList predicates;
 /** How to treat UNKNOWN values, if one of the deprecated {@code
  * simplify} methods without an {@code unknownAs} argument is called. */
@@ -93,16 +75,16 @@ private static final Strong STRONG = new Strong();
  * @param predicates Predicates known to hold on input fields
  * @param executor Executor for constant reduction, not null
  */
-public RexSimplify(RexBuilder rexBuilder, RelOptPredicateList predicates,
+public E6RexSimplify(RexBuilder rexBuilder, RelOptPredicateList predicates,
     RexExecutor executor) {
     this(rexBuilder, predicates, UNKNOWN, true, false, executor);
 }
 
 /** Internal constructor. */
-private RexSimplify(RexBuilder rexBuilder, RelOptPredicateList predicates,
+private E6RexSimplify(RexBuilder rexBuilder, RelOptPredicateList predicates,
     RexUnknownAs defaultUnknownAs, boolean predicateElimination,
     boolean paranoid, RexExecutor executor) {
-    this.rexBuilder = requireNonNull(rexBuilder, "rexBuilder");
+    super(rexBuilder, predicates, executor);
     this.predicates = requireNonNull(predicates, "predicates");
     this.defaultUnknownAs = requireNonNull(defaultUnknownAs, "defaultUnknownAs");
     this.predicateElimination = predicateElimination;
@@ -110,54 +92,15 @@ private RexSimplify(RexBuilder rexBuilder, RelOptPredicateList predicates,
     this.executor = requireNonNull(executor, "executor");
 }
 
-@Deprecated // to be removed before 2.0
-public RexSimplify(RexBuilder rexBuilder, boolean unknownAsFalse,
-    RexExecutor executor) {
-    this(rexBuilder, RelOptPredicateList.EMPTY,
-        RexUnknownAs.falseIf(unknownAsFalse), true, false, executor);
-}
-
-@Deprecated // to be removed before 2.0
-public RexSimplify(RexBuilder rexBuilder, RelOptPredicateList predicates,
-    boolean unknownAsFalse, RexExecutor executor) {
-    this(rexBuilder, predicates, RexUnknownAs.falseIf(unknownAsFalse), true,
-        false, executor);
-}
-
 //~ Methods ----------------------------------------------------------------
 
-/** Returns a RexSimplify the same as this but with a specified
- * {@link #defaultUnknownAs} value.
- *
- * @deprecated Use methods with a {@link RexUnknownAs} argument, such as
- * {@link #simplify(RexNode, RexUnknownAs)}. */
-@Deprecated // to be removed before 2.0
-public RexSimplify withUnknownAsFalse(boolean unknownAsFalse) {
-    final RexUnknownAs defaultUnknownAs = RexUnknownAs.falseIf(unknownAsFalse);
-    return defaultUnknownAs == this.defaultUnknownAs
-           ? this
-           : new RexSimplify(rexBuilder, predicates, defaultUnknownAs,
-               predicateElimination, paranoid, executor);
-}
 
 /** Returns a RexSimplify the same as this but with a specified
  * {@link #predicates} value. */
-public RexSimplify withPredicates(RelOptPredicateList predicates) {
+public E6RexSimplify withPredicates(RelOptPredicateList predicates) {
     return predicates == this.predicates
            ? this
-           : new RexSimplify(rexBuilder, predicates, defaultUnknownAs,
-               predicateElimination, paranoid, executor);
-}
-
-/** Returns a RexSimplify the same as this but which verifies that
- * the expression before and after simplification are equivalent.
- *
- * @see #verify
- */
-public RexSimplify withParanoid(boolean paranoid) {
-    return paranoid == this.paranoid
-           ? this
-           : new RexSimplify(rexBuilder, predicates, defaultUnknownAs,
+           : new E6RexSimplify(rexBuilder, predicates, defaultUnknownAs,
                predicateElimination, paranoid, executor);
 }
 
@@ -170,7 +113,7 @@ public RexSimplify withParanoid(boolean paranoid) {
 private RexSimplify withPredicateElimination(boolean predicateElimination) {
     return predicateElimination == this.predicateElimination
            ? this
-           : new RexSimplify(rexBuilder, predicates, defaultUnknownAs,
+           : new E6RexSimplify(rexBuilder, predicates, defaultUnknownAs,
                predicateElimination, paranoid, executor);
 }
 
@@ -242,19 +185,6 @@ public RexNode simplify(RexNode e) {
     return simplifyUnknownAs(e, defaultUnknownAs);
 }
 
-/** As {@link #simplify(RexNode)}, but for a boolean expression
- * for which a result of UNKNOWN will be treated as FALSE.
- *
- * <p>Use this form for expressions on a WHERE, ON, HAVING or FILTER(WHERE)
- * clause.
- *
- * <p>This may allow certain additional simplifications. A result of UNKNOWN
- * may yield FALSE, however it may still yield UNKNOWN. (If the simplified
- * expression has type BOOLEAN NOT NULL, then of course it can only return
- * FALSE.) */
-public final RexNode simplifyUnknownAsFalse(RexNode e) {
-    return simplifyUnknownAs(e, FALSE);
-}
 
 /** As {@link #simplify(RexNode)}, but specifying how UNKNOWN values are to be
  * treated.
@@ -271,13 +201,7 @@ public RexNode simplifyUnknownAs(RexNode e, RexUnknownAs unknownAs) {
     return simplified;
 }
 
-/** Internal method to simplify an expression.
- *
- * <p>Unlike the public {@link #simplify(RexNode)}
- * and {@link #simplifyUnknownAsFalse(RexNode)} methods,
- * never calls {@link #verify(RexNode, RexNode, RexUnknownAs)}.
- * Verify adds an overhead that is only acceptable for a top-level call.
- */
+@Override
 RexNode simplify(RexNode e, RexUnknownAs unknownAs) {
 
     // E6data change
@@ -717,7 +641,7 @@ private void simplifyList(List<RexNode> terms, RexUnknownAs unknownAs) {
 }
 
 private void simplifyAndTerms(List<RexNode> terms, RexUnknownAs unknownAs) {
-    RexSimplify simplify = this;
+    E6RexSimplify simplify = this;
     for (int i = 0; i < terms.size(); i++) {
         RexNode t = terms.get(i);
         if (Predicate.of(t) == null) {
@@ -743,7 +667,7 @@ private void simplifyOrTerms(List<RexNode> terms, RexUnknownAs unknownAs) {
     // visiting "e3(x)" we know both "e1(x)" and "e2(x)" are not true (they
     // may be unknown), because if either of them were true we would have
     // stopped.
-    RexSimplify simplify = this;
+    E6RexSimplify simplify = this;
 
     // 'doneTerms' prevents us from visiting a term in both first and second
     // loops. If we did this, the second visit would have a predicate saying
@@ -1470,7 +1394,7 @@ enum SafeRexVisitor implements RexVisitor<Boolean> {
     public Boolean visitNodeAndFieldIndex(RexNodeAndFieldIndex rexNodeAndFieldIndex) {
         return false;
     }
-  }
+}
 
 /** Analyzes a given {@link RexNode} and decides whenever it is safe to
  * unwind.
@@ -2340,18 +2264,6 @@ private RexNode simplifyCast(RexCall e) {
             // E6Data: We don't cast NUMERIC values in calcite anymore
             if(SqlTypeFamily.NUMERIC.contains(literal.getType())) {
                 return e;
-            }
-
-            // E6Data: Databricks casts BOOLEAN literals to VARCHAR as lowercase
-            if (CalciteForkSettings.databricks()
-                && literal.getTypeName() == SqlTypeName.BOOLEAN && SqlTypeUtil.isCharacter(e.getType()))
-            {
-                Boolean bVal = literal.getValueAs(Boolean.class);
-                if (bVal != null)
-                {
-                    String sResult = bVal ? "true" : "false";
-                    return rexBuilder.makeLiteral(sResult, e.getType());
-                }
             }
 
             final List<RexNode> reducedValues = new ArrayList<>();
