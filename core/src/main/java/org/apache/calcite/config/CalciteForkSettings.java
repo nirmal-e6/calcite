@@ -85,6 +85,10 @@ public final class CalciteForkSettings {
     return provider.immediateConsistencyEnabled();
   }
 
+  public static String defaultListaggSeparator() {
+    return provider.defaultListaggSeparator();
+  }
+
   public static boolean refreshTable(String catalogName, String schemaName,
       String tableName) {
     return provider.refreshTable(catalogName, schemaName, tableName);
@@ -169,6 +173,10 @@ public final class CalciteForkSettings {
 
     default boolean immediateConsistencyEnabled() {
       return false;
+    }
+
+    default String defaultListaggSeparator() {
+      return "-";
     }
 
     default boolean refreshTable(String catalogName, String schemaName,
