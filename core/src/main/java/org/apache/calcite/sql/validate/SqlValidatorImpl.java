@@ -185,6 +185,7 @@ import static java.util.Objects.requireNonNull;
  * Default implementation of {@link SqlValidator}.
  */
 public class SqlValidatorImpl implements SqlValidatorWithHints {
+  protected boolean m_bHasUsingClause = false;
   //~ Static fields/initializers ---------------------------------------------
 
   public static final Logger TRACER = CalciteTrace.PARSER_LOGGER;
@@ -3745,6 +3746,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       checkRollUp(null, join, condition, joinScope, "ON");
       break;
     case USING:
+      m_bHasUsingClause = true;
       @SuppressWarnings({"rawtypes", "unchecked"}) List<SqlIdentifier> list =
           (List) getCondition(join);
 

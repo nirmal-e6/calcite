@@ -16,7 +16,14 @@
  */
 package org.apache.calcite.config;
 
+import org.apache.calcite.runtime.CalciteContextException;
+import org.apache.calcite.sql.SqlNode;
+import org.apache.calcite.sql.validate.SqlValidatorException;
+
+import org.checkerframework.checker.nullness.qual.Nullable;
+
 import static java.util.Objects.requireNonNull;
+import static org.apache.calcite.util.Static.RESOURCE;
 
 /**
  * Temporary fork-owned settings provider for primer-migrated behavior.
@@ -25,6 +32,11 @@ public final class CalciteForkSettings {
   private static final Provider DEFAULT_PROVIDER = new Provider() {};
 
   private static volatile Provider provider = DEFAULT_PROVIDER;
+
+  private static final String DB_DOES_NOT_EXIST =
+      "Db: %s doesn't exist in catalog: %s";
+  private static final String CATALOG_DOES_NOT_EXIST =
+      "Catalog: %s doesn't exist";
 
   private CalciteForkSettings() {
   }
@@ -69,6 +81,54 @@ public final class CalciteForkSettings {
     return provider.decimalRoundOffScale();
   }
 
+  public static boolean immediateConsistencyEnabled() {
+    return provider.immediateConsistencyEnabled();
+  }
+
+  public static boolean refreshTable(String catalogName, String schemaName,
+      String tableName) {
+    return provider.refreshTable(catalogName, schemaName, tableName);
+  }
+
+  public static @Nullable String defaultCatalog(Object validator) {
+    if (validator instanceof ValidatorCatalogDefaults) {
+      return ((ValidatorCatalogDefaults) validator).getDefaultCatalog();
+    }
+    return null;
+  }
+
+  public static @Nullable String defaultSchema(Object validator) {
+    if (validator instanceof ValidatorCatalogDefaults) {
+      return ((ValidatorCatalogDefaults) validator).getDefaultSchema();
+    }
+    return null;
+  }
+
+  public static RuntimeException invalidSchemaException(SqlNode node,
+      String dbName, @Nullable String catalogName) {
+    return provider.invalidSchemaException(node, dbName, catalogName);
+  }
+
+  public static RuntimeException invalidCatalogException(SqlNode node,
+      String catalogName) {
+    return provider.invalidCatalogException(node, catalogName);
+  }
+
+  private static CalciteContextException contextException(SqlNode node,
+      Throwable cause) {
+    return RESOURCE.validatorContext(node.getParserPosition().getLineNum(),
+        node.getParserPosition().getColumnNum(),
+        node.getParserPosition().getEndLineNum(),
+        node.getParserPosition().getEndColumnNum()).ex(cause);
+  }
+
+  /** Exposes validator-local catalog defaults to Calcite-owned code. */
+  public interface ValidatorCatalogDefaults {
+    String getDefaultCatalog();
+
+    String getDefaultSchema();
+  }
+
   /** Provides temporary fork settings. */
   public interface Provider {
     default boolean enableOuterJoinOpt() {
@@ -105,6 +165,27 @@ public final class CalciteForkSettings {
 
     default int decimalRoundOffScale() {
       return 6;
+    }
+
+    default boolean immediateConsistencyEnabled() {
+      return false;
+    }
+
+    default boolean refreshTable(String catalogName, String schemaName,
+        String tableName) {
+      return false;
+    }
+
+    default RuntimeException invalidSchemaException(SqlNode node,
+        String dbName, @Nullable String catalogName) {
+      return contextException(node, new SqlValidatorException(
+          String.format(DB_DOES_NOT_EXIST, dbName, catalogName), null));
+    }
+
+    default RuntimeException invalidCatalogException(SqlNode node,
+        String catalogName) {
+      return contextException(node, new SqlValidatorException(
+          String.format(CATALOG_DOES_NOT_EXIST, catalogName), null));
     }
 
   }

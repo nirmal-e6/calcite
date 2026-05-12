@@ -33,207 +33,224 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 import static java.util.Objects.requireNonNull;
 
+// SHADED for exposing current state of some members
+
 /**
  * Abstract implementation of {@link SqlValidatorNamespace}.
  */
 abstract class AbstractNamespace implements SqlValidatorNamespace {
-  //~ Instance fields --------------------------------------------------------
+//~ Instance fields --------------------------------------------------------
 
-  protected final SqlValidatorImpl validator;
+protected final SqlValidatorImpl validator;
 
-  /**
-   * Whether this scope is currently being validated. Used to check for
-   * cycles.
-   */
-  private SqlValidatorImpl.Status status =
-      SqlValidatorImpl.Status.UNVALIDATED;
+/**
+ * Whether this scope is currently being validated. Used to check for
+ * cycles.
+ */
+private SqlValidatorImpl.Status status =
+    SqlValidatorImpl.Status.UNVALIDATED;
 
-  /**
-   * Type of the output row, which comprises the name and type of each output
-   * column. Set on validate.
-   */
-  protected @Nullable RelDataType rowType;
+/**
+ * Type of the output row, which comprises the name and type of each output
+ * column. Set on validate.
+ */
+protected @Nullable RelDataType rowType;
 
-  /** As {@link #rowType}, but not necessarily a struct. */
-  protected @Nullable RelDataType type;
+/** As {@link #rowType}, but not necessarily a struct. */
+protected @Nullable RelDataType type;
 
-  /** Information about what fields need to be filtered and what bypass fields
-   * can defuse the errors if they are filtered on as an alternative.
-   * Initialized as an empty object, but typically re-assigned during
-   * validation. */
-  protected FilterRequirement filterRequirement = FilterRequirement.EMPTY;
+/** Information about what fields need to be filtered and what bypass fields
+ * can defuse the errors if they are filtered on as an alternative.
+ * Initialized as an empty object, but typically re-assigned during
+ * validation. */
+protected FilterRequirement filterRequirement = FilterRequirement.EMPTY;
 
-  protected final @Nullable SqlNode enclosingNode;
+protected final @Nullable SqlNode enclosingNode;
 
-  //~ Constructors -----------------------------------------------------------
+//~ Constructors -----------------------------------------------------------
 
-  /**
-   * Creates an AbstractNamespace.
-   *
-   * @param validator     Validator
-   * @param enclosingNode Enclosing node
-   */
-  AbstractNamespace(
-      SqlValidatorImpl validator,
-      @Nullable SqlNode enclosingNode) {
+/**
+ * Creates an AbstractNamespace.
+ *
+ * @param validator     Validator
+ * @param enclosingNode Enclosing node
+ */
+AbstractNamespace(
+    SqlValidatorImpl validator,
+    @Nullable SqlNode enclosingNode) {
     this.validator = validator;
     this.enclosingNode = enclosingNode;
-  }
+}
 
-  //~ Methods ----------------------------------------------------------------
+//~ Methods ----------------------------------------------------------------
 
-  @Override public SqlValidator getValidator() {
+@Override public SqlValidator getValidator() {
     return validator;
-  }
+}
 
-  @Override public final void validate(RelDataType targetRowType) {
+@Override public final void validate(RelDataType targetRowType) {
     switch (status) {
-    case UNVALIDATED:
-      try {
-        status = SqlValidatorImpl.Status.IN_PROGRESS;
-        checkArgument(rowType == null,
-            "Namespace.rowType must be null before validate has been called");
-        RelDataType type = validateImpl(targetRowType);
-        requireNonNull(type, "validateImpl() returned null");
-        setType(type);
-      } finally {
-        status = SqlValidatorImpl.Status.VALID;
-      }
-      break;
-    case IN_PROGRESS:
-      throw new AssertionError("Cycle detected during type-checking");
-    case VALID:
-      break;
-    default:
-      throw Util.unexpected(status);
+        case UNVALIDATED:
+            try {
+                status = SqlValidatorImpl.Status.IN_PROGRESS;
+                checkArgument(rowType == null,
+                    "Namespace.rowType must be null before validate has been called");
+                RelDataType type = validateImpl(targetRowType);
+                requireNonNull(type, "validateImpl() returned null");
+                setType(type);
+            } finally {
+                status = SqlValidatorImpl.Status.VALID;
+            }
+            break;
+        case IN_PROGRESS:
+            throw new AssertionError("Cycle detected during type-checking");
+        case VALID:
+            break;
+        default:
+            throw Util.unexpected(status);
     }
-  }
+}
 
-  /**
-   * Validates this scope and returns the type of the records it returns.
-   * External users should call {@link #validate}, which uses the
-   * {@link #status} field to protect against cycles.
-   *
-   * @param targetRowType Desired row type, must not be null, may be the data
-   *                      type 'unknown'.
-   * @return record data type, never null
-   */
-  protected abstract RelDataType validateImpl(RelDataType targetRowType);
+/**
+ * Validates this scope and returns the type of the records it returns.
+ * External users should call {@link #validate}, which uses the
+ * {@link #status} field to protect against cycles.
+ *
+ * @param targetRowType Desired row type, must not be null, may be the data
+ *                      type 'unknown'.
+ * @return record data type, never null
+ */
+protected abstract RelDataType validateImpl(RelDataType targetRowType);
 
-  @Override public RelDataType getRowType() {
+@Override public RelDataType getRowType() {
     if (rowType == null) {
-      validator.validateNamespace(this, validator.unknownType);
-      requireNonNull(rowType, "validate must set rowType");
+        validator.validateNamespace(this, validator.unknownType);
+        requireNonNull(rowType, "validate must set rowType");
     }
     return rowType;
-  }
+}
 
-  @Override public RelDataType getRowTypeSansSystemColumns() {
+@Override public RelDataType getRowTypeSansSystemColumns() {
     return getRowType();
-  }
+}
 
-  @Override public RelDataType getType() {
+@Override public RelDataType getType() {
     Util.discard(getRowType());
     return requireNonNull(type, "type");
-  }
+}
 
-  @Override public void setType(RelDataType type) {
+@Override public void setType(RelDataType type) {
     this.type = type;
     this.rowType = convertToStruct(type);
-  }
+}
 
-  @Override public @Nullable SqlNode getEnclosingNode() {
+@Override public @Nullable SqlNode getEnclosingNode() {
     return enclosingNode;
-  }
+}
 
-  @Override public @Nullable SqlValidatorTable getTable() {
+@Override public @Nullable SqlValidatorTable getTable() {
     return null;
-  }
+}
 
-  @Override public @Nullable SqlValidatorNamespace lookupChild(String name) {
+@Override public @Nullable SqlValidatorNamespace lookupChild(String name) {
     return validator.lookupFieldNamespace(
         getRowType(),
         name);
-  }
+}
 
-  @Override public @Nullable RelDataTypeField field(String name) {
+@Override public @Nullable RelDataTypeField field(String name) {
     final RelDataType rowType = getRowType();
     return validator.catalogReader.nameMatcher().field(rowType, name);
-  }
+}
 
-  @Override public List<Pair<SqlNode, SqlMonotonicity>> getMonotonicExprs() {
+@Override public List<Pair<SqlNode, SqlMonotonicity>> getMonotonicExprs() {
     return ImmutableList.of();
-  }
+}
 
-  @Override public FilterRequirement getFilterRequirement() {
+@Override public FilterRequirement getFilterRequirement() {
     return requireNonNull(filterRequirement,
         "filterRequirement (maybe validation is not complete?)");
-  }
+}
 
-  @Override public SqlMonotonicity getMonotonicity(String columnName) {
+@Override public SqlMonotonicity getMonotonicity(String columnName) {
     return SqlMonotonicity.NOT_MONOTONIC;
-  }
+}
 
-  @SuppressWarnings("deprecation")
-  @Override public void makeNullable() {
-  }
+@SuppressWarnings("deprecation")
+@Override public void makeNullable() {
+}
 
-  public String translate(String name) {
+public String translate(String name) {
     return name;
-  }
+}
 
-  @Override public SqlValidatorNamespace resolve() {
+@Override public SqlValidatorNamespace resolve() {
     return this;
-  }
+}
 
-  @Override public boolean supportsModality(SqlModality modality) {
+@Override public boolean supportsModality(SqlModality modality) {
     return true;
-  }
+}
 
-  @Override public <T> @Nullable T unwrap(Class<T> clazz) {
+@Override public <T> @Nullable T unwrap(Class<T> clazz) {
     if (clazz.isInstance(this)) {
-      return clazz.cast(this);
+        return clazz.cast(this);
     }
     return null;
-  }
+}
 
-  @Override public boolean isWrapperFor(Class<?> clazz) {
+@Override public boolean isWrapperFor(Class<?> clazz) {
     return clazz.isInstance(this);
-  }
+}
 
-  protected RelDataType convertToStruct(RelDataType type) {
+protected RelDataType convertToStruct(RelDataType type) {
     // "MULTISET [<expr>, ...]" needs to be wrapped in a record if
     // <expr> has a scalar type.
     // For example, "MULTISET [8, 9]" has type
     // "RECORD(INTEGER EXPR$0 NOT NULL) NOT NULL MULTISET NOT NULL".
     final RelDataType componentType = type.getComponentType();
     if (componentType == null || componentType.isStruct()) {
-      return type;
+        return type;
     }
     final RelDataTypeFactory typeFactory = validator.getTypeFactory();
     final RelDataType structType = toStruct(componentType, getNode());
     final RelDataType collectionType;
     switch (type.getSqlTypeName()) {
-    case ARRAY:
-      collectionType = typeFactory.createArrayType(structType, -1);
-      break;
-    case MULTISET:
-      collectionType = typeFactory.createMultisetType(structType, -1);
-      break;
-    default:
-      throw new AssertionError(type);
+        case ARRAY:
+            collectionType = typeFactory.createArrayType(structType, -1);
+            break;
+        case MULTISET:
+            collectionType = typeFactory.createMultisetType(structType, -1);
+            break;
+        default:
+            throw new AssertionError(type);
     }
     return typeFactory.createTypeWithNullability(collectionType,
         type.isNullable());
-  }
+}
 
-  /** Converts a type to a struct if it is not already. */
-  protected RelDataType toStruct(RelDataType type, @Nullable SqlNode unnest) {
+/** Converts a type to a struct if it is not already. */
+protected RelDataType toStruct(RelDataType type, @Nullable SqlNode unnest) {
     if (type.isStruct()) {
-      return type;
+        return type;
     }
     return validator.getTypeFactory().builder()
         .add(SqlValidatorUtil.alias(requireNonNull(unnest, "unnest"), 0), type)
         .build();
-  }
+}
+
+// added by E6Data
+// used at DelegatingScope to fix CyclicException for MatchRecognise
+public boolean currentlyValidationInProgress()
+{
+    return status == SqlValidatorImpl.Status.IN_PROGRESS;
+}
+
+// added by E6Data
+// used at SqlValidator to early check if row type is null or not
+public boolean isRowTypeUnknown()
+{
+    return rowType == null;
+}
+
 }
