@@ -91,6 +91,14 @@ public final class CalciteForkSettings {
     return provider.inSubquerySetThreshold();
   }
 
+  public static boolean enableDecorrelateSortOpt() {
+    return provider.enableDecorrelateSortOpt();
+  }
+
+  public static boolean enableDecorrelateTrace() {
+    return provider.enableDecorrelateTrace();
+  }
+
   public static String defaultListaggSeparator() {
     return provider.defaultListaggSeparator();
   }
@@ -193,6 +201,14 @@ public final class CalciteForkSettings {
 
     default int inSubquerySetThreshold() {
       return 5;
+    }
+
+    default boolean enableDecorrelateSortOpt() {
+      return false;
+    }
+
+    default boolean enableDecorrelateTrace() {
+      return false;
     }
 
     default String defaultListaggSeparator() {
