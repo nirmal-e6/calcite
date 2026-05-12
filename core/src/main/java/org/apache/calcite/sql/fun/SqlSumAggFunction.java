@@ -21,6 +21,7 @@ import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.*;
+import org.apache.calcite.sql.type.E6TypeSystemImpl;
 import org.apache.calcite.sql.type.OperandTypes;
 import org.apache.calcite.sql.type.ReturnTypes;
 import org.apache.calcite.sql.type.SqlTypeName;
@@ -38,8 +39,6 @@ import java.util.Objects;
  */
 public class SqlSumAggFunction extends SqlAggFunction
 {
-
-private static final int MAX_DOUBLE_PRECISION = 19;
 
 //~ Instance fields --------------------------------------------------------
 
@@ -63,7 +62,7 @@ public RelDataType inferReturnType(SqlOperatorBinding opBinding)
     RelDataType operandType = opBinding.getOperandType(0);
     if (operandType.getSqlTypeName().equals(SqlTypeName.DECIMAL))
     {
-      if(operandType.getPrecision() > MAX_DOUBLE_PRECISION)
+      if(operandType.getPrecision() > E6TypeSystemImpl.MAX_DOUBLE_PRECISION)
       {
         if (operandType.getScale() == 0 || CalciteForkSettings.decimal128Enabled())
         {
