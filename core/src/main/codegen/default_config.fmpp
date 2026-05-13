@@ -164,6 +164,7 @@ parser: {
     "LENGTH"
     "LEVEL"
     "LIBRARY"
+    "LISTAGG"
     "LOCATOR"
     "M"
     "MAP"
@@ -175,6 +176,7 @@ parser: {
     "MICROSECOND"
     "MILLENNIUM"
     "MILLISECOND"
+    "MILLISECONDS"
     "MINUTES"
     "MINVALUE"
     "MONTHS"
@@ -314,7 +316,9 @@ parser: {
     "SQL_VARCHAR"
     "STATE"
     "STATEMENT"
+    "STRING"
     "STRING_AGG"
+    "STRUCT"
     "STRUCTURE"
     "STYLE"
     "SUBCLASS_ORIGIN"
@@ -328,6 +332,9 @@ parser: {
     "TIMESTAMPDIFF"
     "TIMESTAMP_DIFF"
     "TIMESTAMP_TRUNC"
+    "TIMESTAMP_NTZ"
+    "TIMESTAMP_TZ"
+    "TOP"
     "TOP_LEVEL_COUNT"
     "TRANSACTION"
     "TRANSACTIONS_ACTIVE"
@@ -387,6 +394,15 @@ parser: {
   statementParserMethods: [
   ]
 
+  # List of methods for parsing custom table references.
+  # Return type of method implementation should be 'SqlNode'.
+  tableRefParserMethods: [
+  ]
+
+  # Optional method for parsing table-reference postfix extensions.
+  # The method must accept "(SqlNode tableRef)" and return "SqlNode".
+  tableRefPostfixParserMethod: ""
+
   # List of methods for parsing custom literals.
   # Return type of method implementation should be "SqlNode".
   # Example: ParseJsonLiteral().
@@ -404,6 +420,28 @@ parser: {
   # Example: "DateTimeConstructorCall()".
   builtinFunctionCallMethods: [
   ]
+
+  # List of methods for parsing function calls with JDBC escape syntax.
+  # Return type of method implementation should be "SqlCall".
+  # Example: "DateaddFunctionCall()".
+  jdbcFunctionCallMethods: [
+  ]
+
+  # Operator used for STRING_AGG.
+  stringAggOperator: "SqlLibraryOperators.STRING_AGG"
+
+  # Operator used for PERCENTILE_CONT.
+  percentileContOperator: "SqlStdOperatorTable.PERCENTILE_CONT"
+
+  # Operator used for three-argument TRANSLATE.
+  translate3Operator: "SqlLibraryOperators.TRANSLATE3"
+
+  # Optional override for FLOOR/CEIL options.
+  # The method must accept "(Span, boolean)" and return "SqlNode".
+  floorCeilOptionsMethod: ""
+
+  # Whether SAMPLE is accepted as an alias for TABLESAMPLE.
+  includeSampleTableKeyword: false
 
   # List of methods for parsing extensions to "ALTER <scope>" calls.
   # Each must accept arguments "(SqlParserPos pos, String scope)".
@@ -438,6 +476,15 @@ parser: {
   # Example: "InfixCast".
   extraBinaryExpressions: [
   ]
+
+  # List of files in @includes directory that have custom token productions.
+  customTokenFiles: [
+  ]
+
+  # Optional method to convert product-specific ParseException enhancements
+  # into SqlParseException. The method must accept
+  # "(ParseException, SqlParserPos, int[][], String[])".
+  parseExceptionEnhancerMethod: ""
 
   # List of files in @includes directory that have parser method
   # implementations for parsing custom SQL statements, literals or types
