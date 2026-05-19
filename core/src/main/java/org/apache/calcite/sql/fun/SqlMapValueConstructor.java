@@ -118,5 +118,5 @@ public class SqlMapValueConstructor extends SqlMultisetValueConstructor {
 
   public boolean areInputsArrayType() {
     return areInputsArrayType;
-  }
+}
 }

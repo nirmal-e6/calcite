@@ -258,4 +258,3 @@ public interface Config extends RelRule.Config {
     Config withAllowCastWithNULL(boolean allowCastWithNull);
 }
 }
-

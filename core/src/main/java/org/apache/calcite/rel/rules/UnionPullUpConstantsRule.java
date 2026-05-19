@@ -37,40 +37,40 @@ public class UnionPullUpConstantsRule
     implements TransformationRule
 {
 
-/** Creates a UnionPullUpConstantsRule. */
-protected UnionPullUpConstantsRule(Config config) {
+  /** Creates a UnionPullUpConstantsRule. */
+  protected UnionPullUpConstantsRule(Config config) {
     super(config);
-}
+  }
 
-@Deprecated // to be removed before 2.0
-public UnionPullUpConstantsRule(Class<? extends Union> unionClass,
-    RelBuilderFactory relBuilderFactory) {
+  @Deprecated // to be removed before 2.0
+  public UnionPullUpConstantsRule(Class<? extends Union> unionClass,
+      RelBuilderFactory relBuilderFactory) {
     this(Config.DEFAULT.withRelBuilderFactory(relBuilderFactory)
         .as(Config.class)
         .withOperandFor(unionClass));
-}
+  }
 
 @SuppressWarnings("deprecation")
-@Override public void onMatch(RelOptRuleCall call) {
+  @Override public void onMatch(RelOptRuleCall call) {
     final Union union = call.rel(0);
 
     final RexBuilder rexBuilder = union.getCluster().getRexBuilder();
     final RelMetadataQuery mq = call.getMetadataQuery();
     final RelOptPredicateList predicates = mq.getPulledUpPredicates(union);
     if (RelOptPredicateList.isEmpty(predicates)) {
-        return;
+      return;
     }
 
     final Map<Integer, RexNode> constants = new HashMap<>();
     for (Map.Entry<RexNode, RexNode> e : predicates.constantMap.entrySet()) {
-        if (e.getKey() instanceof RexInputRef) {
-            constants.put(((RexInputRef) e.getKey()).getIndex(), e.getValue());
-        }
+      if (e.getKey() instanceof RexInputRef) {
+        constants.put(((RexInputRef) e.getKey()).getIndex(), e.getValue());
+      }
     }
 
     // None of the expressions are constant. Nothing to do.
     if (constants.isEmpty()) {
-        return;
+      return;
     }
 
     // Create expressions for Project operators before and after the Union
@@ -80,21 +80,21 @@ public UnionPullUpConstantsRule(Class<? extends Union> unionClass,
     List<RexNode> refs = new ArrayList<>();
     ImmutableBitSet.Builder refsIndexBuilder = ImmutableBitSet.builder();
     for (RelDataTypeField field : fields) {
-        final RexNode constant = constants.get(field.getIndex());
-        if (constant != null) {
-            if (constant.getType().equals(field.getType())) {
-                topChildExprs.add(constant);
-            } else {
-                topChildExprs.add(rexBuilder.makeCast(field.getType(), constant, true));
-            }
-            topChildExprsFields.add(field.getName());
+      final RexNode constant = constants.get(field.getIndex());
+      if (constant != null) {
+        if (constant.getType().equals(field.getType())) {
+          topChildExprs.add(constant);
         } else {
-            final RexNode expr = rexBuilder.makeInputRef(union, field.getIndex());
-            topChildExprs.add(expr);
-            topChildExprsFields.add(field.getName());
-            refs.add(expr);
-            refsIndexBuilder.set(field.getIndex());
+                topChildExprs.add(rexBuilder.makeCast(field.getType(), constant, true));
         }
+        topChildExprsFields.add(field.getName());
+      } else {
+        final RexNode expr = rexBuilder.makeInputRef(union, field.getIndex());
+        topChildExprs.add(expr);
+        topChildExprsFields.add(field.getName());
+        refs.add(expr);
+        refsIndexBuilder.set(field.getIndex());
+      }
     }
     ImmutableBitSet refsIndex = refsIndexBuilder.build();
 
@@ -106,20 +106,20 @@ public UnionPullUpConstantsRule(Class<? extends Union> unionClass,
     // Create new Project-Union-Project sequences
     final RelBuilder relBuilder = call.builder();
     for (RelNode input : union.getInputs()) {
-        List<Pair<RexNode, String>> newChildExprs = new ArrayList<>();
-        for (int j : refsIndex) {
-            newChildExprs.add(
-                Pair.of(rexBuilder.makeInputRef(input, j),
-                    input.getRowType().getFieldList().get(j).getName()));
-        }
-        if (newChildExprs.isEmpty()) {
-            // At least a single item in project is required.
-            newChildExprs.add(
-                Pair.of(topChildExprs.get(0), topChildExprsFields.get(0)));
-        }
-        // Add the input with project on top
-        relBuilder.push(input);
-        relBuilder.project(Pair.left(newChildExprs), Pair.right(newChildExprs));
+      List<Pair<RexNode, String>> newChildExprs = new ArrayList<>();
+      for (int j : refsIndex) {
+        newChildExprs.add(
+            Pair.of(rexBuilder.makeInputRef(input, j),
+                input.getRowType().getFieldList().get(j).getName()));
+      }
+      if (newChildExprs.isEmpty()) {
+        // At least a single item in project is required.
+        newChildExprs.add(
+            Pair.of(topChildExprs.get(0), topChildExprsFields.get(0)));
+      }
+      // Add the input with project on top
+      relBuilder.push(input);
+      relBuilder.project(Pair.left(newChildExprs), Pair.right(newChildExprs));
     }
     relBuilder.union(union.all, union.getInputs().size());
     // Create top Project fixing nullability of fields
@@ -127,29 +127,29 @@ public UnionPullUpConstantsRule(Class<? extends Union> unionClass,
     relBuilder.convert(union.getRowType(), false);
 
     call.transformTo(relBuilder.build());
-}
+  }
 
-/** Rule configuration. */
-@Value.Immutable
-public interface Config extends RelRule.Config {
+  /** Rule configuration. */
+  @Value.Immutable
+  public interface Config extends RelRule.Config {
     Config DEFAULT = ImmutableUnionPullUpConstantsRule.Config.of()
         .withOperandFor(Union.class);
 
     @Override default UnionPullUpConstantsRule toRule() {
-        return new UnionPullUpConstantsRule(this);
+      return new UnionPullUpConstantsRule(this);
     }
 
     /** Defines an operand tree for the given classes. */
     default Config withOperandFor(Class<? extends Union> unionClass) {
-        return withOperandSupplier(b ->
-            b.operand(unionClass)
-                // If field count is 1, then there's no room for
-                // optimization since we cannot create an empty Project
-                // operator. If we created a Project with one column,
-                // this rule would cycle.
-                .predicate(union -> union.getRowType().getFieldCount() > 1)
-                .anyInputs())
-            .as(Config.class);
+      return withOperandSupplier(b ->
+          b.operand(unionClass)
+              // If field count is 1, then there's no room for
+              // optimization since we cannot create an empty Project
+              // operator. If we created a Project with one column,
+              // this rule would cycle.
+              .predicate(union -> union.getRowType().getFieldCount() > 1)
+              .anyInputs())
+          .as(Config.class);
     }
-}
+  }
 }

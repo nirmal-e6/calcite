@@ -1957,16 +1957,16 @@ SqlUpdate WhenMatchedClause(SqlNode table, SqlIdentifier alias) :
         }
     |
         id = CompoundIdentifier() {
+        updateColumnList.add(id);
+    }
+    <EQ> AddExpression(updateExprList, ExprContext.ACCEPT_SUB_QUERY)
+    (
+        <COMMA>
+        id = CompoundIdentifier() {
             updateColumnList.add(id);
         }
         <EQ> AddExpression(updateExprList, ExprContext.ACCEPT_SUB_QUERY)
-        (
-            <COMMA>
-            id = CompoundIdentifier() {
-                updateColumnList.add(id);
-            }
-            <EQ> AddExpression(updateExprList, ExprContext.ACCEPT_SUB_QUERY)
-        )*
+    )*
     )
     {
         return new SqlUpdate(s.addAll(updateExprList).pos(), table,
@@ -2003,27 +2003,27 @@ SqlInsert WhenNotMatchedClause(SqlNode table) :
                 table, insertValues, insertColumnList);
         }
     |
-        (
-            LOOKAHEAD(2)
-            insertColumnList = ParenthesizedSimpleIdentifierList()
-        |   { insertColumnList = null; }
-        )
-        (
-            <LPAREN>
-            <VALUES> { valuesSpan = span(); } rowConstructor = RowConstructor()
-            <RPAREN>
-        |
-            <VALUES> { valuesSpan = span(); } rowConstructor = RowConstructor()
-        )
-        {
-            // TODO zfong 5/26/06: note that extra parentheses are accepted above
-            // around the VALUES clause as a hack for unparse, but this is
-            // actually invalid SQL; should fix unparse
-            insertValues = SqlStdOperatorTable.VALUES.createCall(
-                valuesSpan.end(this), rowConstructor);
-            return new SqlInsert(insertSpan.end(this), keywordList,
-                table, insertValues, insertColumnList);
-        }
+    (
+        LOOKAHEAD(2)
+        insertColumnList = ParenthesizedSimpleIdentifierList()
+    |   { insertColumnList = null; }
+    )
+    (
+        <LPAREN>
+        <VALUES> { valuesSpan = span(); } rowConstructor = RowConstructor()
+        <RPAREN>
+    |
+        <VALUES> { valuesSpan = span(); } rowConstructor = RowConstructor()
+    )
+    {
+        // TODO zfong 5/26/06: note that extra parentheses are accepted above
+        // around the VALUES clause as a hack for unparse, but this is
+        // actually invalid SQL; should fix unparse
+        insertValues = SqlStdOperatorTable.VALUES.createCall(
+            valuesSpan.end(this), rowConstructor);
+        return new SqlInsert(insertSpan.end(this), keywordList,
+            table, insertValues, insertColumnList);
+    }
     )
 }
 
@@ -2068,10 +2068,10 @@ SqlNode SelectExpression() :
 }
 {
     (
-        <STAR> {
+    <STAR> {
             e = SqlIdentifier.star(getPos());
-        }
-    |
+    }
+|
         e = Expression(ExprContext.ACCEPT_SUB_QUERY)
     )
     (
@@ -2483,11 +2483,11 @@ SqlNode Tablesample(SqlNode tableRef) :
         }
     |
         [
-            (
-                <BERNOULLI> { isBernoulli = true; }
-            |
+        (
+            <BERNOULLI> { isBernoulli = true; }
+        |
                 <SYSTEM>
-            )
+        )
         ]
         <LPAREN> samplePercentage = UnsignedNumericLiteral() <RPAREN>
         [
@@ -2520,18 +2520,18 @@ SqlNode Tablesample(SqlNode tableRef) :
             BigDecimal sampleRate = rate.divide(ONE_HUNDRED);
             if (sampleRate.compareTo(BigDecimal.ZERO) > 0
                 && sampleRate.compareTo(BigDecimal.ONE) < 0) {
-                SqlSampleSpec tableSampleSpec =
-                    isRepeatable
+            SqlSampleSpec tableSampleSpec =
+                isRepeatable
                         ? SqlSampleSpec.createTableSample(isBernoulli,
                             sampleRate, repeatableSeed)
                         : SqlSampleSpec.createTableSample(isBernoulli,
                             sampleRate);
 
-                SqlLiteral tableSampleLiteral =
-                    SqlLiteral.createSample(tableSampleSpec, s.end(this));
+            SqlLiteral tableSampleLiteral =
+                SqlLiteral.createSample(tableSampleSpec, s.end(this));
                 tableRef = SqlStdOperatorTable.TABLESAMPLE.createCall(
-                    s.end(this), tableRef, tableSampleLiteral);
-            }
+                s.end(this), tableRef, tableSampleLiteral);
+        }
         }
     )
     { return tableRef; }
@@ -3207,10 +3207,10 @@ E6SqlSnapshot Snapshot(SqlNode tableRef) :
     |
         LOOKAHEAD(2)
         <FOR> <TIMESTAMP> <AS> <OF>
-        e = Expression(ExprContext.ACCEPT_NON_QUERY) {
+    e = Expression(ExprContext.ACCEPT_NON_QUERY) {
             return new E6SqlSnapshot(s.end(this), tableRef, e,
                 SqlLiteral.createCharString(E6SqlSnapshot.TYPE_TIMESTAMP, getPos()));
-        }
+    }
     |
         LOOKAHEAD(2)
         <FOR> <VERSION> <AS> <OF>
@@ -3293,7 +3293,7 @@ void AddPivotAgg(List<SqlNode> list) :
         LOOKAHEAD({ this.conformance.allowPivotAggregateExpression() })
         e = Expression(ExprContext.ACCEPT_NON_QUERY)
     |
-        e = NamedFunctionCall()
+    e = NamedFunctionCall()
     )
     (
         // Because babel put FOR into non-reserved keyword set.
@@ -4532,7 +4532,7 @@ SqlCall PercentileFunctionCall() :
                arraySpan.end(this), arrayArgs.getList()));
        }
    |
-       AddArg(args, ExprContext.ACCEPT_SUB_QUERY)
+   AddArg(args, ExprContext.ACCEPT_SUB_QUERY)
    )
    (
        <RPAREN> {
@@ -5079,7 +5079,7 @@ SqlNode StringLiteral() :
             }
             try {
                 String s = SqlParserUtil.parseCString(token.image);
-                unicodeEscapeChar = SqlParserUtil.checkUnicodeEscapeChar(s);
+            unicodeEscapeChar = SqlParserUtil.checkUnicodeEscapeChar(s);
             } catch (SqlParserUtil.MalformedUnicodeEscape e) {
                 throw SqlUtil.newContextException(getPos(),
                     RESOURCE.unicodeEscapeMalformed(e.i));
@@ -5911,7 +5911,7 @@ void AddIdentifierSegment(List<String> names, List<SqlParserPos> positions) :
             <UESCAPE> <QUOTED_STRING> {
                 try {
                     String s = SqlParserUtil.parseCString(token.image);
-                    unicodeEscapeChar = SqlParserUtil.checkUnicodeEscapeChar(s);
+                unicodeEscapeChar = SqlParserUtil.checkUnicodeEscapeChar(s);
                 } catch (SqlParserUtil.MalformedUnicodeEscape e) {
                     throw SqlUtil.newContextException(getPos(),
                         RESOURCE.unicodeEscapeMalformed(e.i));
@@ -6013,7 +6013,7 @@ SqlIdentifier SimpleIdentifierFromStringLiteral() :
         }
         try {
             final String s = SqlParserUtil.parseCString(token.image);
-            return new SqlIdentifier(s, getPos());
+        return new SqlIdentifier(s, getPos());
         } catch (SqlParserUtil.MalformedUnicodeEscape e) {
             throw SqlUtil.newContextException(getPos(),
                 RESOURCE.unicodeEscapeMalformed(e.i));

@@ -194,7 +194,7 @@ public class AggregateCall {
         distinctKeys, collation, groupCount, input, type, name);
   }
 
-  /** Creates an AggregateCall, inferring its type if {@code type} is null. */
+    /** Creates an AggregateCall, inferring its type if {@code type} is null. */
   public static AggregateCall create(SqlAggFunction aggFunction,
       boolean distinct, boolean approximate, boolean ignoreNulls,
       List<RexNode> rexList, List<Integer> argList, int filterArg,

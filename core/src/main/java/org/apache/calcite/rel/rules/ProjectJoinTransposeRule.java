@@ -56,27 +56,27 @@ public class ProjectJoinTransposeRule
     extends RelRule<ProjectJoinTransposeRule.Config>
     implements TransformationRule {
 
-/** Creates a ProjectJoinTransposeRule. */
-protected ProjectJoinTransposeRule(Config config) {
+  /** Creates a ProjectJoinTransposeRule. */
+  protected ProjectJoinTransposeRule(Config config) {
     super(config);
-}
+  }
 
-@Deprecated // to be removed before 2.0
-public ProjectJoinTransposeRule(
-    Class<? extends Project> projectClass,
-    Class<? extends Join> joinClass,
-    PushProjector.ExprCondition preserveExprCondition,
-    RelBuilderFactory relBuilderFactory) {
+  @Deprecated // to be removed before 2.0
+  public ProjectJoinTransposeRule(
+      Class<? extends Project> projectClass,
+      Class<? extends Join> joinClass,
+      PushProjector.ExprCondition preserveExprCondition,
+      RelBuilderFactory relBuilderFactory) {
     this(Config.DEFAULT
         .withRelBuilderFactory(relBuilderFactory)
         .as(Config.class)
         .withOperandFor(projectClass, joinClass)
         .withPreserveExprCondition(preserveExprCondition));
-}
+  }
 
-//~ Methods ----------------------------------------------------------------
+  //~ Methods ----------------------------------------------------------------
 
-@Override public void onMatch(RelOptRuleCall call) {
+  @Override public void onMatch(RelOptRuleCall call) {
     final Project origProject = call.rel(0);
     final Join join = call.rel(1);
 
@@ -84,14 +84,14 @@ public ProjectJoinTransposeRule(
     // form of IS NOT DISTINCT FROM as PushProject also visit the filter condition
     // and push down expressions.
     RexNode joinFilter = join.getCondition().accept(new RexShuttle() {
-        @Override public RexNode visitCall(RexCall rexCall) {
-            final RexNode node = super.visitCall(rexCall);
-            if (!(node instanceof RexCall)) {
-                return node;
-            }
-            return RelOptUtil.collapseExpandedIsNotDistinctFromExpr((RexCall) node,
-                call.builder().getRexBuilder());
+      @Override public RexNode visitCall(RexCall rexCall) {
+        final RexNode node = super.visitCall(rexCall);
+        if (!(node instanceof RexCall)) {
+          return node;
         }
+        return RelOptUtil.collapseExpandedIsNotDistinctFromExpr((RexCall) node,
+            call.builder().getRexBuilder());
+      }
     });
 
     // locate all fields referenced in the projection and join condition;
@@ -106,7 +106,7 @@ public ProjectJoinTransposeRule(
             config.preserveExprCondition(),
             call.builder());
     if (pushProjector.locateAllRefs()) {
-        return;
+      return;
     }
 
     // Coalesce gets re-written into CASE Statement. As part of this, we project
@@ -161,18 +161,18 @@ public ProjectJoinTransposeRule(
     RexNode newJoinFilter = null;
     int[] adjustments = pushProjector.getAdjustments();
     if (joinFilter != null) {
-        List<RelDataTypeField> projectJoinFieldList = new ArrayList<>();
-        projectJoinFieldList.addAll(
-            join.getSystemFieldList());
-        projectJoinFieldList.addAll(
-            leftProject.getRowType().getFieldList());
-        projectJoinFieldList.addAll(
-            rightProject.getRowType().getFieldList());
-        newJoinFilter =
-            pushProjector.convertRefsAndExprs(
-                joinFilter,
-                projectJoinFieldList,
-                adjustments);
+      List<RelDataTypeField> projectJoinFieldList = new ArrayList<>();
+      projectJoinFieldList.addAll(
+          join.getSystemFieldList());
+      projectJoinFieldList.addAll(
+          leftProject.getRowType().getFieldList());
+      projectJoinFieldList.addAll(
+          rightProject.getRowType().getFieldList());
+      newJoinFilter =
+          pushProjector.convertRefsAndExprs(
+              joinFilter,
+              projectJoinFieldList,
+              adjustments);
     }
 
     // create a new join with the projected children
@@ -191,11 +191,11 @@ public ProjectJoinTransposeRule(
         pushProjector.createNewProject(newJoin, adjustments);
 
     call.transformTo(topProject);
-}
+  }
 
-/** Rule configuration. */
-@Value.Immutable(singleton = false)
-public interface Config extends RelRule.Config {
+  /** Rule configuration. */
+  @Value.Immutable(singleton = false)
+  public interface Config extends RelRule.Config {
     Config DEFAULT = ImmutableProjectJoinTransposeRule.Config.builder()
         .withPreserveExprCondition(expr -> !(expr instanceof RexOver))
         .withAllowCastWithNULL(false)
@@ -203,7 +203,7 @@ public interface Config extends RelRule.Config {
         .withOperandFor(LogicalProject.class, LogicalJoin.class);
 
     @Override default ProjectJoinTransposeRule toRule() {
-        return new ProjectJoinTransposeRule(this);
+      return new ProjectJoinTransposeRule(this);
     }
 
     /** Defines when an expression should not be pushed. */
@@ -215,15 +215,15 @@ public interface Config extends RelRule.Config {
     /** Defines an operand tree for the given classes. */
     default Config withOperandFor(Class<? extends Project> projectClass,
         Class<? extends Join> joinClass) {
-        return withOperandSupplier(b0 ->
-            b0.operand(projectClass).oneInput(b1 ->
-                b1.operand(joinClass).anyInputs()))
-            .as(Config.class);
+      return withOperandSupplier(b0 ->
+          b0.operand(projectClass).oneInput(b1 ->
+              b1.operand(joinClass).anyInputs()))
+          .as(Config.class);
     }
 
     @Value.Default default boolean isAllowCastWithNULL() {
         return false;
     }
     Config withAllowCastWithNULL(boolean allowCastWithNull);
-}
+  }
 }

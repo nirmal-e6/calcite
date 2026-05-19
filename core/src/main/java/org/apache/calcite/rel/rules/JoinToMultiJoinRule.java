@@ -121,30 +121,30 @@ public class JoinToMultiJoinRule
     extends RelRule<JoinToMultiJoinRule.Config>
     implements TransformationRule {
 
-/** Creates a JoinToMultiJoinRule. */
-protected JoinToMultiJoinRule(Config config) {
+  /** Creates a JoinToMultiJoinRule. */
+  protected JoinToMultiJoinRule(Config config) {
     super(config);
-}
+  }
 
-@Deprecated // to be removed before 2.0
-public JoinToMultiJoinRule(Class<? extends Join> clazz) {
+  @Deprecated // to be removed before 2.0
+  public JoinToMultiJoinRule(Class<? extends Join> clazz) {
     this(Config.DEFAULT.withOperandFor(clazz));
-}
+  }
 
-@Deprecated // to be removed before 2.0
-public JoinToMultiJoinRule(Class<? extends Join> joinClass,
-    RelBuilderFactory relBuilderFactory) {
+  @Deprecated // to be removed before 2.0
+  public JoinToMultiJoinRule(Class<? extends Join> joinClass,
+      RelBuilderFactory relBuilderFactory) {
     this(Config.DEFAULT.withRelBuilderFactory(relBuilderFactory)
         .as(Config.class)
         .withOperandFor(joinClass));
-}
+  }
 
-//~ Methods ----------------------------------------------------------------
+  //~ Methods ----------------------------------------------------------------
 
-@Override public boolean matches(RelOptRuleCall call) {
+  @Override public boolean matches(RelOptRuleCall call) {
     final Join origJoin = call.rel(0);
     return origJoin.getJoinType().projectsRight();
-}
+  }
 
 @Override public void onMatch(RelOptRuleCall call)
 {
@@ -206,167 +206,167 @@ public JoinToMultiJoinRule(Class<? extends Join> joinClass,
             RexUtil.composeConjunction(rexBuilder, newPostJoinFilters, true));
 
     call.transformTo(multiJoin);
-}
+  }
 
-/**
- * Combines the inputs into a LogicalJoin into an array of inputs.
- *
- * @param join                   original join
- * @param left                   left input into join
- * @param right                  right input into join
- * @param projFieldsList         returns a list of the new combined projection
- *                               fields
- * @param joinFieldRefCountsList returns a list of the new combined join
- *                               field reference counts
- * @return combined left and right inputs in an array
- */
-private static List<RelNode> combineInputs(
-    Join join,
-    RelNode left,
-    RelNode right,
-    List<@Nullable ImmutableBitSet> projFieldsList,
-    List<int[]> joinFieldRefCountsList) {
+  /**
+   * Combines the inputs into a LogicalJoin into an array of inputs.
+   *
+   * @param join                   original join
+   * @param left                   left input into join
+   * @param right                  right input into join
+   * @param projFieldsList         returns a list of the new combined projection
+   *                               fields
+   * @param joinFieldRefCountsList returns a list of the new combined join
+   *                               field reference counts
+   * @return combined left and right inputs in an array
+   */
+  private static List<RelNode> combineInputs(
+      Join join,
+      RelNode left,
+      RelNode right,
+      List<@Nullable ImmutableBitSet> projFieldsList,
+      List<int[]> joinFieldRefCountsList) {
     final List<RelNode> newInputs = new ArrayList<>();
 
     // leave the null generating sides of an outer join intact; don't
     // pull up those children inputs into the array we're constructing
     if (canCombine(left, join.getJoinType().generatesNullsOnLeft())) {
-        final MultiJoin leftMultiJoin = (MultiJoin) left;
-        for (int i = 0; i < left.getInputs().size(); i++) {
-            newInputs.add(leftMultiJoin.getInput(i));
-            projFieldsList.add(leftMultiJoin.getProjFields().get(i));
-            joinFieldRefCountsList.add(
-                requireNonNull(leftMultiJoin.getJoinFieldRefCountsMap().get(i)).toIntArray());
-        }
-    } else {
-        newInputs.add(left);
-        projFieldsList.add(null);
+      final MultiJoin leftMultiJoin = (MultiJoin) left;
+      for (int i = 0; i < left.getInputs().size(); i++) {
+        newInputs.add(leftMultiJoin.getInput(i));
+        projFieldsList.add(leftMultiJoin.getProjFields().get(i));
         joinFieldRefCountsList.add(
-            new int[left.getRowType().getFieldCount()]);
+            requireNonNull(leftMultiJoin.getJoinFieldRefCountsMap().get(i)).toIntArray());
+      }
+    } else {
+      newInputs.add(left);
+      projFieldsList.add(null);
+      joinFieldRefCountsList.add(
+          new int[left.getRowType().getFieldCount()]);
     }
 
     if (canCombine(right, join.getJoinType().generatesNullsOnRight())) {
-        final MultiJoin rightMultiJoin = (MultiJoin) right;
-        for (int i = 0; i < right.getInputs().size(); i++) {
-            newInputs.add(rightMultiJoin.getInput(i));
-            projFieldsList.add(
-                rightMultiJoin.getProjFields().get(i));
-            joinFieldRefCountsList.add(
-                requireNonNull(rightMultiJoin.getJoinFieldRefCountsMap().get(i)).toIntArray());
-        }
-    } else {
-        newInputs.add(right);
-        projFieldsList.add(null);
+      final MultiJoin rightMultiJoin = (MultiJoin) right;
+      for (int i = 0; i < right.getInputs().size(); i++) {
+        newInputs.add(rightMultiJoin.getInput(i));
+        projFieldsList.add(
+            rightMultiJoin.getProjFields().get(i));
         joinFieldRefCountsList.add(
-            new int[right.getRowType().getFieldCount()]);
+            requireNonNull(rightMultiJoin.getJoinFieldRefCountsMap().get(i)).toIntArray());
+      }
+    } else {
+      newInputs.add(right);
+      projFieldsList.add(null);
+      joinFieldRefCountsList.add(
+          new int[right.getRowType().getFieldCount()]);
     }
 
     return newInputs;
-}
+  }
 
-/**
- * Combines the outer join conditions and join types from the left and right
- * join inputs. If the join itself is either a left or right outer join,
- * then the join condition corresponding to the join is also set in the
- * position corresponding to the null-generating input into the join. The
- * join type is also set.
- *
- * @param joinRel        join rel
- * @param combinedInputs the combined inputs to the join
- * @param left           left child of the joinrel
- * @param right          right child of the joinrel
- * @param joinSpecs      the list where the join types and conditions will be
- *                       copied
- */
-private static void combineOuterJoins(
-    Join joinRel,
-    @SuppressWarnings("unused") List<RelNode> combinedInputs,
-    RelNode left,
-    RelNode right,
-    List<Pair<JoinRelType, @Nullable RexNode>> joinSpecs) {
+  /**
+   * Combines the outer join conditions and join types from the left and right
+   * join inputs. If the join itself is either a left or right outer join,
+   * then the join condition corresponding to the join is also set in the
+   * position corresponding to the null-generating input into the join. The
+   * join type is also set.
+   *
+   * @param joinRel        join rel
+   * @param combinedInputs the combined inputs to the join
+   * @param left           left child of the joinrel
+   * @param right          right child of the joinrel
+   * @param joinSpecs      the list where the join types and conditions will be
+   *                       copied
+   */
+  private static void combineOuterJoins(
+      Join joinRel,
+      @SuppressWarnings("unused") List<RelNode> combinedInputs,
+      RelNode left,
+      RelNode right,
+      List<Pair<JoinRelType, @Nullable RexNode>> joinSpecs) {
     JoinRelType joinType = joinRel.getJoinType();
     boolean leftCombined =
         canCombine(left, joinType.generatesNullsOnLeft());
     boolean rightCombined =
         canCombine(right, joinType.generatesNullsOnRight());
     switch (joinType) {
-        case LEFT:
-            if (leftCombined) {
-                copyOuterJoinInfo(
-                    (MultiJoin) left,
-                    joinSpecs,
-                    0,
-                    null,
-                    null);
-            } else {
+    case LEFT:
+      if (leftCombined) {
+        copyOuterJoinInfo(
+            (MultiJoin) left,
+            joinSpecs,
+            0,
+            null,
+            null);
+      } else {
                 joinSpecs.add(Pair.of(JoinRelType.INNER, (@Nullable RexNode) null));
-            }
-            joinSpecs.add(Pair.of(joinType, joinRel.getCondition()));
-            break;
-        case RIGHT:
-            joinSpecs.add(Pair.of(joinType, joinRel.getCondition()));
-            if (rightCombined) {
-                copyOuterJoinInfo(
-                    (MultiJoin) right,
-                    joinSpecs,
-                    left.getRowType().getFieldCount(),
-                    right.getRowType().getFieldList(),
-                    joinRel.getRowType().getFieldList());
-            } else {
+      }
+      joinSpecs.add(Pair.of(joinType, joinRel.getCondition()));
+      break;
+    case RIGHT:
+      joinSpecs.add(Pair.of(joinType, joinRel.getCondition()));
+      if (rightCombined) {
+        copyOuterJoinInfo(
+            (MultiJoin) right,
+            joinSpecs,
+            left.getRowType().getFieldCount(),
+            right.getRowType().getFieldList(),
+            joinRel.getRowType().getFieldList());
+      } else {
                 joinSpecs.add(Pair.of(JoinRelType.INNER, (RexNode) null));
-            }
-            break;
-        default:
-            if (leftCombined) {
-                copyOuterJoinInfo(
-                    (MultiJoin) left,
-                    joinSpecs,
-                    0,
-                    null,
-                    null);
-            } else {
+      }
+      break;
+    default:
+      if (leftCombined) {
+        copyOuterJoinInfo(
+            (MultiJoin) left,
+            joinSpecs,
+            0,
+            null,
+            null);
+      } else {
                 joinSpecs.add(Pair.of(JoinRelType.INNER, (RexNode) null));
-            }
-            if (rightCombined) {
-                copyOuterJoinInfo(
-                    (MultiJoin) right,
-                    joinSpecs,
-                    left.getRowType().getFieldCount(),
-                    right.getRowType().getFieldList(),
-                    joinRel.getRowType().getFieldList());
-            } else {
+      }
+      if (rightCombined) {
+        copyOuterJoinInfo(
+            (MultiJoin) right,
+            joinSpecs,
+            left.getRowType().getFieldCount(),
+            right.getRowType().getFieldList(),
+            joinRel.getRowType().getFieldList());
+      } else {
                 joinSpecs.add(Pair.of(JoinRelType.INNER, (RexNode) null));
-            }
+      }
     }
-}
+  }
 
-/**
- * Copies outer join data from a source MultiJoin to a new set of arrays.
- * Also adjusts the conditions to reflect the new position of an input if
- * that input ends up being shifted to the right.
- *
- * @param multiJoin     the source MultiJoin
- * @param destJoinSpecs    the list where the join types and conditions will
- *                         be copied
- * @param adjustmentAmount if &gt; 0, the amount the RexInputRefs in the join
- *                         conditions need to be adjusted by
- * @param srcFields        the source fields that the original join conditions
- *                         are referencing
- * @param destFields       the destination fields that the new join conditions
- */
-private static void copyOuterJoinInfo(
-    MultiJoin multiJoin,
-    List<Pair<JoinRelType, @Nullable RexNode>> destJoinSpecs,
-    int adjustmentAmount,
-    @Nullable List<RelDataTypeField> srcFields,
-    @Nullable List<RelDataTypeField> destFields) {
+  /**
+   * Copies outer join data from a source MultiJoin to a new set of arrays.
+   * Also adjusts the conditions to reflect the new position of an input if
+   * that input ends up being shifted to the right.
+   *
+   * @param multiJoin     the source MultiJoin
+   * @param destJoinSpecs    the list where the join types and conditions will
+   *                         be copied
+   * @param adjustmentAmount if &gt; 0, the amount the RexInputRefs in the join
+   *                         conditions need to be adjusted by
+   * @param srcFields        the source fields that the original join conditions
+   *                         are referencing
+   * @param destFields       the destination fields that the new join conditions
+   */
+  private static void copyOuterJoinInfo(
+      MultiJoin multiJoin,
+      List<Pair<JoinRelType, @Nullable RexNode>> destJoinSpecs,
+      int adjustmentAmount,
+      @Nullable List<RelDataTypeField> srcFields,
+      @Nullable List<RelDataTypeField> destFields) {
     final List<Pair<JoinRelType, @Nullable RexNode>> srcJoinSpecs =
         Pair.zip(
             multiJoin.getJoinTypes(),
             multiJoin.getOuterJoinConditions());
 
     if (adjustmentAmount == 0) {
-        destJoinSpecs.addAll(srcJoinSpecs);
+      destJoinSpecs.addAll(srcJoinSpecs);
     } else {
         assert srcFields != null;
         assert destFields != null;
@@ -377,34 +377,34 @@ private static void copyOuterJoinInfo(
         }
         for (Pair<JoinRelType, @Nullable RexNode> src
             : srcJoinSpecs) {
-            destJoinSpecs.add(
-                Pair.of(
-                    src.left,
-                    src.right == null
+        destJoinSpecs.add(
+            Pair.of(
+                src.left,
+                src.right == null
                     ? null
                     : src.right.accept(
                         new RelOptUtil.RexInputConverter(
                             multiJoin.getCluster().getRexBuilder(),
                             srcFields, destFields, adjustments))));
-        }
+      }
     }
-}
+  }
 
-/**
- * Combines the join filters from the left and right inputs (if they are
- * MultiJoinRels) with the join filter in the joinrel into a single AND'd
- * join filter, unless the inputs correspond to null generating inputs in an
- * outer join.
- *
- * @param join    Join
- * @param left    Left input of the join
- * @param right   Right input of the join
- * @return combined join filters AND-ed together
- */
-private static List<@Nullable RexNode> combineJoinFilters(
-    Join join,
-    RelNode left,
-    RelNode right) {
+  /**
+   * Combines the join filters from the left and right inputs (if they are
+   * MultiJoinRels) with the join filter in the joinrel into a single AND'd
+   * join filter, unless the inputs correspond to null generating inputs in an
+   * outer join.
+   *
+   * @param join    Join
+   * @param left    Left input of the join
+   * @param right   Right input of the join
+   * @return combined join filters AND-ed together
+   */
+  private static List<@Nullable RexNode> combineJoinFilters(
+      Join join,
+      RelNode left,
+      RelNode right) {
     JoinRelType joinType = join.getJoinType();
 
     // AND the join condition if this isn't a left or right outer join;
@@ -412,56 +412,56 @@ private static List<@Nullable RexNode> combineJoinFilters(
     // separately
     final List<@Nullable RexNode> filters = new ArrayList<>();
     if ((joinType != JoinRelType.LEFT) && (joinType != JoinRelType.RIGHT)) {
-        filters.add(join.getCondition());
+      filters.add(join.getCondition());
     }
     if (canCombine(left, joinType.generatesNullsOnLeft())) {
-        filters.add(((MultiJoin) left).getJoinFilter());
+      filters.add(((MultiJoin) left).getJoinFilter());
     }
     // Need to adjust the RexInputs of the right child, since
     // those need to shift over to the right
     if (canCombine(right, joinType.generatesNullsOnRight())) {
-        MultiJoin multiJoin = (MultiJoin) right;
-        filters.add(
-            shiftRightFilter(join, left, multiJoin,
-                multiJoin.getJoinFilter()));
+      MultiJoin multiJoin = (MultiJoin) right;
+      filters.add(
+          shiftRightFilter(join, left, multiJoin,
+              multiJoin.getJoinFilter()));
     }
 
     return filters;
-}
+  }
 
-/**
- * Returns whether an input can be merged into a given relational expression
- * without changing semantics.
- *
- * @param input          input into a join
- * @param nullGenerating true if the input is null generating
- * @return true if the input can be combined into a parent MultiJoin
- */
-private static boolean canCombine(RelNode input, boolean nullGenerating) {
+  /**
+   * Returns whether an input can be merged into a given relational expression
+   * without changing semantics.
+   *
+   * @param input          input into a join
+   * @param nullGenerating true if the input is null generating
+   * @return true if the input can be combined into a parent MultiJoin
+   */
+  private static boolean canCombine(RelNode input, boolean nullGenerating) {
     return input instanceof MultiJoin
         && !((MultiJoin) input).isFullOuterJoin()
         && !((MultiJoin) input).containsOuter()
         && !nullGenerating;
-}
+  }
 
-/**
- * Shifts a filter originating from the right child of the LogicalJoin to the
- * right, to reflect the filter now being applied on the resulting
- * MultiJoin.
- *
- * @param joinRel     the original LogicalJoin
- * @param left        the left child of the LogicalJoin
- * @param right       the right child of the LogicalJoin
- * @param rightFilter the filter originating from the right child
- * @return the adjusted right filter
- */
-private static @Nullable RexNode shiftRightFilter(
-    Join joinRel,
-    RelNode left,
-    MultiJoin right,
-    @Nullable RexNode rightFilter) {
+  /**
+   * Shifts a filter originating from the right child of the LogicalJoin to the
+   * right, to reflect the filter now being applied on the resulting
+   * MultiJoin.
+   *
+   * @param joinRel     the original LogicalJoin
+   * @param left        the left child of the LogicalJoin
+   * @param right       the right child of the LogicalJoin
+   * @param rightFilter the filter originating from the right child
+   * @return the adjusted right filter
+   */
+  private static @Nullable RexNode shiftRightFilter(
+      Join joinRel,
+      RelNode left,
+      MultiJoin right,
+      @Nullable RexNode rightFilter) {
     if (rightFilter == null) {
-        return null;
+      return null;
     }
 
     int nFieldsOnLeft = left.getRowType().getFieldList().size();
@@ -478,24 +478,24 @@ private static @Nullable RexNode shiftRightFilter(
                 joinRel.getRowType().getFieldList(),
                 adjustments));
     return rightFilter;
-}
+  }
 
-/**
- * Adds on to the existing join condition reference counts the references
- * from the new join condition.
- *
- * @param multiJoinInputs          inputs into the new MultiJoin
- * @param nTotalFields             total number of fields in the MultiJoin
- * @param joinCondition            the new join condition
- * @param origJoinFieldRefCounts   existing join condition reference counts
- *
- * @return Map containing the new join condition
- */
-private static ImmutableMap<Integer, ImmutableIntList> addOnJoinFieldRefCounts(
-    List<RelNode> multiJoinInputs,
-    int nTotalFields,
-    RexNode joinCondition,
-    List<int[]> origJoinFieldRefCounts) {
+  /**
+   * Adds on to the existing join condition reference counts the references
+   * from the new join condition.
+   *
+   * @param multiJoinInputs          inputs into the new MultiJoin
+   * @param nTotalFields             total number of fields in the MultiJoin
+   * @param joinCondition            the new join condition
+   * @param origJoinFieldRefCounts   existing join condition reference counts
+   *
+   * @return Map containing the new join condition
+   */
+  private static ImmutableMap<Integer, ImmutableIntList> addOnJoinFieldRefCounts(
+      List<RelNode> multiJoinInputs,
+      int nTotalFields,
+      RexNode joinCondition,
+      List<int[]> origJoinFieldRefCounts) {
     // count the input references in the join condition
     int[] joinCondRefCounts = new int[nTotalFields];
     joinCondition.accept(new InputReferenceCounter(joinCondRefCounts));
@@ -505,10 +505,10 @@ private static ImmutableMap<Integer, ImmutableIntList> addOnJoinFieldRefCounts(
     int nInputs = multiJoinInputs.size();
     int currInput = 0;
     for (int[] origRefCounts : origJoinFieldRefCounts) {
-        refCountsMap.put(
-            currInput,
-            origRefCounts.clone());
-        currInput++;
+      refCountsMap.put(
+          currInput,
+          origRefCounts.clone());
+      currInput++;
     }
 
     // add on to the counts for each input into the MultiJoin the
@@ -517,94 +517,94 @@ private static ImmutableMap<Integer, ImmutableIntList> addOnJoinFieldRefCounts(
     int startField = 0;
     int nFields = 0;
     for (int i = 0; i < nTotalFields; i++) {
-        if (joinCondRefCounts[i] == 0) {
-            continue;
-        }
-        while (i >= (startField + nFields)) {
-            startField += nFields;
-            currInput++;
-            assert currInput < nInputs;
-            nFields =
-                multiJoinInputs.get(currInput).getRowType().getFieldCount();
-        }
-        final int key = currInput;
+      if (joinCondRefCounts[i] == 0) {
+        continue;
+      }
+      while (i >= (startField + nFields)) {
+        startField += nFields;
+        currInput++;
+        assert currInput < nInputs;
+        nFields =
+            multiJoinInputs.get(currInput).getRowType().getFieldCount();
+      }
+      final int key = currInput;
         int[] refCounts = requireNonNull(refCountsMap.get(key),
-            () -> "refCountsMap.get(currInput) for " + key);
-        refCounts[i - startField] += joinCondRefCounts[i];
+              () -> "refCountsMap.get(currInput) for " + key);
+      refCounts[i - startField] += joinCondRefCounts[i];
     }
 
     final ImmutableMap.Builder<Integer, ImmutableIntList> builder =
         ImmutableMap.builder();
     for (Map.Entry<Integer, int[]> entry : refCountsMap.entrySet()) {
-        builder.put(entry.getKey(), ImmutableIntList.of(entry.getValue()));
+      builder.put(entry.getKey(), ImmutableIntList.of(entry.getValue()));
     }
     return builder.build();
-}
+  }
 
-/**
- * Combines the post-join filters from the left and right inputs (if they
- * are MultiJoinRels) into a single AND'd filter.
- *
- * @param joinRel the original LogicalJoin
- * @param left    left child of the LogicalJoin
- * @param right   right child of the LogicalJoin
- * @return combined post-join filters AND'd together
- */
-private static List<@Nullable RexNode> combinePostJoinFilters(
-    Join joinRel,
-    RelNode left,
-    RelNode right) {
+  /**
+   * Combines the post-join filters from the left and right inputs (if they
+   * are MultiJoinRels) into a single AND'd filter.
+   *
+   * @param joinRel the original LogicalJoin
+   * @param left    left child of the LogicalJoin
+   * @param right   right child of the LogicalJoin
+   * @return combined post-join filters AND'd together
+   */
+  private static List<@Nullable RexNode> combinePostJoinFilters(
+      Join joinRel,
+      RelNode left,
+      RelNode right) {
     final List<@Nullable RexNode> filters = new ArrayList<>();
     if (right instanceof MultiJoin) {
-        final MultiJoin multiRight = (MultiJoin) right;
-        filters.add(
-            shiftRightFilter(joinRel, left, multiRight,
-                multiRight.getPostJoinFilter()));
+      final MultiJoin multiRight = (MultiJoin) right;
+      filters.add(
+          shiftRightFilter(joinRel, left, multiRight,
+              multiRight.getPostJoinFilter()));
     }
 
     if (left instanceof MultiJoin) {
-        filters.add(((MultiJoin) left).getPostJoinFilter());
+      filters.add(((MultiJoin) left).getPostJoinFilter());
     }
 
     return filters;
-}
+  }
 
-//~ Inner Classes ----------------------------------------------------------
+  //~ Inner Classes ----------------------------------------------------------
 
-/**
- * Visitor that keeps a reference count of the inputs used by an expression.
- */
-private static class InputReferenceCounter extends RexVisitorImpl<Void> {
+  /**
+   * Visitor that keeps a reference count of the inputs used by an expression.
+   */
+  private static class InputReferenceCounter extends RexVisitorImpl<Void> {
     private final int[] refCounts;
 
     InputReferenceCounter(int[] refCounts) {
-        super(true);
-        this.refCounts = refCounts;
+      super(true);
+      this.refCounts = refCounts;
     }
 
     @Override public Void visitInputRef(RexInputRef inputRef) {
-        refCounts[inputRef.getIndex()]++;
-        return null;
+      refCounts[inputRef.getIndex()]++;
+      return null;
     }
-}
+  }
 
-/** Rule configuration. */
-@Value.Immutable
-public interface Config extends RelRule.Config {
+  /** Rule configuration. */
+  @Value.Immutable
+  public interface Config extends RelRule.Config {
     Config DEFAULT = ImmutableJoinToMultiJoinRule.Config.of()
         .withOperandFor(LogicalJoin.class);
 
     @Override default JoinToMultiJoinRule toRule() {
-        return new JoinToMultiJoinRule(this);
+      return new JoinToMultiJoinRule(this);
     }
 
     /** Defines an operand tree for the given classes. */
     default Config withOperandFor(Class<? extends Join> joinClass) {
-        return withOperandSupplier(b0 ->
-            b0.operand(joinClass).inputs(
-                b1 -> b1.operand(RelNode.class).anyInputs(),
-                b2 -> b2.operand(RelNode.class).anyInputs()))
-            .as(Config.class);
+      return withOperandSupplier(b0 ->
+          b0.operand(joinClass).inputs(
+              b1 -> b1.operand(RelNode.class).anyInputs(),
+              b2 -> b2.operand(RelNode.class).anyInputs()))
+          .as(Config.class);
     }
-}
+  }
 }

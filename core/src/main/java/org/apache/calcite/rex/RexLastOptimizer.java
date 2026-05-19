@@ -45,7 +45,7 @@ public class RexLastOptimizer extends RexShuttle
         {
             return optimizeLastCall(call);
         }
-        
+
         // Recursively process operands (same pattern as VectorSearchProjectBreakdownRule)
         List<RexNode> newOperands = new ArrayList<>();
         boolean changed = false;
@@ -58,12 +58,12 @@ public class RexLastOptimizer extends RexShuttle
                 changed = true;
             }
         }
-        
+
         if (changed)
         {
             return m_rexBuilder.makeCall(call.getType(), call.getOperator(), newOperands);
         }
-        
+
         return call;
     }
 
@@ -81,27 +81,27 @@ public class RexLastOptimizer extends RexShuttle
         {
             return false;
         }
-        
+
         List<RexNode> operands = call.getOperands();
         if (operands.size() != 2)
         {
             return false;
         }
-        
+
         // Second operand must be literal integer >= 0
         RexNode secondOperand = operands.get(1);
         if (!(secondOperand instanceof RexLiteral))
         {
             return false;
         }
-        
+
         RexLiteral literal = (RexLiteral) secondOperand;
         Integer offset = literal.getValueAs(Integer.class);
         if (offset == null || offset < 0)
         {
             return false;
         }
-        
+
         // First operand must be RexPatternFieldRef (*.$n)
         RexNode firstOperand = operands.get(0);
         return firstOperand instanceof RexPatternFieldRef;
@@ -123,18 +123,18 @@ public class RexLastOptimizer extends RexShuttle
     {
         RexNode firstOperand = call.getOperands().get(0);
         RexNode secondOperand = call.getOperands().get(1);
-        
+
         if (firstOperand instanceof RexPatternFieldRef)
         {
             RexPatternFieldRef patternFieldRef = (RexPatternFieldRef) firstOperand;
             int fieldIndex = patternFieldRef.getIndex();
             RexInputRef inputRef = new RexInputRef(fieldIndex, call.getType());
-            
+
             // Get the offset value
             RexLiteral offsetLiteral = (RexLiteral) secondOperand;
             Integer offsetValue = offsetLiteral.getValueAs(Integer.class);
             int offset = offsetValue != null ? offsetValue : 0;
-            
+
             if (offset == 0)
             {
                 // LAST(*.$n, 0) -> RexInputRef(n) for direct field access
@@ -144,11 +144,11 @@ public class RexLastOptimizer extends RexShuttle
             {
                 // LAST(*.$n, offset) where offset > 0 -> LAG(RexInputRef(n), offset) for PREV functionality
                 List<RexNode> lagOperands = Arrays.asList(inputRef, offsetLiteral);
-                return m_rexBuilder.makeCall(call.getType(), 
+                return m_rexBuilder.makeCall(call.getType(),
                     org.apache.calcite.sql.fun.SqlStdOperatorTable.LAG, lagOperands);
             }
         }
-        
+
         // Shouldn't reach here if isLastFunctionCall returned true
         return call;
     }

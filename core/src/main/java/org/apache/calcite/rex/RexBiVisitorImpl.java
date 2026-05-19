@@ -126,5 +126,5 @@ public class RexBiVisitorImpl<@Nullable R, P> implements RexBiVisitor<R, P> {
 
   @Override public R visitNodeAndFieldIndex(RexNodeAndFieldIndex rexNodeAndFieldIndex, P arg) {
     return null;
-  }
+}
 }

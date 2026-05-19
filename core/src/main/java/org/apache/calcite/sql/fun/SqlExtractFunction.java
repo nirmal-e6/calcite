@@ -16,28 +16,40 @@
  */
 package org.apache.calcite.sql.fun;
 
-import com.google.common.collect.ImmutableSet;
-import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.avatica.util.TimeUnitRange;
+import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.rel.type.RelDataType;
-import org.apache.calcite.sql.*;
-import org.apache.calcite.sql.type.*;
+import org.apache.calcite.sql.SqlCall;
+import org.apache.calcite.sql.SqlFunction;
+import org.apache.calcite.sql.SqlFunctionCategory;
+import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.SqlOperatorBinding;
+import org.apache.calcite.sql.SqlWriter;
+import org.apache.calcite.sql.type.OperandTypes;
+import org.apache.calcite.sql.type.ReturnTypes;
+import org.apache.calcite.sql.type.SqlReturnTypeInference;
+import org.apache.calcite.sql.type.SqlSingleOperandTypeChecker;
+import org.apache.calcite.sql.type.SqlTypeFamily;
 import org.apache.calcite.sql.validate.SqlMonotonicity;
 import org.apache.calcite.sql.validate.SqlValidator;
 import org.apache.calcite.sql.validate.SqlValidatorScope;
 import org.apache.calcite.util.Static;
 import org.apache.calcite.util.Util;
 
+import com.google.common.collect.ImmutableSet;
+
 import static org.apache.calcite.sql.validate.SqlNonNullableAccessors.getOperandLiteralValueOrThrow;
 
 /**
- * The SQL <code>EXTRACT</code> operator. Extracts a specified field value from a DATETIME or an INTERVAL. E.g.<br>
+ * The SQL <code>EXTRACT</code> operator. Extracts a specified field value from
+ * a DATETIME or an INTERVAL. E.g.<br>
  * <code>EXTRACT(HOUR FROM INTERVAL '364 23:59:59')</code> returns <code>
  * 23</code>
  */
-public class SqlExtractFunction extends SqlFunction
-{
-//~ Constructors -----------------------------------------------------------
+public class SqlExtractFunction extends SqlFunction {
+  //~ Constructors -----------------------------------------------------------
+
+
 
 private static final SqlSingleOperandTypeChecker INTERVAL_TIMESTAMP = OperandTypes.family(
     SqlTypeFamily.DATETIME_INTERVAL, SqlTypeFamily.TIMESTAMP);
@@ -48,21 +60,23 @@ private static final SqlSingleOperandTypeChecker INTERVAL_TIME = OperandTypes.fa
 private static final SqlSingleOperandTypeChecker OPERAND_TYPE_CHECKER = OperandTypes.or(OperandTypes.INTERVAL_SAME_SAME,
     INTERVAL_TIMESTAMP, INTERVAL_TIME);
 
-// SQL2003, Part 2, Section 4.4.3 - extract returns a exact numeric
-// TODO: Return type should be decimal for seconds
+  // SQL2003, Part 2, Section 4.4.3 - extract returns a exact numeric
+  // TODO: Return type should be decimal for seconds
+
 // Native executor returns Int32 for date component extraction functions,
 // while the Java executor returns Int64.
 private static final SqlReturnTypeInference EXTRACT_RETURN_TYPE = opBinding ->
     (CalciteForkSettings.nativeExecutor() ? ReturnTypes.INTEGER_NULLABLE : ReturnTypes.BIGINT_NULLABLE)
         .inferReturnType(opBinding);
 
-public SqlExtractFunction(String name, boolean allowString) {
-    super(name, SqlKind.EXTRACT, EXTRACT_RETURN_TYPE, null,
+  public SqlExtractFunction(String name, boolean allowString) {
+    super(name, SqlKind.EXTRACT,  EXTRACT_RETURN_TYPE, null,
         allowString
-        ? OperandTypes.INTERVALINTERVAL_INTERVALDATETIME
-            .or(OperandTypes.family(SqlTypeFamily.STRING, SqlTypeFamily.DATETIME))
+            ? OperandTypes.INTERVALINTERVAL_INTERVALDATETIME
+                .or(OperandTypes.family(SqlTypeFamily.STRING, SqlTypeFamily.DATETIME))
+
             .or(OperandTypes.family(SqlTypeFamily.DATETIME_INTERVAL, SqlTypeFamily.TIMESTAMP))
-        : OperandTypes.INTERVALINTERVAL_INTERVALDATETIME,
+            : OperandTypes.INTERVALINTERVAL_INTERVALDATETIME,
         SqlFunctionCategory.SYSTEM);
 }
 
@@ -70,39 +84,42 @@ public SqlExtractFunction(String name, boolean allowString) {
 // TODO: Return type should be decimal for seconds
 public SqlExtractFunction(String name)
 {
-    super(name, SqlKind.EXTRACT, EXTRACT_RETURN_TYPE, null, OPERAND_TYPE_CHECKER, SqlFunctionCategory.SYSTEM);
-}
+    super(name, SqlKind.EXTRACT, EXTRACT_RETURN_TYPE, null, OPERAND_TYPE_CHECKER,
+        SqlFunctionCategory.SYSTEM);
+  }
 
-//~ Methods ----------------------------------------------------------------
+  //~ Methods ----------------------------------------------------------------
 
-@Override
-public String getSignatureTemplate(int operandsCount)
-{
+  @Override public String getSignatureTemplate(int operandsCount) {
     Util.discard(operandsCount);
     return "{0}({1} FROM {2})";
-}
+  }
 
-@Override
-public void unparse(SqlWriter writer, SqlCall call, int leftPrec, int rightPrec)
-{
+  @Override public void unparse(
+      SqlWriter writer,
+      SqlCall call,
+      int leftPrec,
+      int rightPrec) {
     final SqlWriter.Frame frame = writer.startFunCall(getName());
-    call.operand(0).unparse(writer, 0, 0);
+    call.operand(0)
+        .unparse(writer, 0, 0);
     writer.sep("FROM");
     call.operand(1).unparse(writer, 0, 0);
     writer.endFunCall(frame);
-}
+  }
 
-@Override
-public SqlMonotonicity getMonotonicity(SqlOperatorBinding call)
-{
-    TimeUnitRange value = getOperandLiteralValueOrThrow(call, 0, TimeUnitRange.class);
-    switch (value)
-    {
-        case YEAR:
-            return call.getOperandMonotonicity(1).unstrict();
-        default:
-            return SqlMonotonicity.NOT_MONOTONIC;
+
+
+  @Override public SqlMonotonicity getMonotonicity(SqlOperatorBinding call) {
+     TimeUnitRange
+      value = getOperandLiteralValueOrThrow(call, 0, TimeUnitRange.class);
+
+
+    switch (value) {
+    case YEAR:
+      return call.getOperandMonotonicity(1).unstrict();
+    default:
+      return SqlMonotonicity.NOT_MONOTONIC;
     }
-}
-
+  }
 }

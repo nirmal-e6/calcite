@@ -32,232 +32,228 @@ import org.apache.calcite.rel.type.StructKind;
 import org.apache.calcite.schema.CustomColumnResolvingTable;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.schema.Wrapper;
-import org.apache.calcite.sql.*;
+import org.apache.calcite.sql.JoinConditionType;
+import org.apache.calcite.sql.SqlBasicCall;
+import org.apache.calcite.sql.SqlCall;
+import org.apache.calcite.sql.SqlIdentifier;
+import org.apache.calcite.sql.SqlJoin;
+import org.apache.calcite.sql.SqlLambda;
+import org.apache.calcite.sql.SqlNode;
+import org.apache.calcite.sql.SqlNodeList;
+import org.apache.calcite.sql.SqlSelect;
+import org.apache.calcite.sql.SqlWindow;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.Util;
+
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Supplier;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
+
 import static org.apache.calcite.sql.validate.SqlNonNullableAccessors.getSelectList;
 import static org.apache.calcite.util.Static.RESOURCE;
 
 /**
- * A scope which delegates all requests to its parent scope. Use this as a base class for defining nested scopes.
+ * A scope which delegates all requests to its parent scope. Use this as a base
+ * class for defining nested scopes.
  */
-public abstract class DelegatingScope implements SqlValidatorScope
-{
-//~ Instance fields --------------------------------------------------------
+public abstract class DelegatingScope implements SqlValidatorScope {
+  //~ Instance fields --------------------------------------------------------
 
-/**
- * Parent scope. This is where to look next to resolve an identifier; it is not always the parent object in the parse
- * tree.
- *
- * <p>This is never null: at the top of the tree, it is an
- * {@link EmptyScope}.
- */
-protected final SqlValidatorScope parent;
-protected final SqlValidatorImpl validator;
+  /**
+   * Parent scope. This is where to look next to resolve an identifier; it is
+   * not always the parent object in the parse tree.
+   *
+   * <p>This is never null: at the top of the tree, it is an
+   * {@link EmptyScope}.
+   */
+  protected final SqlValidatorScope parent;
+  protected final SqlValidatorImpl validator;
 
-/**
- * Computes and stores information that cannot be computed on construction, but only after sub-queries have been
- * validated.
- */
-@SuppressWarnings({"methodref.receiver.bound.invalid"})
-public final Supplier<AggregatingSelectScope.Resolved> resolved = Suppliers.memoize(this::resolve);
+  /** Computes and stores information that cannot be computed on construction,
+   * but only after sub-queries have been validated. */
+  @SuppressWarnings({"methodref.receiver.bound.invalid"})
+  public final Supplier<AggregatingSelectScope.Resolved> resolved =
+      Suppliers.memoize(this::resolve);
 
-/**
- * Use while resolving.
- */
-SqlValidatorUtil.@Nullable GroupAnalyzer groupAnalyzer;
+  /** Use while resolving. */
+  SqlValidatorUtil.@Nullable GroupAnalyzer groupAnalyzer;
 
-//~ Constructors -----------------------------------------------------------
+  //~ Constructors -----------------------------------------------------------
 
-/**
- * Creates a <code>DelegatingScope</code>.
- *
- * @param parent Parent scope
- */
-DelegatingScope(SqlValidatorScope parent)
-{
+  /**
+   * Creates a <code>DelegatingScope</code>.
+   *
+   * @param parent Parent scope
+   */
+  DelegatingScope(SqlValidatorScope parent) {
     super();
     this.parent = requireNonNull(parent, "parent");
     this.validator = (SqlValidatorImpl) parent.getValidator();
-}
+  }
 
-//~ Methods ----------------------------------------------------------------
+  //~ Methods ----------------------------------------------------------------
 
-@Override
-public void addChild(SqlValidatorNamespace ns, String alias, boolean nullable)
-{
+  @Override public void addChild(SqlValidatorNamespace ns, String alias,
+      boolean nullable) {
     // By default, you cannot add to a scope. Derived classes can
     // override.
     throw new UnsupportedOperationException();
-}
+  }
 
-@Override
-public void resolve(List<String> names, SqlNameMatcher nameMatcher, boolean deep, Resolved resolved)
-{
+  @Override public void resolve(List<String> names, SqlNameMatcher nameMatcher,
+      boolean deep, Resolved resolved) {
     parent.resolve(names, nameMatcher, deep, resolved);
-}
+  }
 
-/**
- * If a record type allows implicit references to fields, recursively looks into the fields. Otherwise, returns
- * immediately.
- */
-void resolveInNamespace(SqlValidatorNamespace ns, boolean nullable, List<String> names, SqlNameMatcher nameMatcher,
-    Path path, Resolved resolved)
-{
-    if (names.isEmpty())
-    {
-        resolved.found(ns, nullable, this, path, names);
-        return;
+  /** If a record type allows implicit references to fields, recursively looks
+   * into the fields. Otherwise, returns immediately. */
+  void resolveInNamespace(SqlValidatorNamespace ns, boolean nullable,
+      List<String> names, SqlNameMatcher nameMatcher, Path path,
+      Resolved resolved) {
+    if (names.isEmpty()) {
+      resolved.found(ns, nullable, this, path, names);
+      return;
     }
 
     // added by E6Data for fixing Cyclic Exception
     // Match_Recognize tries to validate columns inside it and tries to fully qualify it's column names
     if (ns instanceof MatchRecognizeNamespace
-        && ((MatchRecognizeNamespace) ns).currentlyValidationInProgress())
-    {
-        return;
+        && ((MatchRecognizeNamespace) ns).currentlyValidationInProgress()) {
+      return;
     }
-
     final RelDataType rowType = ns.getRowType();
-    if (rowType.isStruct())
-    {
-        SqlValidatorTable validatorTable = ns.getTable();
-        if (validatorTable instanceof Prepare.PreparingTable)
-        {
-            Table t = ((Prepare.PreparingTable) validatorTable).unwrap(Table.class);
-            if (t instanceof CustomColumnResolvingTable)
-            {
-                final List<Pair<RelDataTypeField, List<String>>> entries = ((CustomColumnResolvingTable) t).resolveColumn(
-                    rowType, validator.getTypeFactory(), names);
-                for (Pair<RelDataTypeField, List<String>> entry : entries)
-                {
-                    final RelDataTypeField field = entry.getKey();
-                    final List<String> remainder = entry.getValue();
-                    final SqlValidatorNamespace ns2 = new FieldNamespace(validator, field.getType());
-                    final Step path2 = path.plus(rowType, field.getIndex(), field.getName(),
-                        StructKind.FULLY_QUALIFIED);
-                    resolveInNamespace(ns2, nullable, remainder, nameMatcher, path2, resolved);
-                }
-                return;
-            }
+    if (rowType.isStruct()) {
+      SqlValidatorTable validatorTable = ns.getTable();
+      if (validatorTable instanceof Prepare.PreparingTable) {
+        Table t = ((Prepare.PreparingTable) validatorTable).unwrap(Table.class);
+        if (t instanceof CustomColumnResolvingTable) {
+          final List<Pair<RelDataTypeField, List<String>>> entries =
+              ((CustomColumnResolvingTable) t).resolveColumn(
+                  rowType, validator.getTypeFactory(), names);
+          for (Pair<RelDataTypeField, List<String>> entry : entries) {
+            final RelDataTypeField field = entry.getKey();
+            final List<String> remainder = entry.getValue();
+            final SqlValidatorNamespace ns2 =
+                new FieldNamespace(validator, field.getType());
+            final Step path2 =
+                path.plus(rowType, field.getIndex(), field.getName(),
+                    StructKind.FULLY_QUALIFIED);
+            resolveInNamespace(ns2, nullable, remainder, nameMatcher, path2,
+                resolved);
+          }
+          return;
         }
+      }
 
-        final String name = names.get(0);
-        final RelDataTypeField field0 = nameMatcher.field(rowType, name);
-        if (field0 != null)
-        {
-            final SqlValidatorNamespace ns2 = requireNonNull(ns.lookupChild(field0.getName()),
+      final String name = names.get(0);
+      final RelDataTypeField field0 = nameMatcher.field(rowType, name);
+      if (field0 != null) {
+        final SqlValidatorNamespace ns2 =
+            requireNonNull(ns.lookupChild(field0.getName()),
                 () -> "field " + field0.getName() + " is not found in " + ns);
-            final Step path2 = path.plus(rowType, field0.getIndex(), field0.getName(), StructKind.FULLY_QUALIFIED);
-            resolveInNamespace(ns2, nullable, names.subList(1, names.size()), nameMatcher, path2, resolved);
+        final Step path2 =
+            path.plus(rowType, field0.getIndex(),
+                field0.getName(), StructKind.FULLY_QUALIFIED);
+        resolveInNamespace(ns2, nullable, names.subList(1, names.size()),
+            nameMatcher, path2, resolved);
+      } else {
+        for (RelDataTypeField field : rowType.getFieldList()) {
+          switch (field.getType().getStructKind()) {
+          case PEEK_FIELDS:
+          case PEEK_FIELDS_DEFAULT:
+          case PEEK_FIELDS_NO_EXPAND:
+            final Step path2 =
+                path.plus(rowType, field.getIndex(),
+                    field.getName(), field.getType().getStructKind());
+            final SqlValidatorNamespace ns2 =
+                requireNonNull(ns.lookupChild(field.getName()),
+                    () -> "field " + field.getName() + " is not found in " + ns);
+            resolveInNamespace(ns2, nullable, names, nameMatcher, path2,
+                resolved);
+            break;
+          default:
+            break;
+          }
         }
-        else
-        {
-            for (RelDataTypeField field : rowType.getFieldList())
-            {
-                switch (field.getType().getStructKind())
-                {
-                    case PEEK_FIELDS:
-                    case PEEK_FIELDS_DEFAULT:
-                    case PEEK_FIELDS_NO_EXPAND:
-                        final Step path2 = path.plus(rowType, field.getIndex(), field.getName(),
-                            field.getType().getStructKind());
-                        final SqlValidatorNamespace ns2 = requireNonNull(ns.lookupChild(field.getName()),
-                            () -> "field " + field.getName() + " is not found in " + ns);
-                        resolveInNamespace(ns2, nullable, names, nameMatcher, path2, resolved);
-                        break;
-                    default:
-                        break;
-                }
-            }
-        }
+      }
     }
-}
+  }
 
-protected void addColumnNames(SqlValidatorNamespace ns, List<SqlMoniker> colNames)
-{
+  protected void addColumnNames(
+      SqlValidatorNamespace ns,
+      List<SqlMoniker> colNames) {
     final RelDataType rowType;
-    try
-    {
-        rowType = ns.getRowType();
-    }
-    catch (Error e)
-    {
-        // namespace is not good - bail out.
-        return;
+    try {
+      rowType = ns.getRowType();
+    } catch (Error e) {
+      // namespace is not good - bail out.
+      return;
     }
 
-    for (RelDataTypeField field : rowType.getFieldList())
-    {
-        colNames.add(new SqlMonikerImpl(field.getName(), SqlMonikerType.COLUMN));
+    for (RelDataTypeField field : rowType.getFieldList()) {
+      colNames.add(
+          new SqlMonikerImpl(
+              field.getName(),
+              SqlMonikerType.COLUMN));
     }
-}
+  }
 
-@Override
-public void findAllColumnNames(List<SqlMoniker> result)
-{
+  @Override public void findAllColumnNames(List<SqlMoniker> result) {
     parent.findAllColumnNames(result);
-}
+  }
 
-@Override
-public void findAliases(Collection<SqlMoniker> result)
-{
+  @Override public void findAliases(Collection<SqlMoniker> result) {
     parent.findAliases(result);
-}
+  }
 
-@SuppressWarnings("deprecation")
-@Override
-public Pair<String, SqlValidatorNamespace> findQualifyingTableName(String columnName, SqlNode ctx)
-{
+  @SuppressWarnings("deprecation")
+  @Override public Pair<String, SqlValidatorNamespace> findQualifyingTableName(
+      String columnName, SqlNode ctx) {
     //noinspection deprecation
     return parent.findQualifyingTableName(columnName, ctx);
-}
+  }
 
-@Override
-public Map<String, ScopeChild> findQualifyingTableNames(String columnName, SqlNode ctx, SqlNameMatcher nameMatcher)
-{
+  @Override public Map<String, ScopeChild> findQualifyingTableNames(String columnName,
+      SqlNode ctx, SqlNameMatcher nameMatcher) {
     return parent.findQualifyingTableNames(columnName, ctx, nameMatcher);
-}
+  }
 
-@Override
-public @Nullable RelDataType resolveColumn(String name, SqlNode ctx)
-{
+  @Override public @Nullable RelDataType resolveColumn(String name, SqlNode ctx) {
     return parent.resolveColumn(name, ctx);
-}
+  }
 
-@Override
-public RelDataType nullifyType(SqlNode node, RelDataType type)
-{
+  @Override public RelDataType nullifyType(SqlNode node, RelDataType type) {
     return parent.nullifyType(node, type);
-}
+  }
 
-@SuppressWarnings("deprecation")
-@Override
-public @Nullable SqlValidatorNamespace getTableNamespace(List<String> names)
-{
+  @SuppressWarnings("deprecation")
+  @Override public @Nullable SqlValidatorNamespace getTableNamespace(List<String> names) {
     return parent.getTableNamespace(names);
-}
+  }
 
-@Override
-public void resolveTable(List<String> names, SqlNameMatcher nameMatcher, Path path, Resolved resolved)
-{
+  @Override public void resolveTable(List<String> names, SqlNameMatcher nameMatcher,
+      Path path, Resolved resolved) {
     parent.resolveTable(names, nameMatcher, path, resolved);
-}
+  }
 
-/**
- * added by E6Data to resolve temp tables for CTE which are stored in SESSION schema
- */
-public void resolveTempTable(List<String> names, SqlNameMatcher nameMatcher, Path path, Resolved resolved)
-{
+
+  /**
+   * added by E6Data to resolve temp tables for CTE which are stored in SESSION schema
+   */
+  public void resolveTempTable(List<String> names, SqlNameMatcher nameMatcher,
+      Path path, Resolved resolved) {
     CalciteSchema rootSchema = validator.catalogReader.getRootSchema();
 
     List<String> resolverNames = validator.catalogReader.getSchemaPaths().get(0);
@@ -269,89 +265,75 @@ public void resolveTempTable(List<String> names, SqlNameMatcher nameMatcher, Pat
     CalciteSchema schema = rootSchema;
     SqlValidatorNamespace namespace = null;
     List<String> remainingNames = tableResolverName;
-    for (String schemaName : tableResolverName)
-    {
-        if (schema == rootSchema && nameMatcher.matches(schemaName, schema.name))
-        {
-            remainingNames = Util.skip(remainingNames);
-            continue;
+    for (String schemaName : tableResolverName) {
+      if (schema == rootSchema && nameMatcher.matches(schemaName, schema.name)) {
+        remainingNames = Util.skip(remainingNames);
+        continue;
+      }
+      final CalciteSchema subSchema = schema.getSubSchema(schemaName,
+          nameMatcher.isCaseSensitive());
+      if (subSchema != null) {
+        path = path.plus(null, -1, subSchema.name, StructKind.NONE);
+        remainingNames = Util.skip(remainingNames);
+        schema = subSchema;
+        namespace = new SchemaNamespace(validator, ImmutableList.copyOf(path.stepNames()));
+        continue;
+      }
+      CalciteSchema.TableEntry entry = schema.getTable(schemaName,
+          nameMatcher.isCaseSensitive());
+      if (entry == null) {
+        entry = schema.getTableBasedOnNullaryFunction(schemaName,
+            nameMatcher.isCaseSensitive());
+      }
+      if (entry != null) {
+        path = path.plus(null, -1, entry.name, StructKind.NONE);
+        remainingNames = Util.skip(remainingNames);
+        final Table table = entry.getTable();
+        SqlValidatorTable table2 = null;
+        if (table instanceof Wrapper) {
+          table2 = ((Wrapper) table).unwrap(Prepare.PreparingTable.class);
         }
-        final CalciteSchema subSchema = schema.getSubSchema(schemaName, nameMatcher.isCaseSensitive());
-        if (subSchema != null)
-        {
-            path = path.plus(null, -1, subSchema.name, StructKind.NONE);
-            remainingNames = Util.skip(remainingNames);
-            schema = subSchema;
-            namespace = new SchemaNamespace(validator, ImmutableList.copyOf(path.stepNames()));
-            continue;
+        if (table2 == null) {
+          final RelOptSchema relOptSchema = validator.catalogReader.unwrap(RelOptSchema.class);
+          final RelDataType rowType = table.getRowType(validator.typeFactory);
+          table2 = RelOptTableImpl.create(relOptSchema, rowType, entry, null);
         }
-        CalciteSchema.TableEntry entry = schema.getTable(schemaName, nameMatcher.isCaseSensitive());
-        if (entry == null)
-        {
-            entry = schema.getTableBasedOnNullaryFunction(schemaName, nameMatcher.isCaseSensitive());
-        }
-        if (entry != null)
-        {
-            path = path.plus(null, -1, entry.name, StructKind.NONE);
-            remainingNames = Util.skip(remainingNames);
-            final Table table = entry.getTable();
-            SqlValidatorTable table2 = null;
-            if (table instanceof Wrapper)
-            {
-                table2 = ((Wrapper) table).unwrap(Prepare.PreparingTable.class);
-            }
-            if (table2 == null)
-            {
-                final RelOptSchema relOptSchema = validator.catalogReader.unwrap(RelOptSchema.class);
-                final RelDataType rowType = table.getRowType(validator.typeFactory);
-                table2 = RelOptTableImpl.create(relOptSchema, rowType, entry, null);
-            }
-            namespace = new TableNamespace(validator, table2);
-            resolved.found(namespace, false, null, path, remainingNames);
-            return;
-        }
-        // neither sub-schema nor table
-        if (namespace != null && !remainingNames.equals(names))
-        {
-            resolved.found(namespace, false, null, path, remainingNames);
-        }
+        namespace = new TableNamespace(validator, table2);
+        resolved.found(namespace, false, null, path, remainingNames);
         return;
+      }
+      // neither sub-schema nor table
+      if (namespace != null && !remainingNames.equals(names)) {
+        resolved.found(namespace, false, null, path, remainingNames);
+      }
+      return;
     }
-}
+  }
 
-@Override
-public SqlValidatorScope getOperandScope(SqlCall call)
-{
-    if (call instanceof SqlSelect)
-    {
-        return validator.getSelectScope((SqlSelect) call);
-    }
-    else if (call instanceof SqlLambda)
-    {
-        return validator.getLambdaScope((SqlLambda) call);
+  @Override public SqlValidatorScope getOperandScope(SqlCall call) {
+    if (call instanceof SqlSelect) {
+      return validator.getSelectScope((SqlSelect) call);
+    } else if (call instanceof SqlLambda) {
+      return validator.getLambdaScope((SqlLambda) call);
     }
     return this;
-}
+  }
 
-@Override
-public SqlValidator getValidator()
-{
+  @Override public SqlValidator getValidator() {
     return validator;
-}
+  }
 
-/**
- * Converts an identifier into a fully-qualified identifier. For example, the "empno" in "select empno from emp natural
- * join dept" becomes "emp.empno".
- *
- * <p>If the identifier cannot be resolved, throws. Never returns null.
- */
-@SuppressWarnings("deprecation")
-@Override
-public SqlQualified fullyQualify(SqlIdentifier identifier)
-{
-    if (identifier.isStar())
-    {
-        return SqlQualified.create(this, 1, null, identifier);
+  /**
+   * Converts an identifier into a fully-qualified identifier. For example,
+   * the "empno" in "select empno from emp natural join dept" becomes
+   * "emp.empno".
+   *
+   * <p>If the identifier cannot be resolved, throws. Never returns null.
+   */
+  @SuppressWarnings("deprecation")
+  @Override public SqlQualified fullyQualify(SqlIdentifier identifier) {
+    if (identifier.isStar()) {
+      return SqlQualified.create(this, 1, null, identifier);
     }
 
     final SqlIdentifier previous = identifier;
@@ -359,614 +341,537 @@ public SqlQualified fullyQualify(SqlIdentifier identifier)
     String columnName;
     String tableName = null;
     SqlValidatorNamespace namespace = null;
-    switch (identifier.names.size())
-    {
-        case 1:
-        {
-            columnName = identifier.names.get(0);
-            final Map<String, ScopeChild> map = findQualifyingTableNames(columnName, identifier, nameMatcher);
-            if (map.isEmpty())
-            {
-                if (nameMatcher.isCaseSensitive())
-                {
-                    final SqlNameMatcher liberalMatcher = SqlNameMatchers.liberal();
-                    final Map<String, ScopeChild> map2 = findQualifyingTableNames(columnName, identifier,
-                        liberalMatcher);
-                    if (!map2.isEmpty())
-                    {
-                        final List<String> list = new ArrayList<>();
-                        for (ScopeChild entry : map2.values())
-                        {
-                            final RelDataTypeField field = liberalMatcher.field(entry.namespace.getRowType(),
-                                columnName);
-                            if (field == null)
-                            {
-                                continue;
-                            }
-                            list.add(field.getName());
-                        }
-                        Collections.sort(list);
-                        throw validator.newValidationError(identifier,
-                            RESOURCE.columnNotFoundDidYouMean(columnName, Util.sepList(list, "', '")));
-                    }
-                }
-                throw validator.newValidationError(identifier, RESOURCE.columnNotFound(columnName));
+    switch (identifier.names.size()) {
+    case 1: {
+      columnName = identifier.names.get(0);
+      final Map<String, ScopeChild> map =
+          findQualifyingTableNames(columnName, identifier, nameMatcher);
+      if (map.isEmpty()) {
+        if (nameMatcher.isCaseSensitive()) {
+          final SqlNameMatcher liberalMatcher = SqlNameMatchers.liberal();
+          final Map<String, ScopeChild> map2 =
+              findQualifyingTableNames(columnName, identifier, liberalMatcher);
+          if (!map2.isEmpty()) {
+            final List<String> list = new ArrayList<>();
+            for (ScopeChild entry : map2.values()) {
+              final RelDataTypeField field =
+                  liberalMatcher.field(entry.namespace.getRowType(),
+                      columnName);
+              if (field == null) {
+                continue;
+              }
+              list.add(field.getName());
             }
-            else if (map.size() == 1)
-            {
-                tableName = map.keySet().iterator().next();
-                namespace = map.get(tableName).namespace;
-            }
-            else if (validator.m_bHasUsingClause && CalciteForkSettings.databricks())
-            {
-                if (this instanceof SelectScope)
-                {
-                    SelectScope selectScope = (SelectScope) this;
-                    if (selectScope.getNode().getFrom() instanceof SqlJoin)
-                    {
-                        SqlJoin joinNode = (SqlJoin) selectScope.getNode().getFrom();
-                        JoinScope joinScope = (JoinScope) validator.getJoinScope(joinNode);
-                        SqlValidatorNamespace preferredNs = preferSideForUsingAmbiguity(validator, joinScope,
-                            columnName);
-
-                        if (preferredNs != null)
-                        {
-                            namespace = preferredNs;
-
-                            String alias = aliasForNamespace(joinScope, preferredNs);
-
-                            // Qualify identifier using the alias of the chosen side
-                            if (alias != null)
-                            {
-                                tableName = alias;
-                            }
-                            else
-                            {
-                                tableName = SqlValidatorUtil.alias(preferredNs.getNode());
-                                if (tableName == null)
-                                {
-                                    tableName = SqlValidatorUtil.getAlias(preferredNs.getNode(), -1);
-                                }
-                            }
-                            //identifier.setNames(java.util.Arrays.asList(tableName, columnName), null);
-                        }
-                        else
-                        {
-                            throw validator.newValidationError(identifier, RESOURCE.columnAmbiguous(columnName));
-                        }
-                    }
-                    else
-                    {
-                        throw validator.newValidationError(identifier, RESOURCE.columnAmbiguous(columnName));
-                    }
-                }
-                else
-                {
-                    throw validator.newValidationError(identifier, RESOURCE.columnAmbiguous(columnName));
-                }
-            }
-            else  // map.size() > 2
-            {
-                throw validator.newValidationError(identifier, RESOURCE.columnAmbiguous(columnName));
-            }
-
-            final ResolvedImpl resolved = new ResolvedImpl();
-            resolveInNamespace(namespace, false, identifier.names, nameMatcher, Path.EMPTY, resolved);
-            final RelDataTypeField field = nameMatcher.field(namespace.getRowType(), columnName);
-            if (field != null)
-            {
-                if (!CalciteForkSettings.allowDuplicateAliasInProjection() &&
-                    hasAmbiguousField(namespace.getRowType(), field, columnName, nameMatcher))
-                {
-                    throw validator.newValidationError(identifier, RESOURCE.columnAmbiguous(columnName));
-                }
-
-                columnName = field.getName(); // use resolved field name
-            }
-            // todo: do implicit collation here
-            final SqlParserPos pos = identifier.getParserPosition();
-            String tableNameForIdentifier = tableName;
-
-            identifier = new SqlIdentifier(ImmutableList.of(tableNameForIdentifier, columnName), null, pos,
-                ImmutableList.of(SqlParserPos.ZERO, pos));
+            Collections.sort(list);
+            throw validator.newValidationError(identifier,
+                RESOURCE.columnNotFoundDidYouMean(columnName,
+                    Util.sepList(list, "', '")));
+          }
         }
-        // fall through
-        default:
-        {
-            SqlValidatorNamespace fromNs = null;
-            Path fromPath = null;
-            RelDataType fromRowType = null;
-            final ResolvedImpl resolved = new ResolvedImpl();
-            int size = identifier.names.size();
-            int i = size - 1;
-            for (; i > 0; i--)
-            {
-                final SqlIdentifier prefix = identifier.getComponent(0, i);
-                resolved.clear();
-                resolve(prefix.names, nameMatcher, false, resolved);
-                if (resolved.count() == 1)
-                {
-                    final Resolve resolve = resolved.only();
-                    fromNs = resolve.namespace;
-                    fromPath = resolve.path;
-                    fromRowType = resolve.rowType();
-                    break;
-                }
-                // Look for a table alias that is the wrong case.
-                if (nameMatcher.isCaseSensitive())
-                {
-                    final SqlNameMatcher liberalMatcher = SqlNameMatchers.liberal();
-                    resolved.clear();
-                    resolve(prefix.names, liberalMatcher, false, resolved);
-                    if (resolved.count() == 1)
-                    {
-                        final Step lastStep = Util.last(resolved.only().path.steps());
-                        throw validator.newValidationError(prefix,
-                            RESOURCE.tableNameNotFoundDidYouMean(prefix.toString(), lastStep.name));
-                    }
-                }
-            }
-            if (fromNs == null || fromNs instanceof SchemaNamespace)
-            {
-                // Look for a column not qualified by a table alias.
-                columnName = identifier.names.get(0);
-                final Map<String, ScopeChild> map = findQualifyingTableNames(columnName, identifier, nameMatcher);
-                switch (map.size())
-                {
-                    default:
-                        final SqlIdentifier prefix1 = identifier.skipLast(1);
-                        throw validator.newValidationError(prefix1, RESOURCE.tableNameNotFound(prefix1.toString()));
-                    case 1:
-                    {
-                        final Map.Entry<String, ScopeChild> entry = map.entrySet().iterator().next();
-                        final String tableName2 = map.keySet().iterator().next();
-                        fromNs = entry.getValue().namespace;
-                        fromPath = Path.EMPTY;
+        throw validator.newValidationError(identifier,
+            RESOURCE.columnNotFound(columnName));
+      } else if (map.size() == 1) {
+        tableName = map.keySet().iterator().next();
+        namespace = map.get(tableName).namespace;
+      } else if (validator.m_bHasUsingClause && CalciteForkSettings.databricks()) {
+        if (this instanceof SelectScope) {
+          SelectScope selectScope = (SelectScope) this;
+          if (selectScope.getNode().getFrom() instanceof SqlJoin) {
+            SqlJoin joinNode = (SqlJoin) selectScope.getNode().getFrom();
+            JoinScope joinScope = (JoinScope) validator.getJoinScope(joinNode);
+            SqlValidatorNamespace preferredNs = preferSideForUsingAmbiguity(validator, joinScope,
+                columnName);
 
-                        // Adding table name is for RecordType column with StructKind.PEEK_FIELDS or
-                        // StructKind.PEEK_FIELDS only. Access to a field in a RecordType column of
-                        // other StructKind should always be qualified with table name.
-                        final RelDataTypeField field = nameMatcher.field(fromNs.getRowType(), columnName);
-                        if (field != null)
-                        {
-                            switch (field.getType().getStructKind())
-                            {
-                                case PEEK_FIELDS:
-                                case PEEK_FIELDS_DEFAULT:
-                                case PEEK_FIELDS_NO_EXPAND:
-                                case FULLY_QUALIFIED: // E6Data change. Added to support table.struct.field_name and struct.field_name access
-                                    columnName = field.getName(); // use resolved field name
-                                    resolve(ImmutableList.of(tableName2), nameMatcher, false, resolved);
-                                    if (resolved.count() == 1)
-                                    {
-                                        final Resolve resolve = resolved.only();
-                                        fromNs = resolve.namespace;
-                                        fromPath = resolve.path;
-                                        fromRowType = resolve.rowType();
-                                        identifier = identifier.setName(0, columnName)
-                                            .add(0, tableName2, identifier.getParserPosition());
-                                        ++i;
-                                        ++size;
-                                    }
-                                    break;
-                                default:
-                                    // Throw an error if the table was not found.
-                                    // If one or more of the child namespaces allows peeking
-                                    // (e.g. if they are Phoenix column families) then we relax the SQL
-                                    // standard requirement that record fields are qualified by table alias.
-                                    final SqlIdentifier prefix = identifier.skipLast(1);
-                                    throw validator.newValidationError(prefix,
-                                        RESOURCE.tableNameNotFound(prefix.toString()));
-                            }
-                        }
-                    }
+            if (preferredNs != null) {
+              namespace = preferredNs;
+
+              String alias = aliasForNamespace(joinScope, preferredNs);
+
+              // Qualify identifier using the alias of the chosen side
+              if (alias != null) {
+                tableName = alias;
+              } else {
+                tableName = SqlValidatorUtil.alias(preferredNs.getNode());
+                if (tableName == null) {
+                  tableName = SqlValidatorUtil.getAlias(preferredNs.getNode(), -1);
                 }
+              }
+              //identifier.setNames(java.util.Arrays.asList(tableName, columnName), null);
+            } else {
+              throw validator.newValidationError(identifier, RESOURCE.columnAmbiguous(columnName));
             }
-
-            // If a table alias is part of the identifier, make sure that the table
-            // alias uses the same case as it was defined. For example, in
-            //
-            //    SELECT e.empno FROM Emp as E
-            //
-            // change "e.empno" to "E.empno".
-            if (fromNs.getEnclosingNode() != null && !(this instanceof MatchRecognizeScope))
-            {
-                @Nullable String alias = SqlValidatorUtil.alias(fromNs.getEnclosingNode());
-                if (alias != null && i > 0 && !alias.equals(identifier.names.get(i - 1)))
-                {
-                    identifier = identifier.setName(i - 1, alias);
-                }
-            }
-            if (requireNonNull(fromPath, "fromPath").stepCount() > 1)
-            {
-                requireNonNull(fromRowType, "fromRowType");
-                for (Step p : fromPath.steps())
-                {
-                    fromRowType = fromRowType.getFieldList().get(p.i).getType();
-                }
-                ++i;
-            }
-            final SqlIdentifier suffix = identifier.getComponent(i, size);
-            resolved.clear();
-            resolveInNamespace(fromNs, false, suffix.names, nameMatcher, Path.EMPTY, resolved);
-            final Path path;
-            switch (resolved.count())
-            {
-                case 0:
-                    // Maybe the last component was correct, just wrong case
-                    if (nameMatcher.isCaseSensitive())
-                    {
-                        SqlNameMatcher liberalMatcher = SqlNameMatchers.liberal();
-                        resolved.clear();
-                        resolveInNamespace(fromNs, false, suffix.names, liberalMatcher, Path.EMPTY, resolved);
-                        if (resolved.count() > 0)
-                        {
-                            int k = size - 1;
-                            final SqlIdentifier prefix = identifier.getComponent(0, i);
-                            final SqlIdentifier suffix3 = identifier.getComponent(i, k + 1);
-                            final Step step = Util.last(resolved.resolves.get(0).path.steps());
-                            throw validator.newValidationError(suffix3,
-                                RESOURCE.columnNotFoundInTableDidYouMean(suffix3.toString(), prefix.toString(),
-                                    step.name));
-                        }
-                    }
-                    // Find the shortest suffix that also fails. Suppose we cannot resolve
-                    // "a.b.c"; we find we cannot resolve "a.b" but can resolve "a". So,
-                    // the error will be "Column 'a.b' not found".
-                    int k = size - 1;
-                    for (; k > i; --k)
-                    {
-                        SqlIdentifier suffix2 = identifier.getComponent(i, k);
-                        resolved.clear();
-                        resolveInNamespace(fromNs, false, suffix2.names, nameMatcher, Path.EMPTY, resolved);
-                        if (resolved.count() > 0)
-                        {
-                            break;
-                        }
-                    }
-                    final SqlIdentifier prefix = identifier.getComponent(0, i);
-                    final SqlIdentifier suffix3 = identifier.getComponent(i, k + 1);
-                    throw validator.newValidationError(suffix3,
-                        RESOURCE.columnNotFoundInTable(suffix3.toString(), prefix.toString()));
-                case 1:
-                    path = resolved.only().path;
-                    break;
-                default:
-                    final Comparator<Resolve> c = new Comparator<Resolve>()
-                    {
-                        @Override
-                        public int compare(Resolve o1, Resolve o2)
-                        {
-                            // Name resolution that uses fewer implicit steps wins.
-                            int c = Integer.compare(worstKind(o1.path), worstKind(o2.path));
-                            if (c != 0)
-                            {
-                                return c;
-                            }
-                            // Shorter path wins
-                            return Integer.compare(o1.path.stepCount(), o2.path.stepCount());
-                        }
-
-                        private int worstKind(Path path)
-                        {
-                            int kind = -1;
-                            for (Step step : path.steps())
-                            {
-                                kind = Math.max(kind, step.kind.ordinal());
-                            }
-                            return kind;
-                        }
-                    };
-                    resolved.resolves.sort(c);
-                    if (c.compare(resolved.resolves.get(0), resolved.resolves.get(1)) == 0)
-                    {
-                        throw validator.newValidationError(suffix, RESOURCE.columnAmbiguous(suffix.toString()));
-                    }
-                    path = resolved.resolves.get(0).path;
-            }
-
-            // Normalize case to match definition, make elided fields explicit,
-            // and check that references to dynamic stars ("**") are unambiguous.
-            int k = i;
-            for (Step step : path.steps())
-            {
-                final String name = identifier.names.get(k);
-                if (step.i < 0)
-                {
-                    throw validator.newValidationError(identifier, RESOURCE.columnNotFound(name));
-                }
-                final RelDataTypeField field0 = requireNonNull(step.rowType,
-                    () -> "rowType of step " + step.name).getFieldList().get(step.i);
-                final String fieldName = field0.getName();
-                switch (step.kind)
-                {
-                    case PEEK_FIELDS:
-                    case PEEK_FIELDS_DEFAULT:
-                    case PEEK_FIELDS_NO_EXPAND:
-                        identifier = identifier.add(k, fieldName, SqlParserPos.ZERO);
-                        break;
-                    default:
-                        if (!fieldName.equals(name))
-                        {
-                            identifier = identifier.setName(k, fieldName);
-                        }
-                        if (!CalciteForkSettings.allowDuplicateAliasInProjection() && hasAmbiguousField(
-                            step.rowType, field0, name, nameMatcher))
-                        {
-                            throw validator.newValidationError(identifier, RESOURCE.columnAmbiguous(name));
-                        }
-                }
-                ++k;
-            }
-
-            // Multiple name components may have been resolved as one step by
-            // CustomResolvingTable.
-            if (identifier.names.size() > k)
-            {
-                identifier = identifier.getComponent(0, k);
-            }
-
-            if (i > 1)
-            {
-                // Simplify overqualified identifiers.
-                // For example, schema.emp.deptno becomes emp.deptno.
-                //
-                // It is safe to convert schema.emp or database.schema.emp to emp
-                // because it would not have resolved if the FROM item had an alias. The
-                // following query is invalid:
-                //   SELECT schema.emp.deptno FROM schema.emp AS e
-                identifier = identifier.getComponent(i - 1, identifier.names.size());
-            }
-
-            if (!previous.equals(identifier))
-            {
-                validator.setOriginal(identifier, previous);
-            }
-            return SqlQualified.create(this, i, fromNs, identifier);
+          } else {
+            throw validator.newValidationError(identifier, RESOURCE.columnAmbiguous(columnName));
+          }
+        } else {
+          throw validator.newValidationError(identifier, RESOURCE.columnAmbiguous(columnName));
         }
+      } else {
+        // map.size() > 2
+        throw validator.newValidationError(identifier,
+            RESOURCE.columnAmbiguous(columnName));
+      }
+
+      final ResolvedImpl resolved = new ResolvedImpl();
+      resolveInNamespace(namespace, false, identifier.names, nameMatcher,
+          Path.EMPTY, resolved);
+      final RelDataTypeField field =
+          nameMatcher.field(namespace.getRowType(), columnName);
+      if (field != null) {
+        if (!CalciteForkSettings.allowDuplicateAliasInProjection()
+            && hasAmbiguousField(namespace.getRowType(), field, columnName, nameMatcher)) {
+          throw validator.newValidationError(identifier,
+              RESOURCE.columnAmbiguous(columnName));
+        }
+
+        columnName = field.getName(); // use resolved field name
+      }
+      // todo: do implicit collation here
+      final SqlParserPos pos = identifier.getParserPosition();
+      String tableNameForIdentifier = tableName;
+
+      identifier = new SqlIdentifier(ImmutableList.of(tableNameForIdentifier, columnName), null,
+              pos, ImmutableList.of(SqlParserPos.ZERO, pos));
     }
-}
+    // fall through
+    default: {
+      SqlValidatorNamespace fromNs = null;
+      Path fromPath = null;
+      RelDataType fromRowType = null;
+      final ResolvedImpl resolved = new ResolvedImpl();
+      int size = identifier.names.size();
+      int i = size - 1;
+      for (; i > 0; i--) {
+        final SqlIdentifier prefix = identifier.getComponent(0, i);
+        resolved.clear();
+        resolve(prefix.names, nameMatcher, false, resolved);
+        if (resolved.count() == 1) {
+          final Resolve resolve = resolved.only();
+          fromNs = resolve.namespace;
+          fromPath = resolve.path;
+          fromRowType = resolve.rowType();
+          break;
+        }
+        // Look for a table alias that is the wrong case.
+        if (nameMatcher.isCaseSensitive()) {
+          final SqlNameMatcher liberalMatcher = SqlNameMatchers.liberal();
+          resolved.clear();
+          resolve(prefix.names, liberalMatcher, false, resolved);
+          if (resolved.count() == 1) {
+            final Step lastStep = Util.last(resolved.only().path.steps());
+            throw validator.newValidationError(prefix,
+                RESOURCE.tableNameNotFoundDidYouMean(prefix.toString(),
+                    lastStep.name));
+          }
+        }
+      }
+      if (fromNs == null || fromNs instanceof SchemaNamespace) {
+        // Look for a column not qualified by a table alias.
+        columnName = identifier.names.get(0);
+        final Map<String, ScopeChild> map =
+            findQualifyingTableNames(columnName, identifier, nameMatcher);
+        switch (map.size()) {
+        default:
+          final SqlIdentifier prefix1 = identifier.skipLast(1);
+          throw validator.newValidationError(prefix1,
+              RESOURCE.tableNameNotFound(prefix1.toString()));
+        case 1: {
+          final Map.Entry<String, ScopeChild> entry =
+              map.entrySet().iterator().next();
+          final String tableName2 = map.keySet().iterator().next();
+          fromNs = entry.getValue().namespace;
+          fromPath = Path.EMPTY;
 
-@Override
-public void validateExpr(SqlNode expr)
-{
+          // Adding table name is for RecordType column with StructKind.PEEK_FIELDS or
+          // StructKind.PEEK_FIELDS only. Access to a field in a RecordType column of
+          // other StructKind should always be qualified with table name.
+          final RelDataTypeField field =
+              nameMatcher.field(fromNs.getRowType(), columnName);
+          if (field != null) {
+            switch (field.getType().getStructKind()) {
+            case PEEK_FIELDS:
+            case PEEK_FIELDS_DEFAULT:
+            case PEEK_FIELDS_NO_EXPAND:
+
+                                case FULLY_QUALIFIED: // E6Data change. Added to support table.struct.field_name and struct.field_name access
+              columnName = field.getName(); // use resolved field name
+              resolve(ImmutableList.of(tableName2), nameMatcher, false,
+                  resolved);
+              if (resolved.count() == 1) {
+                final Resolve resolve = resolved.only();
+                fromNs = resolve.namespace;
+                fromPath = resolve.path;
+                fromRowType = resolve.rowType();
+                identifier = identifier
+                    .setName(0, columnName)
+                    .add(0, tableName2,  identifier.getParserPosition());
+                ++i;
+                ++size;
+              }
+              break;
+            default:
+              // Throw an error if the table was not found.
+              // If one or more of the child namespaces allows peeking
+              // (e.g. if they are Phoenix column families) then we relax the SQL
+              // standard requirement that record fields are qualified by table alias.
+              final SqlIdentifier prefix = identifier.skipLast(1);
+              throw validator.newValidationError(prefix,
+                  RESOURCE.tableNameNotFound(prefix.toString()));
+            }
+          }
+        }
+        }
+      }
+
+      // If a table alias is part of the identifier, make sure that the table
+      // alias uses the same case as it was defined. For example, in
+      //
+      //    SELECT e.empno FROM Emp as E
+      //
+      // change "e.empno" to "E.empno".
+      if (fromNs.getEnclosingNode() != null
+          && !(this instanceof MatchRecognizeScope)) {
+        @Nullable String alias =
+            SqlValidatorUtil.alias(fromNs.getEnclosingNode());
+        if (alias != null
+            && i > 0
+            && !alias.equals(identifier.names.get(i - 1))) {
+          identifier = identifier.setName(i - 1, alias);
+        }
+      }
+      if (requireNonNull(fromPath, "fromPath").stepCount() > 1) {
+        requireNonNull(fromRowType, "fromRowType");
+        for (Step p : fromPath.steps()) {
+          fromRowType = fromRowType.getFieldList().get(p.i).getType();
+        }
+        ++i;
+      }
+      final SqlIdentifier suffix = identifier.getComponent(i, size);
+      resolved.clear();
+      resolveInNamespace(fromNs, false, suffix.names, nameMatcher, Path.EMPTY,
+          resolved);
+      final Path path;
+      switch (resolved.count()) {
+      case 0:
+        // Maybe the last component was correct, just wrong case
+        if (nameMatcher.isCaseSensitive()) {
+          SqlNameMatcher liberalMatcher = SqlNameMatchers.liberal();
+          resolved.clear();
+          resolveInNamespace(fromNs, false, suffix.names, liberalMatcher,
+              Path.EMPTY, resolved);
+          if (resolved.count() > 0) {
+            int k = size - 1;
+            final SqlIdentifier prefix = identifier.getComponent(0, i);
+            final SqlIdentifier suffix3 = identifier.getComponent(i, k + 1);
+            final Step step = Util.last(resolved.resolves.get(0).path.steps());
+            throw validator.newValidationError(suffix3,
+                RESOURCE.columnNotFoundInTableDidYouMean(suffix3.toString(),
+                    prefix.toString(), step.name));
+          }
+        }
+        // Find the shortest suffix that also fails. Suppose we cannot resolve
+        // "a.b.c"; we find we cannot resolve "a.b" but can resolve "a". So,
+        // the error will be "Column 'a.b' not found".
+        int k = size - 1;
+        for (; k > i; --k) {
+          SqlIdentifier suffix2 = identifier.getComponent(i, k);
+          resolved.clear();
+          resolveInNamespace(fromNs, false, suffix2.names, nameMatcher,
+              Path.EMPTY, resolved);
+          if (resolved.count() > 0) {
+            break;
+          }
+        }
+        final SqlIdentifier prefix = identifier.getComponent(0, i);
+        final SqlIdentifier suffix3 = identifier.getComponent(i, k + 1);
+        throw validator.newValidationError(suffix3,
+            RESOURCE.columnNotFoundInTable(suffix3.toString(), prefix.toString()));
+      case 1:
+        path = resolved.only().path;
+        break;
+      default:
+        final Comparator<Resolve> c =
+            new Comparator<Resolve>() {
+              @Override public int compare(Resolve o1, Resolve o2) {
+                // Name resolution that uses fewer implicit steps wins.
+                int c = Integer.compare(worstKind(o1.path), worstKind(o2.path));
+                if (c != 0) {
+                  return c;
+                }
+                // Shorter path wins
+                return Integer.compare(o1.path.stepCount(), o2.path.stepCount());
+              }
+
+              private int worstKind(Path path) {
+                int kind = -1;
+                for (Step step : path.steps()) {
+                  kind = Math.max(kind, step.kind.ordinal());
+                }
+                return kind;
+              }
+            };
+        resolved.resolves.sort(c);
+        if (c.compare(resolved.resolves.get(0), resolved.resolves.get(1)) == 0) {
+          throw validator.newValidationError(suffix,
+              RESOURCE.columnAmbiguous(suffix.toString()));
+        }
+        path = resolved.resolves.get(0).path;
+      }
+
+      // Normalize case to match definition, make elided fields explicit,
+      // and check that references to dynamic stars ("**") are unambiguous.
+      int k = i;
+      for (Step step : path.steps()) {
+        final String name = identifier.names.get(k);
+        if (step.i < 0) {
+          throw validator.newValidationError(
+              identifier, RESOURCE.columnNotFound(name));
+        }
+        final RelDataTypeField field0 =
+            requireNonNull(step.rowType, () -> "rowType of step " + step.name)
+                .getFieldList().get(step.i);
+        final String fieldName = field0.getName();
+        switch (step.kind) {
+        case PEEK_FIELDS:
+        case PEEK_FIELDS_DEFAULT:
+        case PEEK_FIELDS_NO_EXPAND:
+          identifier = identifier.add(k, fieldName, SqlParserPos.ZERO);
+          break;
+        default:
+          if (!fieldName.equals(name)) {
+            identifier = identifier.setName(k, fieldName);
+          }
+          if (!CalciteForkSettings.allowDuplicateAliasInProjection() && hasAmbiguousField(step.rowType, field0, name, nameMatcher)) {
+            throw validator.newValidationError(identifier,
+                RESOURCE.columnAmbiguous(name));
+          }
+        }
+        ++k;
+      }
+
+      // Multiple name components may have been resolved as one step by
+      // CustomResolvingTable.
+      if (identifier.names.size() > k) {
+        identifier = identifier.getComponent(0, k);
+      }
+
+      if (i > 1) {
+        // Simplify overqualified identifiers.
+        // For example, schema.emp.deptno becomes emp.deptno.
+        //
+        // It is safe to convert schema.emp or database.schema.emp to emp
+        // because it would not have resolved if the FROM item had an alias. The
+        // following query is invalid:
+        //   SELECT schema.emp.deptno FROM schema.emp AS e
+        identifier = identifier.getComponent(i - 1, identifier.names.size());
+      }
+
+      if (!previous.equals(identifier)) {
+        validator.setOriginal(identifier, previous);
+      }
+      return SqlQualified.create(this, i, fromNs, identifier);
+    }
+    }
+  }
+
+  @Override public void validateExpr(SqlNode expr) {
     // Do not delegate to parent. An expression valid in this scope may not
     // be valid in the parent scope.
-}
+  }
 
-@Override
-public @Nullable SqlWindow lookupWindow(String name)
-{
+  @Override public @Nullable SqlWindow lookupWindow(String name) {
     return parent.lookupWindow(name);
-}
+  }
 
-@Override
-public SqlMonotonicity getMonotonicity(SqlNode expr)
-{
+  @Override public SqlMonotonicity getMonotonicity(SqlNode expr) {
     return parent.getMonotonicity(expr);
-}
+  }
 
-@Override
-public @Nullable SqlNodeList getOrderList()
-{
+  @Override public @Nullable SqlNodeList getOrderList() {
     return parent.getOrderList();
-}
+  }
 
-/**
- * Returns whether {@code rowType} contains more than one star column or fields with the same name, which implies
- * ambiguous column.
- */
-private static boolean hasAmbiguousField(RelDataType rowType, RelDataTypeField field, String columnName,
-    SqlNameMatcher nameMatcher)
-{
-    if (field.isDynamicStar() && !DynamicRecordType.isDynamicStarColName(columnName))
-    {
-        int count = 0;
-        for (RelDataTypeField possibleStar : rowType.getFieldList())
-        {
-            if (possibleStar.isDynamicStar())
-            {
-                if (++count > 1)
-                {
-                    return true;
-                }
-            }
+  /** Returns whether {@code rowType} contains more than one star column or
+   * fields with the same name, which implies ambiguous column. */
+  private static boolean hasAmbiguousField(RelDataType rowType,
+      RelDataTypeField field, String columnName, SqlNameMatcher nameMatcher) {
+    if (field.isDynamicStar()
+        && !DynamicRecordType.isDynamicStarColName(columnName)) {
+      int count = 0;
+      for (RelDataTypeField possibleStar : rowType.getFieldList()) {
+        if (possibleStar.isDynamicStar()) {
+          if (++count > 1) {
+            return true;
+          }
         }
-        return false;
-    }
-    else
-    { // check if there are fields with the same name
-        int count = 0;
-        for (RelDataTypeField f : rowType.getFieldList())
-        {
-            if (Util.matches(nameMatcher.isCaseSensitive(), f.getName(), columnName))
-            {
-                count++;
-            }
+      }
+      return false;
+    } else { // check if there are fields with the same name
+      int count = 0;
+      for (RelDataTypeField f : rowType.getFieldList()) {
+        if (Util.matches(nameMatcher.isCaseSensitive(), f.getName(), columnName)) {
+          count++;
         }
-        return count > 1;
+      }
+      return count > 1;
     }
-}
+  }
 
-private AggregatingSelectScope.Resolved resolve()
-{
+  private AggregatingSelectScope.Resolved resolve() {
     checkArgument(groupAnalyzer == null, "resolve already in progress");
     SqlValidatorUtil.GroupAnalyzer groupAnalyzer = new SqlValidatorUtil.GroupAnalyzer();
     this.groupAnalyzer = groupAnalyzer;
-    try
-    {
-        analyze(groupAnalyzer);
-        return groupAnalyzer.finish();
+    try {
+      analyze(groupAnalyzer);
+      return groupAnalyzer.finish();
+    } finally {
+      this.groupAnalyzer = null;
     }
-    finally
-    {
-        this.groupAnalyzer = null;
-    }
-}
+  }
 
-/**
- * Analyzes expressions in this scope and populates a {@code GroupAnalyzer}.
- */
-protected void analyze(SqlValidatorUtil.GroupAnalyzer analyzer)
-{
+  /** Analyzes expressions in this scope and populates a
+   * {@code GroupAnalyzer}. */
+  protected void analyze(SqlValidatorUtil.GroupAnalyzer analyzer) {
     final SelectScope selectScope = SqlValidatorUtil.getEnclosingSelectScope(this);
-    if (selectScope != null)
-    {
-        // Find all expressions in this scope that reference measures
-        for (ScopeChild child : selectScope.children)
-        {
-            final RelDataType rowType = child.namespace.getRowType();
-            if (child.namespace instanceof SelectNamespace)
-            {
-                final SqlSelect select = ((SelectNamespace) child.namespace).getNode();
-                Pair.forEach(select.getSelectList(), rowType.getFieldList(), (selectItem, field) ->
-                {
-                    if (SqlValidatorUtil.isMeasure(selectItem))
-                    {
-                        analyzer.measureExprs.add(
-                            new SqlIdentifier(Arrays.asList(child.name, field.getName()), SqlParserPos.ZERO));
-                    }
-                });
+    if (selectScope != null) {
+      // Find all expressions in this scope that reference measures
+      for (ScopeChild child : selectScope.children) {
+        final RelDataType rowType = child.namespace.getRowType();
+        if (child.namespace instanceof SelectNamespace) {
+          final SqlSelect select = ((SelectNamespace) child.namespace).getNode();
+          Pair.forEach(select.getSelectList(),
+              rowType.getFieldList(),
+              (selectItem, field) -> {
+                if (SqlValidatorUtil.isMeasure(selectItem)) {
+                  analyzer.measureExprs.add(
+                      new SqlIdentifier(
+                          Arrays.asList(child.name, field.getName()),
+                          SqlParserPos.ZERO));
+                }
+              });
+        } else {
+          rowType.getFieldList().forEach(field -> {
+            if (field.getType().isMeasure()) {
+              analyzer.measureExprs.add(
+                  new SqlIdentifier(
+                      Arrays.asList(child.name, field.getName()),
+                      SqlParserPos.ZERO));
             }
-            else
-            {
-                rowType.getFieldList().forEach(field ->
-                {
-                    if (field.getType().isMeasure())
-                    {
-                        analyzer.measureExprs.add(
-                            new SqlIdentifier(Arrays.asList(child.name, field.getName()), SqlParserPos.ZERO));
-                    }
-                });
-            }
+          });
         }
+      }
     }
-}
+  }
 
-/**
- * Returns the parent scope of this <code>DelegatingScope</code>.
- */
-public SqlValidatorScope getParent()
-{
+  /**
+   * Returns the parent scope of this <code>DelegatingScope</code>.
+   */
+  public SqlValidatorScope getParent() {
     return parent;
-}
+  }
 
-/**
- * Qualifies an identifier by looking for an alias in the current select-list.
- *
- * <p>Used when resolving ORDER BY items (when the conformance allows order by
- * alias, such as "SELECT x - y AS z FROM t ORDER BY z") and measures (when one measure refers to another, for example
- * "SELECT SUM(x) AS MEASURE m1, SUM(y) - m1 AS MEASURE m2 FROM t").
- */
-protected @Nullable SqlQualified qualifyUsingAlias(SqlSelect select, SqlIdentifier identifier)
-{
+  /** Qualifies an identifier by looking for an alias in the current
+   * select-list.
+   *
+   * <p>Used when resolving ORDER BY items (when the conformance allows order by
+   * alias, such as "SELECT x - y AS z FROM t ORDER BY z") and measures
+   * (when one measure refers to another, for example
+   * "SELECT SUM(x) AS MEASURE m1, SUM(y) - m1 AS MEASURE m2 FROM t"). */
+  protected @Nullable SqlQualified qualifyUsingAlias(SqlSelect select,
+      SqlIdentifier identifier) {
     final String name = identifier.names.get(0);
     final SqlNameMatcher nameMatcher = validator.catalogReader.nameMatcher();
     final int aliasCount = aliasCount(select, nameMatcher, name);
-    switch (aliasCount)
-    {
-        case 0:
-            return null;
-        case 1:
-            final SqlValidatorNamespace selectNs = validator.getNamespaceOrThrow(select);
-            return SqlQualified.create(this, 1, selectNs, identifier);
-        default:
-            // More than one column has this alias.
-            throw validator.newValidationError(identifier, RESOURCE.columnAmbiguous(name));
+    switch (aliasCount) {
+    case 0:
+      return null;
+    case 1:
+      final SqlValidatorNamespace selectNs =
+          validator.getNamespaceOrThrow(select);
+      return SqlQualified.create(this, 1, selectNs, identifier);
+    default:
+      // More than one column has this alias.
+      throw validator.newValidationError(identifier,
+          RESOURCE.columnAmbiguous(name));
     }
-}
+  }
 
-/**
- * Returns the number of columns in the SELECT clause that have {@code name} as their implicit (e.g. {@code t.name}) or
- * explicit (e.g. {@code t.c as name}) alias.
- */
-private static int aliasCount(SqlSelect select, SqlNameMatcher nameMatcher, String name)
-{
+  /** Returns the number of columns in the SELECT clause that have {@code name}
+   * as their implicit (e.g. {@code t.name}) or explicit (e.g.
+   * {@code t.c as name}) alias. */
+  private static int aliasCount(SqlSelect select, SqlNameMatcher nameMatcher,
+      String name) {
     int n = 0;
-    for (SqlNode s : getSelectList(select))
-    {
-        final @Nullable String alias = SqlValidatorUtil.alias(s);
-        if (alias != null && nameMatcher.matches(alias, name))
-        {
-            n++;
-        }
+    for (SqlNode s : getSelectList(select)) {
+      final @Nullable String alias = SqlValidatorUtil.alias(s);
+      if (alias != null && nameMatcher.matches(alias, name)) {
+        n++;
+      }
     }
     return n;
-}
+  }
 
-@Nullable
-private static SqlValidatorNamespace preferSideForUsingAmbiguity(SqlValidatorImpl validator, JoinScope joinScope,
-    String columnName)
-{
+
+  @Nullable
+  private static SqlValidatorNamespace preferSideForUsingAmbiguity(SqlValidatorImpl validator,
+      JoinScope joinScope, String columnName) {
     SqlJoin join = (SqlJoin) joinScope.getNode();
     final SqlNameMatcher matcher = validator.getCatalogReader().nameMatcher();
 
     final boolean isUsing = join.getConditionType() == JoinConditionType.USING;
 
-    if (!isUsing)
-    {
-        return null;
-    }
+    if (!isUsing) {
+      return null;
+}
 
     boolean listed = false;
     final SqlNode cond = join.getCondition();
-    if (cond instanceof SqlNodeList)
-    {
-        for (SqlNode n : (SqlNodeList) cond)
-        {
-            final String n0 = ((SqlIdentifier) n).getSimple();
-            if (matcher.matches(n0, columnName))
-            {
-                listed = true;
-                break;
-            }
+    if (cond instanceof SqlNodeList) {
+      for (SqlNode n : (SqlNodeList) cond) {
+        final String n0 = ((SqlIdentifier) n).getSimple();
+        if (matcher.matches(n0, columnName)) {
+          listed = true;
+          break;
         }
+      }
     }
-    if (!listed)
-    {
-        return null;
+    if (!listed) {
+      return null;
     }
 
     // Left/right namespaces of THIS JoinScope
     final List<SqlValidatorNamespace> children = ((ListScope) joinScope).getChildren();
-    if (children.size() < 2)
-    {
-        return null;
+    if (children.size() < 2) {
+      return null;
     }
     final SqlValidatorNamespace leftNs = children.get(0);
     final SqlValidatorNamespace rightNs = children.get(children.size() - 1);
 
-    switch (join.getJoinType())
-    {
-        case LEFT:
-        case INNER:
-            return leftNs;
-        case RIGHT:
-            return rightNs;
-        // keep FULL ambiguous
-        default:
-            return null;
+    switch (join.getJoinType()) {
+    case LEFT:
+    case INNER:
+      return leftNs;
+    case RIGHT:
+      return rightNs;
+    // keep FULL ambiguous
+    default:
+      return null;
     }
-}
+  }
 
-@Nullable
-private static String aliasForNamespace(JoinScope joinScope, SqlValidatorNamespace ns)
-{
-    for (SqlValidatorNamespace namespace : ((ListScope) joinScope).getChildren())
-    {
-        if (namespace == ns)
-        {
-            if (namespace.getEnclosingNode() instanceof SqlBasicCall)
-            {
-                SqlBasicCall call = (SqlBasicCall) namespace.getEnclosingNode();
-                if (call.getOperator() == SqlStdOperatorTable.AS)
-                {
-                    return call.operand(1).toString();
-                }
-            }
+  @Nullable
+  private static String aliasForNamespace(JoinScope joinScope, SqlValidatorNamespace ns) {
+    for (SqlValidatorNamespace namespace : ((ListScope) joinScope).getChildren()) {
+      if (namespace == ns) {
+        if (namespace.getEnclosingNode() instanceof SqlBasicCall) {
+          SqlBasicCall call = (SqlBasicCall) namespace.getEnclosingNode();
+          if (call.getOperator() == SqlStdOperatorTable.AS) {
+            return call.operand(1).toString();
+          }
         }
+      }
     }
     return null;
-}
+  }
 
 }
