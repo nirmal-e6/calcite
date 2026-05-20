@@ -39,10 +39,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 
-
-
 // Shaded for deriveType method change
-
 /**
  * Definition of the SQL <code>COUNT</code> aggregation function.
  *

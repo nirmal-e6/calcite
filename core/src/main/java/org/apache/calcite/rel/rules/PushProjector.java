@@ -68,7 +68,7 @@ import static java.util.Objects.requireNonNull;
  * <p>Sometimes an expression needs to be split before it can be pushed down.
  * To flag that an expression cannot be split, specify a rule that it must be
  * <dfn>preserved</dfn>. Such an expression will be pushed down intact to one
- * of the inputs, or not pushed down at all.</p>
+ * of the inputs, or not pushed down at all.
  */
 public class PushProjector {
   //~ Instance fields --------------------------------------------------------
@@ -355,9 +355,8 @@ List<RexNode> rightPreserveExprs;
         projRefs.set(0, nChildFields);
       }
       nProject = nChildFields;
-    } else if (
-        (projRefs.cardinality() == nChildFields)
-            && (childPreserveExprs.size() == 0)) {
+    } else if ((projRefs.cardinality() == nChildFields)
+        && (childPreserveExprs.size() == 0)) {
       return null;
     }
 

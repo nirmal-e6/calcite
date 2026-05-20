@@ -36,10 +36,7 @@ import static org.apache.calcite.util.Static.RESOURCE;
 
 import static java.util.Objects.requireNonNull;
 
-
 // shaded for lambda bug fix at line no. 186
-
-
 /**
  * Visitor which throws an exception if any component of the expression is not a
  * group expression.

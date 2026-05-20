@@ -1,4 +1,4 @@
-// E6data shade - Added for hypergraph backport from 1.41
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -23,6 +23,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Objects;
 
+// E6data shade - Added for hypergraph backport from 1.41
 /**
  * RexNodeAndFieldIndex has the same meaning as {@link RexInputRef}, they are both reference a
  * field of an input relational expression. The difference is that, RexNodeAndFieldIndex uses the

@@ -40,7 +40,6 @@ import static java.util.Objects.requireNonNull;
 
 // E6 shade - shaded to update usedColumnNames to not cast to SqlCall
 // to support constants as measures
-
 /**
  * Parse tree node that represents a PIVOT applied to a table reference
  * (or sub-query).

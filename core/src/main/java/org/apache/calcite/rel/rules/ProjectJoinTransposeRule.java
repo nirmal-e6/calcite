@@ -13,10 +13,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- * This rule has been shaded to include a new property, AllowCastWithNULL.
- * Default is FALSE. If it is set to true, then CAST with NOT NULL is not
- * considered as a preserved expression.
  */
 package org.apache.calcite.rel.rules;
 
@@ -43,6 +39,9 @@ import java.util.List;
 
 import static java.util.Objects.requireNonNull;
 
+// This rule has been shaded to include a new property, AllowCastWithNULL.
+// Default is FALSE. If it is set to true, then CAST with NOT NULL is not
+// considered as a preserved expression.
 /**
  * Planner rule that pushes a {@link org.apache.calcite.rel.core.Project}
  * past a {@link org.apache.calcite.rel.core.Join}

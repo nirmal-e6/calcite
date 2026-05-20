@@ -2107,7 +2107,7 @@ public class RelBuilder {
       fieldNameList.add(null);
     }
 
-    // Do not merge projection when top projection has correlation variables.
+    // Do not merge projection when top projection has correlation variables
     bloat:
     if (!(force && CalciteForkSettings.relBuilderFix()) && frame.rel instanceof Project
         && config.bloat() >= 0

@@ -1,13 +1,4 @@
 /*
- * Copyright (c) 2023 Uniphi Inc
- * All rights reserved.
- *
- * File Name: JoinToMultiJoinRule.java
- *
- * Created On: 2023-09-06
- */
-
-/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -49,6 +40,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import org.immutables.value.Value;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -110,7 +102,7 @@ import static java.util.Objects.requireNonNull;
  *
  * <p>The constructor is parameterized to allow any sub-class of
  * {@link org.apache.calcite.rel.core.Join}, not just
- * {@link org.apache.calcite.rel.logical.LogicalJoin}.</p>
+ * {@link org.apache.calcite.rel.logical.LogicalJoin}.
  *
  * @see org.apache.calcite.rel.rules.FilterMultiJoinMergeRule
  * @see org.apache.calcite.rel.rules.ProjectMultiJoinMergeRule
@@ -146,8 +138,7 @@ public class JoinToMultiJoinRule
     return origJoin.getJoinType().projectsRight();
   }
 
-@Override public void onMatch(RelOptRuleCall call)
-{
+  @Override public void onMatch(RelOptRuleCall call) {
     final Join origJoin = call.rel(0);
     final RelNode left = call.rel(1);
     final RelNode right = call.rel(2);
@@ -528,7 +519,8 @@ public class JoinToMultiJoinRule
             multiJoinInputs.get(currInput).getRowType().getFieldCount();
       }
       final int key = currInput;
-        int[] refCounts = requireNonNull(refCountsMap.get(key),
+      int[] refCounts =
+          requireNonNull(refCountsMap.get(key),
               () -> "refCountsMap.get(currInput) for " + key);
       refCounts[i - startField] += joinCondRefCounts[i];
     }

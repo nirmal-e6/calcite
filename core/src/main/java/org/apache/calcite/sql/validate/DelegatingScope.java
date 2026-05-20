@@ -1,5 +1,3 @@
-// Added for Lambda expression
-
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -18,8 +16,6 @@
  */
 package org.apache.calcite.sql.validate;
 
-import com.google.common.base.Suppliers;
-import com.google.common.collect.ImmutableList;
 import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.plan.RelOptSchema;
@@ -47,6 +43,9 @@ import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.Util;
 
+import com.google.common.base.Suppliers;
+import com.google.common.collect.ImmutableList;
+
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
@@ -59,11 +58,13 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static java.util.Objects.requireNonNull;
 
 import static org.apache.calcite.sql.validate.SqlNonNullableAccessors.getSelectList;
 import static org.apache.calcite.util.Static.RESOURCE;
 
+import static java.util.Objects.requireNonNull;
+
+// Added for Lambda expression
 /**
  * A scope which delegates all requests to its parent scope. Use this as a base
  * class for defining nested scopes.

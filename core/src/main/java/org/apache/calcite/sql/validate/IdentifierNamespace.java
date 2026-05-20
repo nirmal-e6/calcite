@@ -1,13 +1,4 @@
 /*
- * Copyright (c) 2023 Uniphi Inc
- * All rights reserved.
- *
- * File Name: IdentifierNamespace.java
- *
- * Created On: 2023-05-31
- */
-
-/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -83,6 +74,7 @@ protected static final Logger LOG = LoggerFactory.getLogger(IdentifierNamespace.
    * @param extendList    Extension columns, or null
    * @param enclosingNode Enclosing node
    * @param parentScope   Parent scope which this namespace turns to in order to
+   *                      resolve objects
    */
   IdentifierNamespace(SqlValidatorImpl validator, SqlIdentifier id,
       @Nullable SqlNodeList extendList, @Nullable SqlNode enclosingNode,

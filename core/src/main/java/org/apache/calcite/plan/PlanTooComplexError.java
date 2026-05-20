@@ -1,5 +1,3 @@
-// E6data shade - Added for hypergraph backport from 1.41
-
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -16,13 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.calcite.plan;
 
 import org.apache.calcite.util.ControlFlowException;
+
+// E6data shade - Added for hypergraph backport from 1.41
 
 /**
  * Exception to catch when optimizing the plan produces a result that is too complex,
  * either at the Rel or at the Rex level.
  */
-public class PlanTooComplexError extends ControlFlowException {}
+public class PlanTooComplexError extends ControlFlowException {
+}

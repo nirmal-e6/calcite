@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.calcite.sql2rel;
 
 import org.apache.calcite.config.CalciteForkSettings;
@@ -230,7 +229,6 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 
 import static org.apache.calcite.linq4j.Nullness.castNonNull;
-import static org.apache.calcite.runtime.FlatLists.append;
 import static org.apache.calcite.sql.SqlUtil.containsDefault;
 import static org.apache.calcite.sql.SqlUtil.containsIn;
 import static org.apache.calcite.sql.SqlUtil.stripAs;
@@ -2039,7 +2037,7 @@ protected void replaceSubQueries(
       NlsString unpadded = (NlsString) value;
       return rexBuilder.makeCharLiteral(
           new NlsString(
-                unpadded.getValue(),
+              unpadded.getValue(),
               unpadded.getCharsetName(),
               unpadded.getCollation()));
     }

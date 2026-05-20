@@ -79,8 +79,7 @@ import static java.util.Objects.requireNonNull;
 /**
  * Context required to simplify a row-expression.
  */
-public class RexSimplify
-{
+public class RexSimplify {
   private final boolean paranoid;
   public final RexBuilder rexBuilder;
   private final RelOptPredicateList predicates;

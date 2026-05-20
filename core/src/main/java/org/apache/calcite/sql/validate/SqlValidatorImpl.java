@@ -79,6 +79,7 @@ import org.apache.calcite.sql.SqlSampleSpec;
 import org.apache.calcite.sql.SqlSelect;
 import org.apache.calcite.sql.SqlSelectKeyword;
 import org.apache.calcite.sql.SqlSnapshot;
+import org.apache.calcite.sql.SqlStarExclude;
 import org.apache.calcite.sql.SqlSyntax;
 import org.apache.calcite.sql.SqlTableFunction;
 import org.apache.calcite.sql.SqlUnknownLiteral;
@@ -121,10 +122,12 @@ import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.Static;
 import org.apache.calcite.util.Util;
 import org.apache.calcite.util.trace.CalciteTrace;
+
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
+
 import org.apiguardian.api.API;
 import org.checkerframework.checker.initialization.qual.UnknownInitialization;
 import org.checkerframework.checker.nullness.qual.KeyFor;
@@ -134,6 +137,7 @@ import org.checkerframework.checker.nullness.qual.PolyNull;
 import org.checkerframework.checker.nullness.qual.RequiresNonNull;
 import org.checkerframework.dataflow.qual.Pure;
 import org.slf4j.Logger;
+
 import java.math.BigDecimal;
 import java.util.AbstractList;
 import java.util.ArrayDeque;
@@ -161,8 +165,10 @@ import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
+
 import static org.apache.calcite.linq4j.Nullness.castNonNull;
 import static org.apache.calcite.linq4j.Ord.forEach;
 import static org.apache.calcite.sql.SqlUtil.stripAs;
@@ -173,11 +179,11 @@ import static org.apache.calcite.sql.validate.SqlNonNullableAccessors.getMatchCo
 import static org.apache.calcite.sql.validate.SqlNonNullableAccessors.getTable;
 import static org.apache.calcite.util.Static.RESOURCE;
 import static org.apache.calcite.util.Util.first;
+
 import static java.util.Collections.emptyList;
 import static java.util.Objects.requireNonNull;
 import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.sql.E6SqlSnapshot;
-import org.apache.calcite.sql.SqlStarExclude;
 import org.apache.calcite.sql.fun.E6PercentileCount;
 import java.util.LinkedHashMap;
 
@@ -641,8 +647,6 @@ private boolean hasPivotWithStar = false;
           continue;
         }
 
-
-
             // E6data change
             // changed from identifier.getSimple() into get last
             final SqlIdentifier  fieldIdentifier1  = call.operand(0);
@@ -740,13 +744,12 @@ private boolean hasPivotWithStar = false;
     final SqlIdentifier identifier;
     final SqlNodeList excludeList;
     if (node instanceof SqlStarExclude) {
-        final SqlStarExclude starExclude = (SqlStarExclude) node;
-        identifier = starExclude.getStarIdentifier();
-        excludeList = starExclude.getExcludeList();
+      final SqlStarExclude starExclude = (SqlStarExclude) node;
+      identifier = starExclude.getStarIdentifier();
+      excludeList = starExclude.getExcludeList();
     } else if (node instanceof SqlIdentifier) {
-       identifier = (SqlIdentifier) node;
-
-        excludeList = null;
+      identifier = (SqlIdentifier) node;
+      excludeList = null;
     } else {
       return false;
     }
@@ -812,11 +815,10 @@ private boolean hasPivotWithStar = false;
                 new SqlIdentifier(
                     ImmutableList.of(child.name, columnName),
                     startPosition);
-
-                            recordExcludeMatches(excludeIdentifiers, exp, nameMatcher, excludeMatched);
-                            if (shouldExcludeField(excludeList, exp, nameMatcher)) {
-                                continue;
-                            }
+            recordExcludeMatches(excludeIdentifiers, exp, nameMatcher, excludeMatched);
+            if (shouldExcludeField(excludeList, exp, nameMatcher)) {
+              continue;
+            }
             // Don't add expanded rolled up columns
             if (!isRolledUpColumn(exp, scope)) {
               addOrExpandField(
@@ -910,19 +912,18 @@ private boolean hasPivotWithStar = false;
         int offset = Math.min(calculatePermuteOffset(selectItems), originalSize);
         new Permute(from, offset).permute(selectItems, fields);
       }
-
-            throwIfUnknownExcludeColumns(excludeIdentifiers, excludeMatched);
-            throwIfExcludeEliminatesAllColumns(excludeIdentifiers, fieldsBeforeStar,
-                fields, identifier);
+      throwIfUnknownExcludeColumns(excludeIdentifiers, excludeMatched);
+      throwIfExcludeEliminatesAllColumns(excludeIdentifiers, fieldsBeforeStar,
+          fields, identifier);
       return true;
 
     default:
       final SqlIdentifier prefixId = identifier.skipLast(1);
       final SqlValidatorScope.ResolvedImpl resolved =
           new SqlValidatorScope.ResolvedImpl();
-      final SqlNameMatcher  resolvedNameMatcher  =
+      final SqlNameMatcher resolvedNameMatcher =
           scope.validator.catalogReader.nameMatcher();
-      scope.resolve(prefixId.names,  resolvedNameMatcher, true, resolved);
+      scope.resolve(prefixId.names, resolvedNameMatcher, true, resolved);
       if (resolved.count() == 0) {
         // e.g. "select s.t.* from e"
         // or "select r.* from e"
@@ -943,15 +944,13 @@ private boolean hasPivotWithStar = false;
         for (RelDataTypeField field : rowType.getFieldList()) {
           String columnName = field.getName();
 
-
-
-                    final SqlIdentifier columnId =
-                        prefixId.plus(columnName, startPosition);
-                    recordExcludeMatches(excludeIdentifiers, columnId, resolvedNameMatcher,
-                        excludeMatched);
-                    if (shouldExcludeField(excludeList, columnId, resolvedNameMatcher)) {
-                        continue;
-                    }
+          final SqlIdentifier columnId =
+              prefixId.plus(columnName, startPosition);
+          recordExcludeMatches(excludeIdentifiers, columnId, resolvedNameMatcher,
+              excludeMatched);
+          if (shouldExcludeField(excludeList, columnId, resolvedNameMatcher)) {
+            continue;
+          }
           // TODO: do real implicit collation here
           addOrExpandField(
               selectItems,
@@ -959,17 +958,15 @@ private boolean hasPivotWithStar = false;
               fields,
               includeSystemVars,
               scope,
-
-                        columnId,
+              columnId,
               field);
         }
       } else {
         throw newValidationError(prefixId, RESOURCE.starRequiresRecordType());
       }
-
-            throwIfUnknownExcludeColumns(excludeIdentifiers, excludeMatched);
-            throwIfExcludeEliminatesAllColumns(excludeIdentifiers, fieldsBeforeStar,
-                fields, identifier);
+      throwIfUnknownExcludeColumns(excludeIdentifiers, excludeMatched);
+      throwIfExcludeEliminatesAllColumns(excludeIdentifiers, fieldsBeforeStar,
+          fields, identifier);
       return true;
     }
   }
@@ -984,103 +981,96 @@ private boolean hasPivotWithStar = false;
       }
     }
     return 0;
-
-}
+  }
 
 // E6data change - ported EXCEPT/EXCLUDE syntax from CALCITE-7310
-private static boolean matchesExcludeNames(List<String> identifierNames,
-    List<String> excludedIdentifierNames, SqlNameMatcher nameMatcher) {
+  private static boolean matchesExcludeNames(List<String> identifierNames,
+      List<String> excludedIdentifierNames, SqlNameMatcher nameMatcher) {
     if (excludedIdentifierNames.size() > identifierNames.size()) {
-        return false;
+      return false;
     }
     final int offset = identifierNames.size() - excludedIdentifierNames.size();
     for (int i = 0; i < excludedIdentifierNames.size(); i++) {
-        if (!nameMatcher.matches(identifierNames.get(offset + i),
-            excludedIdentifierNames.get(i))) {
-            return false;
-        }
+      if (!nameMatcher.matches(identifierNames.get(offset + i),
+          excludedIdentifierNames.get(i))) {
+        return false;
+      }
     }
     return true;
-}
+  }
 
-// E6data change - ported EXCEPT/EXCLUDE syntax from CALCITE-7310
-private static boolean shouldExcludeField(@Nullable SqlNodeList excludeList,
-    SqlIdentifier columnId, SqlNameMatcher nameMatcher) {
+  private static boolean shouldExcludeField(@Nullable SqlNodeList excludeList,
+      SqlIdentifier columnId, SqlNameMatcher nameMatcher) {
     if (excludeList == null) {
-        return false;
+      return false;
     }
     for (SqlNode node : excludeList) {
-        assert node instanceof SqlIdentifier;
-        if (matchesExcludeIdentifier(columnId, (SqlIdentifier) node, nameMatcher)) {
-            return true;
-        }
+      assert node instanceof SqlIdentifier;
+      if (matchesExcludeIdentifier(columnId, (SqlIdentifier) node, nameMatcher)) {
+        return true;
+      }
     }
     return false;
-}
+  }
 
-// E6data change - ported EXCEPT/EXCLUDE syntax from CALCITE-7310
-private static boolean matchesExcludeIdentifier(SqlIdentifier columnId,
-    SqlIdentifier excludeIdentifier, SqlNameMatcher nameMatcher) {
+  private static boolean matchesExcludeIdentifier(SqlIdentifier columnId,
+      SqlIdentifier excludeIdentifier, SqlNameMatcher nameMatcher) {
     return matchesExcludeNames(columnId.names, excludeIdentifier.names, nameMatcher);
-}
+  }
 
-// E6data change - ported EXCEPT/EXCLUDE syntax from CALCITE-7310
-private static List<SqlIdentifier> extractExcludeIdentifiers(@Nullable SqlNodeList excludeList) {
+  private static List<SqlIdentifier> extractExcludeIdentifiers(@Nullable SqlNodeList excludeList) {
     if (excludeList == null) {
-        return ImmutableList.of();
+      return ImmutableList.of();
     }
     final ImmutableList.Builder<SqlIdentifier> builder = ImmutableList.builder();
     for (SqlNode node : excludeList) {
-        if (node instanceof SqlIdentifier) {
-            builder.add((SqlIdentifier) node);
-        }
+      if (node instanceof SqlIdentifier) {
+        builder.add((SqlIdentifier) node);
+      }
     }
     return builder.build();
-}
+  }
 
-// E6data change - ported EXCEPT/EXCLUDE syntax from CALCITE-7310
-private static void recordExcludeMatches(List<SqlIdentifier> excludeIdentifiers,
-    SqlIdentifier columnId, SqlNameMatcher nameMatcher, boolean[] matched) {
+  private static void recordExcludeMatches(List<SqlIdentifier> excludeIdentifiers,
+      SqlIdentifier columnId, SqlNameMatcher nameMatcher, boolean[] matched) {
     for (int i = 0; i < excludeIdentifiers.size(); i++) {
-        if (!matched[i]
-            && matchesExcludeIdentifier(columnId, excludeIdentifiers.get(i), nameMatcher)) {
-            matched[i] = true;
-        }
+      if (!matched[i]
+          && matchesExcludeIdentifier(columnId, excludeIdentifiers.get(i), nameMatcher)) {
+        matched[i] = true;
+      }
     }
-}
+  }
 
-// E6data change - ported EXCEPT/EXCLUDE syntax from CALCITE-7310
-private void throwIfUnknownExcludeColumns(List<SqlIdentifier> excludeIdentifiers,
-    boolean[] excludeMatched) {
+  private void throwIfUnknownExcludeColumns(List<SqlIdentifier> excludeIdentifiers,
+      boolean[] excludeMatched) {
     if (excludeIdentifiers.isEmpty()) {
-        return;
+      return;
     }
     final List<String> unknownExcludeNames = new ArrayList<>();
     int firstUnknownIndex = -1;
     for (int i = 0; i < excludeIdentifiers.size(); i++) {
-        if (!excludeMatched[i]) {
-            if (firstUnknownIndex < 0) {
-                firstUnknownIndex = i;
-            }
-            unknownExcludeNames.add(excludeIdentifiers.get(i).toString());
+      if (!excludeMatched[i]) {
+        if (firstUnknownIndex < 0) {
+          firstUnknownIndex = i;
         }
+        unknownExcludeNames.add(excludeIdentifiers.get(i).toString());
+      }
     }
     if (firstUnknownIndex >= 0) {
-        throw newValidationError(
-            excludeIdentifiers.get(firstUnknownIndex),
-            RESOURCE.selectStarExcludeListContainsUnknownColumns(
-                String.join(", ", unknownExcludeNames)));
+      throw newValidationError(
+          excludeIdentifiers.get(firstUnknownIndex),
+          RESOURCE.selectStarExcludeListContainsUnknownColumns(
+              String.join(", ", unknownExcludeNames)));
     }
-}
+  }
 
-// E6data change - ported EXCEPT/EXCLUDE syntax from CALCITE-7310
-private void throwIfExcludeEliminatesAllColumns(List<SqlIdentifier> excludeIdentifiers,
-    int fieldsBeforeStar, PairList<String, RelDataType> fields,
-    SqlIdentifier identifier) {
+  private void throwIfExcludeEliminatesAllColumns(List<SqlIdentifier> excludeIdentifiers,
+      int fieldsBeforeStar, PairList<String, RelDataType> fields,
+      SqlIdentifier identifier) {
     if (!excludeIdentifiers.isEmpty()
         && fields.size() == fieldsBeforeStar) {
-        throw newValidationError(identifier,
-            RESOURCE.selectStarExcludeCannotExcludeAllColumns());
+      throw newValidationError(identifier,
+          RESOURCE.selectStarExcludeCannotExcludeAllColumns());
     }
   }
 
@@ -1107,7 +1097,6 @@ private void throwIfExcludeEliminatesAllColumns(List<SqlIdentifier> excludeIdent
           scope,
           starExp);
       return true;
-
     default:
       addToSelectList(
           selectItems,
@@ -1549,8 +1538,7 @@ private void throwIfExcludeEliminatesAllColumns(List<SqlIdentifier> excludeIdent
     return getScopeOrThrow(function);
 }
 
-@Override
-public SqlValidatorScope getMeasureScope(SqlSelect select) {
+  @Override public SqlValidatorScope getMeasureScope(SqlSelect select) {
     return getScope(select, Clause.MEASURE);
   }
 
@@ -1977,7 +1965,7 @@ public SqlValidatorScope getMeasureScope(SqlSelect select) {
 
     case MERGE: {
       SqlMerge call = (SqlMerge) node;
-            expandMergeActionStars(call);
+      expandMergeActionStars(call);
       rewriteMerge(call);
       break;
     }
@@ -2676,9 +2664,7 @@ private static SqlNodeList createMergeStarSourceExpressionList(SqlMerge call, Re
   }
 
 
-
 // parameter [scope] type change by e6data
-
   /**
    * Adds an expression to a select list, ensuring that its alias does not
    * clash with any existing expressions on the list.
@@ -2976,8 +2962,8 @@ private static SqlNodeList createMergeStarSourceExpressionList(SqlMerge call, Re
 
 
 
-            // if condition change by E6data
-            boolean hasPivot = call.getOperandList().get(0) instanceof SqlPivot;
+      // if condition change by E6data
+      boolean hasPivot = call.getOperandList().get(0) instanceof SqlPivot;
       // If alias has a column list, introduce a namespace to translate
       // column names. We skipped registering it just now.
       if (needAliasNamespace && !hasPivot) {
@@ -4643,8 +4629,6 @@ private void addSqlNodeToGroupByList(SqlNode sqlNode, List<SqlNode> newGroupByLi
     } else {
       rowTypes = Collections.singleton(rowType);
     }
-
-
     if (CalciteForkSettings.databricks())
     {
     for (RelDataType rowType0 : rowTypes) {
@@ -8524,7 +8508,6 @@ static class PivotSelectExpander extends Expander
           break;
         }
       }
-
       return super.visit(literal);
     }
 
@@ -8594,10 +8577,8 @@ static class PivotSelectExpander extends Expander
         Util.swallow(e, null);
         return true;
       }
-
     }
-
-}
+  }
 
 /**
  * Added by E6data for expanding lateral alias of Match Recognize Measure element

@@ -1,4 +1,3 @@
-// E6data shade - Added for hypergraph backport from 1.41
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -19,6 +18,7 @@ package org.apache.calcite.rex;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+// E6data shade - Added for hypergraph backport from 1.41
 /**
  * Default implementation of {@link RexBiVisitor}, which visits each node but
  * does nothing while it's there.
@@ -124,7 +124,7 @@ public class RexBiVisitorImpl<@Nullable R, P> implements RexBiVisitor<R, P> {
     return null;
   }
 
-  @Override public R visitNodeAndFieldIndex(RexNodeAndFieldIndex rexNodeAndFieldIndex, P arg) {
+  @Override public R visitNodeAndFieldIndex(RexNodeAndFieldIndex nodeAndFieldIndex, P arg) {
     return null;
-}
+  }
 }

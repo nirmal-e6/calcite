@@ -588,7 +588,7 @@ public class SubQueryRemoveRule
     //   when e.deptno is null then null       -- (2) key NULL check
     //   when dt.i is not null then true       -- (3) match found
     //   when ct.ck < ct.c then null           -- (4) NULLs exist in subquery
-    //   else false                             -- (5) no match
+    //   else false                            -- (5) no match
     //   end
     // from emp as e
     // left join (
@@ -602,7 +602,7 @@ public class SubQueryRemoveRule
     // select e.deptno,
     //   case
     //   when dt.i is not null then true       -- (3) match found
-    //   else false                             -- (5) no match
+    //   else false                            -- (5) no match
     //   end
     // from emp as e
     // left join (select distinct deptno, true as i from emp) as dt
@@ -732,14 +732,14 @@ public class SubQueryRemoveRule
       case TRUE_FALSE_UNKNOWN:
       case UNKNOWN_AS_TRUE:
         if (needsNullSafety) {
-        // Builds the cross join
+          // Builds the cross join
           // Some databases don't support use FILTER clauses for aggregate functions
           // like {@code COUNT(*) FILTER (WHERE not(a is null))}
           // So use count(*) when only one column
           if (builder.fields().size() <= 1) {
-        builder.aggregate(builder.groupKey(),
-            builder.count(false, "c"),
-            builder.count(builder.fields()).as("ck"));
+            builder.aggregate(builder.groupKey(),
+                builder.count(false, "c"),
+                builder.count(builder.fields()).as("ck"));
           } else {
             builder.aggregate(builder.groupKey(),
                 builder.count(false, "c"),
@@ -751,14 +751,14 @@ public class SubQueryRemoveRule
                                 .collect(Collectors.toList()))))
                     .as("ck"));
           }
-        builder.as(ctAlias);
-        if (!variablesSet.isEmpty()) {
-          builder.join(JoinRelType.LEFT, trueLiteral, variablesSet);
-        } else {
-          builder.join(JoinRelType.INNER, trueLiteral, variablesSet);
-        }
-        offset += 2;
-        builder.push(e.rel);
+          builder.as(ctAlias);
+          if (!variablesSet.isEmpty()) {
+            builder.join(JoinRelType.LEFT, trueLiteral, variablesSet);
+          } else {
+            builder.join(JoinRelType.INNER, trueLiteral, variablesSet);
+          }
+          offset += 2;
+          builder.push(e.rel);
         }
         // fall through
       default:
@@ -808,10 +808,10 @@ public class SubQueryRemoveRule
       } else {
         // only reference ctAlias if we created it
         if (needsNullSafety) {
-        operands.add(
-            builder.equals(builder.field(ctAlias, "c"), builder.literal(0)),
-            falseLiteral);
-      }
+          operands.add(
+              builder.equals(builder.field(ctAlias, "c"), builder.literal(0)),
+              falseLiteral);
+        }
       }
       break;
     default:

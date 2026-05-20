@@ -1,4 +1,3 @@
-// E6data shade - Added for hypergraph backport from 1.41
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -27,6 +26,7 @@ import org.checkerframework.checker.nullness.qual.PolyNull;
 import java.util.ArrayList;
 import java.util.List;
 
+// E6data shade - Added for hypergraph backport from 1.41
 /**
  * Passes over a row-expression, calling a handler method for each node,
  * appropriate to the type of the node.
@@ -245,8 +245,8 @@ public class RexShuttle implements RexVisitor<RexNode> {
     return lambdaRef;
   }
 
-  @Override public RexNode visitNodeAndFieldIndex(RexNodeAndFieldIndex rexNodeAndFieldIndex) {
-    return rexNodeAndFieldIndex;
+  @Override public RexNode visitNodeAndFieldIndex(RexNodeAndFieldIndex nodeAndFieldIndex) {
+    return nodeAndFieldIndex;
   }
 
   /**

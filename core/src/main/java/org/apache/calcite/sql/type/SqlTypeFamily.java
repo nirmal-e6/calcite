@@ -27,6 +27,9 @@ import org.apache.calcite.sql.SqlIntervalQualifier;
 import org.apache.calcite.sql.SqlWindow;
 import org.apache.calcite.sql.parser.SqlParserPos;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.sql.Types;
@@ -34,10 +37,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
-
-
 // Shaded for INTEGER_EXCLUDING_BIG_INT type
-
 /**
  * SqlTypeFamily provides SQL type categorization.
  *

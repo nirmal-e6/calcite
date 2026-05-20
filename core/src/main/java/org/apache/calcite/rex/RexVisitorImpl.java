@@ -1,4 +1,3 @@
-// E6data shade - Added for hypergraph backport from 1.41
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -21,6 +20,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 
+// E6data shade - Added for hypergraph backport from 1.41
 /**
  * Default implementation of {@link RexVisitor}, which visits each node but does
  * nothing while it's there.
@@ -127,12 +127,12 @@ public class RexVisitorImpl<@Nullable R> implements RexVisitor<R> {
     return null;
   }
 
-  @Override public R visitNodeAndFieldIndex(RexNodeAndFieldIndex rexNodeAndFieldIndex) {
+  @Override public R visitNodeAndFieldIndex(RexNodeAndFieldIndex nodeAndFieldIndex) {
     return null;
   }
 
   /**
-   * <p>Visits an array of expressions, returning the logical 'and' of their
+   * Visits an array of expressions, returning the logical 'and' of their
    * results.
    *
    * <p>If any of them returns false, returns false immediately; if they all
@@ -154,7 +154,7 @@ public class RexVisitorImpl<@Nullable R> implements RexVisitor<R> {
   }
 
   /**
-   * <p>Visits an array of expressions, returning the logical 'or' of their
+   * Visits an array of expressions, returning the logical 'or' of their
    * results.
    *
    * <p>If any of them returns true, returns true immediately; if they all

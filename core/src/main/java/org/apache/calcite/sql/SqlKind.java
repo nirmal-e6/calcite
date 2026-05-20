@@ -17,6 +17,7 @@
 package org.apache.calcite.sql;
 
 import com.google.common.collect.Sets;
+
 import org.apiguardian.api.API;
 
 import java.util.Collection;
@@ -25,7 +26,6 @@ import java.util.Locale;
 import java.util.Set;
 
 // Shaded to add custom SqlKind enums line no.261
-
 /**
  * Enumerates the possible types of {@link SqlNode}.
  *

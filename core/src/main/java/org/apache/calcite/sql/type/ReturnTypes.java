@@ -51,13 +51,8 @@ import static org.apache.calcite.util.Static.RESOURCE;
 
 import static java.util.Objects.requireNonNull;
 
-/*
- * changed return type of PERCENTILE_DISC_CONT
- * WARNING : DO NOT PUT CUSTOM RETURN TYPES HERE AS IT'S A COPY OF CALCITE'S CLASS
- */
-
-
-
+// changed return type of PERCENTILE_DISC_CONT
+// WARNING : DO NOT PUT CUSTOM RETURN TYPES HERE AS IT'S A COPY OF CALCITE'S CLASS
 /**
  * A collection of return-type inference strategies.
  */
@@ -360,13 +355,11 @@ public abstract class ReturnTypes {
     }
   };
 
-
-
   /**
- * Same as {@link #ARG0_EXCEPT_DATE} but returns with nullability if any of the operands is nullable by using
- * {@link SqlTypeTransforms#TO_NULLABLE}.
+   * Same as {@link #ARG0_EXCEPT_DATE} but returns with nullability if any of
+   * the operands is nullable by using
+   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NULLABLE}.
    */
-
   public static final SqlReturnTypeInference ARG0_EXCEPT_DATE_NULLABLE =
       ARG0_EXCEPT_DATE.andThen(SqlTypeTransforms.TO_NULLABLE);
 
@@ -786,13 +779,11 @@ private static @Nullable RelDataType leastRestrictiveByCast(SqlOperatorBinding o
     }
   };
 
-
-
   /**
- * Same as {@link #ARG0_EXCEPT_INTEGER} but returns with nullability if any of the operands is nullable by using
- * {@link SqlTypeTransforms#TO_NULLABLE}.
+   * Same as {@link #ARG0_EXCEPT_INTEGER} but returns with nullability if any of
+   * the operands is nullable by using
+   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NULLABLE}.
    */
-
   public static final SqlReturnTypeInference ARG0_EXCEPT_INTEGER_NULLABLE =
       ARG0_EXCEPT_INTEGER.andThen(SqlTypeTransforms.TO_NULLABLE);
 
@@ -1096,24 +1087,20 @@ private static @Nullable RelDataType leastRestrictiveByCast(SqlOperatorBinding o
     return typeFactory.getTypeSystem().deriveDecimalMultiplyType(typeFactory, type1, type2);
   };
 
-
-
   /**
- * Same as {@link #DECIMAL_PRODUCT} but returns with nullability if any of the operands is nullable by using
- * {@link SqlTypeTransforms#TO_NULLABLE}.
+   * Same as {@link #DECIMAL_PRODUCT} but returns with nullability if any of
+   * the operands is nullable by using
+   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NULLABLE}.
    */
-
   public static final SqlReturnTypeInference DECIMAL_PRODUCT_NULLABLE =
       DECIMAL_PRODUCT.andThen(SqlTypeTransforms.TO_NULLABLE);
 
-
-
   /**
- * Same as {@link #DECIMAL_PRODUCT_NULLABLE} but returns with nullability if any of the operands is nullable or the
- * operation results in overflow by using {@link SqlTypeTransforms#FORCE_NULLABLE}. Also handles multiplication for
- * integers, not just decimals.
+   * Same as {@link #DECIMAL_PRODUCT_NULLABLE} but returns with nullability if any of
+   * the operands is nullable or the operation results in overflow by using
+   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#FORCE_NULLABLE}. Also handles
+   * multiplication for integers, not just decimals.
    */
-
   public static final SqlReturnTypeInference PRODUCT_FORCE_NULLABLE =
       DECIMAL_PRODUCT_NULLABLE.orElse(LEAST_RESTRICTIVE).andThen(SqlTypeTransforms.FORCE_NULLABLE);
 
@@ -1140,13 +1127,11 @@ private static @Nullable RelDataType leastRestrictiveByCast(SqlOperatorBinding o
     return typeFactory.getTypeSystem().deriveDecimalDivideType(typeFactory, type1, type2);
   };
 
-
-
   /**
- * Same as {@link #DECIMAL_QUOTIENT} but returns with nullability if any of the operands is nullable by using
- * {@link SqlTypeTransforms#TO_NULLABLE}.
+   * Same as {@link #DECIMAL_QUOTIENT} but returns with nullability if any of
+   * the operands is nullable by using
+   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NULLABLE}.
    */
-
   public static final SqlReturnTypeInference DECIMAL_QUOTIENT_NULLABLE =
       DECIMAL_QUOTIENT.andThen(SqlTypeTransforms.TO_NULLABLE);
 
@@ -1163,14 +1148,12 @@ private static @Nullable RelDataType leastRestrictiveByCast(SqlOperatorBinding o
         typeFactory.createSqlType(SqlTypeName.DOUBLE), true) : null;
   };
 
-
-
   /**
- * Same as {@link #DECIMAL_QUOTIENT_NULLABLE} but returns with nullability if any of the operands is nullable or the
- * operation results in overflow by using {@link SqlTypeTransforms#FORCE_NULLABLE}. Also handles multiplication for
- * integers, not just decimals.
+   * Same as {@link #DECIMAL_QUOTIENT_NULLABLE} but returns with nullability if any of
+   * the operands is nullable or the operation results in overflow by using
+   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#FORCE_NULLABLE}. Also handles
+   * multiplication for integers, not just decimals.
    */
-
   public static final SqlReturnTypeInference QUOTIENT_FORCE_NULLABLE =
       DECIMAL_QUOTIENT_NULLABLE.orElse(LEAST_RESTRICTIVE).andThen(SqlTypeTransforms.FORCE_NULLABLE);
 
@@ -1196,24 +1179,20 @@ private static @Nullable RelDataType leastRestrictiveByCast(SqlOperatorBinding o
     return typeFactory.getTypeSystem().deriveDecimalPlusType(typeFactory, type1, type2);
   };
 
-
-
   /**
- * Same as {@link #DECIMAL_SUM} but returns with nullability if any of the operands is nullable by using
- * {@link SqlTypeTransforms#TO_NULLABLE}.
+   * Same as {@link #DECIMAL_SUM} but returns with nullability if any
+   * of the operands is nullable by using
+   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NULLABLE}.
    */
-
   public static final SqlReturnTypeInference DECIMAL_SUM_NULLABLE =
       DECIMAL_SUM.andThen(SqlTypeTransforms.TO_NULLABLE);
 
-
-
   /**
- * Same as {@link #DECIMAL_SUM_NULLABLE} but returns with nullability if any of the operands is nullable or the
- * operation results in overflow by using {@link SqlTypeTransforms#FORCE_NULLABLE}. Also handles addition for integers,
- * not just decimals.
+   * Same as {@link #DECIMAL_SUM_NULLABLE} but returns with nullability if any of
+   * the operands is nullable or the operation results in overflow by using
+   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#FORCE_NULLABLE}. Also handles
+   * addition for integers, not just decimals.
    */
-
   public static final SqlReturnTypeInference SUM_FORCE_NULLABLE =
       DECIMAL_SUM_NULLABLE.orElse(LEAST_RESTRICTIVE).andThen(SqlTypeTransforms.FORCE_NULLABLE);
 
@@ -1457,84 +1436,68 @@ private static @Nullable RelDataType leastRestrictiveByCast(SqlOperatorBinding o
     return typeFactory.createSqlType(SqlTypeName.VARCHAR, typePrecision);
   }
 
-
-
   /**
- * Same as {@link #MULTIVALENT_STRING_SUM_PRECISION} and using {@link SqlTypeTransforms#TO_NULLABLE}.
+   * Same as {@link #MULTIVALENT_STRING_SUM_PRECISION} and using
+   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NULLABLE}.
    */
-
   public static final SqlReturnTypeInference MULTIVALENT_STRING_SUM_PRECISION_NULLABLE =
       MULTIVALENT_STRING_SUM_PRECISION.andThen(SqlTypeTransforms.TO_NULLABLE);
 
-
-
   /**
- * Same as {@link #MULTIVALENT_STRING_SUM_PRECISION} and using {@link SqlTypeTransforms#TO_NOT_NULLABLE}.
+   * Same as {@link #MULTIVALENT_STRING_SUM_PRECISION} and using
+   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NOT_NULLABLE}.
    */
-
   public static final SqlReturnTypeInference MULTIVALENT_STRING_SUM_PRECISION_NOT_NULLABLE =
       MULTIVALENT_STRING_SUM_PRECISION
           .andThen(SqlTypeTransforms.TO_NOT_NULLABLE);
 
-
-
   /**
- * Same as {@link #MULTIVALENT_STRING_WITH_SEP_SUM_PRECISION} and using {@link SqlTypeTransforms#TO_NOT_NULLABLE}.
+   * Same as {@link #MULTIVALENT_STRING_WITH_SEP_SUM_PRECISION} and using
+   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NOT_NULLABLE}.
    */
-
   public static final SqlReturnTypeInference
       MULTIVALENT_STRING_WITH_SEP_SUM_PRECISION_NOT_NULLABLE =
           MULTIVALENT_STRING_WITH_SEP_SUM_PRECISION
               .andThen(SqlTypeTransforms.TO_NOT_NULLABLE);
 
-
-
   /**
- * Same as {@link #MULTIVALENT_STRING_WITH_SEP_SUM_PRECISION} and using {@link SqlTypeTransforms#TO_NULLABLE_ALL}.
+   * Same as {@link #MULTIVALENT_STRING_WITH_SEP_SUM_PRECISION} and using
+   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NULLABLE_ALL}.
    */
-
   public static final SqlReturnTypeInference
       MULTIVALENT_STRING_WITH_SEP_SUM_PRECISION_ARG0_NULLABLE =
           MULTIVALENT_STRING_WITH_SEP_SUM_PRECISION
               .andThen(SqlTypeTransforms.ARG0_NULLABLE);
 
-
-
   /**
- * Same as {@link #MULTIVALENT_STRING_SUM_PRECISION} and using {@link SqlTypeTransforms#TO_NULLABLE_ALL}.
+   * Same as {@link #MULTIVALENT_STRING_SUM_PRECISION} and using
+   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NULLABLE_ALL}.
    */
-
   public static final SqlReturnTypeInference MULTIVALENT_STRING_SUM_PRECISION_NULLABLE_ALL =
       MULTIVALENT_STRING_SUM_PRECISION
           .andThen(SqlTypeTransforms.TO_NULLABLE_ALL);
 
-
-
   /**
- * Same as {@link #DYADIC_STRING_SUM_PRECISION} and using {@link SqlTypeTransforms#TO_NULLABLE},
- * {@link SqlTypeTransforms#TO_VARYING}.
+   * Same as {@link #DYADIC_STRING_SUM_PRECISION} and using
+   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NULLABLE},
+   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_VARYING}.
    */
-
   public static final SqlReturnTypeInference DYADIC_STRING_SUM_PRECISION_NULLABLE_VARYING =
       DYADIC_STRING_SUM_PRECISION.andThen(SqlTypeTransforms.TO_NULLABLE)
           .andThen(SqlTypeTransforms.TO_VARYING);
 
-
-
   /**
- * Same as {@link #DYADIC_STRING_SUM_PRECISION} and using {@link SqlTypeTransforms#TO_NULLABLE}.
+   * Same as {@link #DYADIC_STRING_SUM_PRECISION} and using
+   * {@link org.apache.calcite.sql.type.SqlTypeTransforms#TO_NULLABLE}.
    */
-
   public static final SqlReturnTypeInference DYADIC_STRING_SUM_PRECISION_NULLABLE =
       DYADIC_STRING_SUM_PRECISION.andThen(SqlTypeTransforms.TO_NULLABLE);
 
-
-
   /**
- * Type-inference strategy where the expression is assumed to be registered as a {@link SqlValidatorNamespace}, and
+   * Type-inference strategy where the expression is assumed to be registered
+   * as a {@link org.apache.calcite.sql.validate.SqlValidatorNamespace}, and
    * therefore the result type of the call is the type of that namespace.
    */
-
   public static final SqlReturnTypeInference SCOPE = opBinding -> {
     SqlCallBinding callBinding = (SqlCallBinding) opBinding;
     SqlValidatorNamespace ns = getNamespace(callBinding);

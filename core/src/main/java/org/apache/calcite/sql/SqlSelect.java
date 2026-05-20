@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.calcite.sql;
 
 import org.apache.calcite.sql.fun.SqlInternalOperators;
@@ -32,7 +31,6 @@ import java.util.List;
 import static java.util.Objects.requireNonNull;
 
 // Shaded to support Except() Clause in select
-
 /**
  * A <code>SqlSelect</code> is a node of a parse tree which represents a select
  * statement. It warrants its own node type just because we have a lot of

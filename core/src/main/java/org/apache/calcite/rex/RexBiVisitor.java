@@ -60,7 +60,7 @@ public interface RexBiVisitor<R, P> {
 
   R visitLambda(RexLambda lambda, P arg);
 
-  R visitNodeAndFieldIndex(RexNodeAndFieldIndex rexNodeAndFieldIndex, P arg);
+  R visitNodeAndFieldIndex(RexNodeAndFieldIndex nodeAndFieldIndex, P arg);
 
   /** Visits a list and writes the results to another list. */
   default void visitList(Iterable<? extends RexNode> exprs, P arg,

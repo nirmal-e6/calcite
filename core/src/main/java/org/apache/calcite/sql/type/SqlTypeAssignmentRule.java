@@ -25,7 +25,6 @@ import java.util.Map;
 import java.util.Set;
 
 // shaded for changing timestamp assignment
-
 /**
  * Rules that determine whether a type is assignable from another type.
  */

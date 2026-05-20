@@ -82,7 +82,6 @@ import static org.apache.calcite.rel.type.RelDataType.PRECISION_NOT_SPECIFIED;
 import static java.util.Objects.requireNonNull;
 
 // Shaded for converting into SetSearch at line. 632
-
 /**
  * Utility methods concerning row-expressions.
  */
@@ -842,9 +841,8 @@ public class RexUtil {
 
     // backported by E6data from calcite 1.41 for HyperGraph
     @Override public Boolean visitNodeAndFieldIndex(RexNodeAndFieldIndex nodeAndFieldIndex) {
-        return false;
+      return false;
     }
-
   }
 
   /**
@@ -1739,7 +1737,6 @@ public class RexUtil {
     }
     return isLosslessCast(((RexCall) node).getOperands().get(0).getType(), node.getType());
   }
-
 
   /**
    * Returns whether the conversion from {@code source} to {@code target} type

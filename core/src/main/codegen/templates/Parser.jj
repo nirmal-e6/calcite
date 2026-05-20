@@ -510,7 +510,7 @@ JAVACODE SqlParseException convertException(Throwable ex)
                 && SqlParserUtil.allowsIdentifier(tokenImage, expectedTokenSequences)) {
                 // If the next token is a keyword, reformat the error message as:
 
-                // Incorrect syntax near the reserved keyword '{keyword}' at line {line_number},
+                // Incorrect syntax near the keyword '{keyword}' at line {line_number},
                 // column {column_number}.
                 final String expecting = ex.getMessage()
                     .substring(ex.getMessage().indexOf("Was expecting"));
@@ -2068,10 +2068,10 @@ SqlNode SelectExpression() :
 }
 {
     (
-    <STAR> {
+        <STAR> {
             e = SqlIdentifier.star(getPos());
-    }
-|
+        }
+    |
         e = Expression(ExprContext.ACCEPT_SUB_QUERY)
     )
     (
@@ -2133,7 +2133,7 @@ SqlLiteral JoinType() :
 {
     (
 <#list (parser.joinTypes!default.parser.joinTypes) as method>
-        LOOKAHEAD(3) // required for multi-token join extensions
+        LOOKAHEAD(3) // required for "LEFT SEMI JOIN" and "LEFT ANTI JOIN" in Babel
         joinType = ${method}()
     |
 </#list>

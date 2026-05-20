@@ -1,4 +1,3 @@
-// E6data shade - Added for hypergraph backport from 1.41
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -102,6 +101,8 @@ import static org.apache.calcite.sql.fun.SqlStdOperatorTable.SUBSTRING;
 import static org.apache.calcite.sql.fun.SqlStdOperatorTable.UPPER;
 
 import static java.util.Objects.requireNonNull;
+
+// E6data shade - Added for hypergraph backport from 1.41
 
 /**
  * Translates {@link org.apache.calcite.rex.RexNode REX expressions} to
