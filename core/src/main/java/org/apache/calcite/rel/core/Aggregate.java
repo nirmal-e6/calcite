@@ -301,6 +301,8 @@ public abstract class Aggregate extends SingleRel implements Hintable {
     return groupSet.cardinality();
   }
 
+  // WARNING : use this method after upgrade to 1.41
+  // currently in 1.39 it will give inaccurate results
   public boolean hasEmptyGroup() {
     return groupSets.contains(ImmutableBitSet.of());
   }

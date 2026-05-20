@@ -89,6 +89,16 @@ import java.util.stream.Collectors;
 import static java.util.Objects.requireNonNull;
 
 /**
+ * <b>BACKPORT_CALCITE_5387</b> — vendored Calcite 1.39.0 with two edits at the join-pull-up
+ * call sites (grep {@code BACKPORT_CALCITE_5387}) so transposed predicates adopt the
+ * destination's nullability and JoinPushTransitivePredicatesRule stops AssertionError-ing on
+ * mixed-nullability join keys. Sibling: {@link org.apache.calcite.rex.RexPermuteInputsShuttle}.
+ * Delete both once Calcite is bumped to 1.40.0+.
+ *
+ * <p>Original Javadoc follows.
+ *
+ * <hr>
+ *
  * Utility to infer Predicates that are applicable above a RelNode.
  *
  * <p>This is currently used by
@@ -791,13 +801,15 @@ public class RelMdPredicates
       Mappings.TargetMapping rightMapping =
           Mappings.createShiftMapping(nSysFields + nFieldsLeft + nFieldsRight,
               0, nSysFields + nFieldsLeft, nFieldsRight);
+      // BACKPORT_CALCITE_5387: matchTargetType=true so transposed refs adopt the right-side nullability.
       final RexPermuteInputsShuttle rightPermute =
-          new RexPermuteInputsShuttle(rightMapping, joinRel);
+          new RexPermuteInputsShuttle(rightMapping, true, joinRel.getRight());
       Mappings.TargetMapping leftMapping =
           Mappings.createShiftMapping(nSysFields + nFieldsLeft, 0, nSysFields,
               nFieldsLeft);
+      // BACKPORT_CALCITE_5387: same patch on the left side.
       final RexPermuteInputsShuttle leftPermute =
-          new RexPermuteInputsShuttle(leftMapping, joinRel);
+          new RexPermuteInputsShuttle(leftMapping, true, joinRel.getLeft());
       final List<RexNode> leftInferredPredicates = new ArrayList<>();
       final List<RexNode> rightInferredPredicates = new ArrayList<>();
 

@@ -562,11 +562,19 @@ public class AggregateCall {
       return new Aggregate.PercentileDiscAggCallBinding(typeFactory,
           aggFunction, SqlTypeUtil.projectTypes(rowType, argList),
           SqlTypeUtil.projectTypes(rowType, collation.getKeys()).get(0),
-          aggregateRelBase.hasEmptyGroup(), hasFilter());
+          // if we use hasEmptyGroup currently, it will not return accurate datatype
+          // we currently use 1.39 in which group count is used widely
+          // getGroupCount is Deprecated in 1.41
+          // after upgrade we will switch to hasEmptyGroup
+          aggregateRelBase.getGroupCount() == 0, hasFilter());
     }
     return new Aggregate.AggCallBinding(typeFactory, aggFunction,
         RexUtil.types(rexList), SqlTypeUtil.projectTypes(rowType, argList),
-        aggregateRelBase.hasEmptyGroup(), hasFilter());
+        // if we use hasEmptyGroup currently, it will not return accurate datatype
+        // we currently use 1.39 in which group count is used widely
+        // getGroupCount is Deprecated in 1.41
+        // after upgrade we will switch to hasEmptyGroup
+        aggregateRelBase.getGroupCount() == 0, hasFilter());
   }
 
   /**

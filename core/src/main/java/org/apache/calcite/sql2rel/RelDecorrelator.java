@@ -803,9 +803,13 @@ public class RelDecorrelator implements ReflectiveVisitor {
           newHasEmptyGroup |= groupSetsIterator.next().isEmpty();
         }
       }
+      // if we use hasEmptyGroup currently, it will not return accurate datatype
+      // we currently use 1.39 in which group count is used widely
+      // getGroupCount is Deprecated in 1.41
+      // after upgrade we will switch to hasEmptyGroup
       newAggCalls.add(
           oldAggCall.adaptTo(newProject, aggArgs, filterArg,
-              rel.hasEmptyGroup(), newHasEmptyGroup));
+              rel.getGroupCount() == 0, newHasEmptyGroup));
 
       // The old to new output position mapping will be the same as that
       // of newProject, plus any aggregates that the oldAgg produces.
@@ -844,7 +848,11 @@ public class RelDecorrelator implements ReflectiveVisitor {
       }
     }
 
-    if ((rel.hasEmptyGroup() || rel.getGroupSet().isEmpty())
+    // if we use hasEmptyGroup currently, it will not return accurate datatype
+    // we currently use 1.39 in which group count is used widely
+    // getGroupCount is Deprecated in 1.41
+    // after upgrade we will switch to hasEmptyGroup
+    if ((rel.getGroupCount() == 0 || rel.getGroupSet().isEmpty())
         && !frame.corDefOutputs.isEmpty()
         && !parentPropagatesNullValues) {
       newRel = rewriteScalarAggregate(rel, newRel, outputMap, corDefOutputs);
@@ -3326,9 +3334,13 @@ public class RelDecorrelator implements ReflectiveVisitor {
         int filterArg =
             aggCall.filterArg < 0 ? aggCall.filterArg
                 : aggCall.filterArg + groupCount;
+        // if we use hasEmptyGroup currently, it will not return accurate datatype
+        // we currently use 1.39 in which group count is used widely
+        // getGroupCount is Deprecated in 1.41
+        // after upgrade we will switch to hasEmptyGroup
         newAggCalls.add(
             aggCall.adaptTo(joinOutputProject, argList, filterArg,
-                aggregate.hasEmptyGroup(), groupCount == 0));
+                aggregate.getGroupCount() == 0, groupCount == 0));
       }
 
       ImmutableBitSet groupSet =

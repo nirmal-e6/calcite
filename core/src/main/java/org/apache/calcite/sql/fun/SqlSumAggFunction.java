@@ -81,11 +81,31 @@ public RelDataType inferReturnType(SqlOperatorBinding opBinding)
       {
         if (operandType.getScale() == 0 || CalciteForkSettings.decimal128Enabled())
         {
-          return operandType;
+          return createTypeWithNullability(opBinding, operandType);
         }
       }
     }
-    return Objects.requireNonNull(ReturnTypes.DOUBLE_NULLABLE.inferReturnType(opBinding));
+    return createTypeWithNullability(opBinding,
+        Objects.requireNonNull(ReturnTypes.DOUBLE_NULLABLE.inferReturnType(opBinding)));
+}
+
+// using calcite's nullability on top of our return type implementation
+protected RelDataType createTypeWithNullability(SqlOperatorBinding opBinding,
+    RelDataType type)
+{
+    final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+    // if we use hasEmptyGroup currently, it will not return accurate results
+    // we currently use 1.39 in which group count is used widely
+    // getGroupCount is Deprecated in 1.41
+    // after upgrade we will switch to hasEmptyGroup
+    if (opBinding.getGroupCount() == 0 || opBinding.hasFilter())
+    {
+        return typeFactory.createTypeWithNullability(type, true);
+    }
+    else
+    {
+        return type;
+    }
 }
 
   @SuppressWarnings("deprecation")
