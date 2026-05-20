@@ -1382,11 +1382,6 @@ public class RexToLixTranslator implements RexVisitor<RexToLixTranslator.Result>
     return new Result(isNullVariable, valueVariable);
   }
 
-  @Override public Result visitNodeAndFieldIndex(
-      RexNodeAndFieldIndex rexNodeAndFieldIndex) {
-    return null;
-  }
-
   @Override public Result visitLocalRef(RexLocalRef localRef) {
     return deref(localRef).accept(this);
   }

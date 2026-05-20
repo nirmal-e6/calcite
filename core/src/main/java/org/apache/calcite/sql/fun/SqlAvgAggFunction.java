@@ -119,7 +119,7 @@ private static final SqlReturnTypeInference AVG_AGG_FUNCTION = opBinding ->
     {
         return typeFactory.createSqlType(SqlTypeName.DOUBLE);
     }
-    if (opBinding.getGroupCount() == 0 || opBinding.hasFilter())
+    if (opBinding.hasEmptyGroup() || opBinding.hasFilter())
     {
         return typeFactory.createTypeWithNullability(relDataType, true);
     }

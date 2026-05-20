@@ -952,11 +952,6 @@ public enum SqlKind {
    */
   LATERAL,
 
-  /**
-     * <a href="https://docs.databricks.com/aws/en/sql/language-manual/functions/colonsign">Databricks' colon operator</a>
-     */
-    COLON,
-
     /**
      * Access to a JSON path in a variant value.
      */

@@ -65,6 +65,7 @@ import java.util.*;
  * <p>There is also a variant that matches
  * {@link Calc} rather than {@code Project}.
  */
+@SuppressWarnings("deprecation")
 public abstract class E6ProjectToWindowRule
     extends RelRule<E6ProjectToWindowRule.Config>
     implements TransformationRule {
