@@ -38,7 +38,7 @@ public int getMaxScale(SqlTypeName typeName)
 {
     if (isDecimal128Enabled() && isDecimal(typeName))
     {
-        return getMaxNumericScale();
+        return MAX_DECIMAL_SCALE;
     }
     return super.getMaxScale(typeName);
 }
@@ -58,7 +58,7 @@ public int getMaxPrecision(SqlTypeName typeName)
 {
     if (isDecimal128Enabled() && isDecimal(typeName))
     {
-        return getMaxNumericPrecision();
+        return MAX_DECIMAL_PRECISION;
     }
     if (isDatetime(typeName))
     {
