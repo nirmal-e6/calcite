@@ -34,18 +34,6 @@ private static boolean isDecimal128Enabled()
 }
 
 @Override
-public int getMaxNumericPrecision()
-{
-    return isDecimal128Enabled() ? MAX_DECIMAL_PRECISION : super.getMaxNumericPrecision();
-}
-
-@Override
-public int getMaxNumericScale()
-{
-    return isDecimal128Enabled() ? MAX_DECIMAL_SCALE : super.getMaxNumericScale();
-}
-
-@Override
 public int getMaxScale(SqlTypeName typeName)
 {
     if (isDecimal128Enabled() && isDecimal(typeName))

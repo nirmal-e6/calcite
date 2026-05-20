@@ -1147,24 +1147,6 @@ public abstract class ReduceExpressionsRule<C extends ReduceExpressionsRule.Conf
       return null;
     }
 
-    // E6data fix for lambda support
-    @Override
-    public Void visitLambda(RexLambda lambda)
-    {
-        for (RexLambdaRef rexLambdaRef : lambda.getParameters())
-        {
-            visitLambdaRef(rexLambdaRef);
-        }
-        return null;
-    }
-
-    // E6data fix for lambda support
-    @Override
-    public Void visitLambdaRef(RexLambdaRef lambdaRef)
-    {
-        return pushVariable();
-    }
-
     @Override public Void visitSubQuery(RexSubQuery subQuery) {
       analyzeCall(subQuery, Constancy.REDUCIBLE_CONSTANT);
       return null;

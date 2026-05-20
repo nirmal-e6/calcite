@@ -855,9 +855,15 @@ public @Nullable Frame decorrelateRel(Aggregate rel, boolean isCorVarDefined) {
                                      : requireNonNull(combinedMap.get(oldAggCall.filterArg),
                                          () -> "combinedMap.get(" + oldAggCall.filterArg + ")");
 
+        boolean newHasEmptyGroup = newGroupSet.isEmpty();
+        if (newGroupSets != null) {
+            for (ImmutableBitSet groupSet : newGroupSets) {
+                newHasEmptyGroup |= groupSet.isEmpty();
+            }
+        }
         newAggCalls.add(
             oldAggCall.adaptTo(newProject, aggArgs, filterArg,
-                oldGroupKeyCount, newGroupKeyCount));
+                rel.hasEmptyGroup(), newHasEmptyGroup));
 
         // The old to new output position mapping will be the same as that
         // of newProject, plus any aggregates that the oldAgg produces.
@@ -2904,7 +2910,7 @@ public static final class E6OldRemoveCorrelationForScalarAggregateRule
                                       : aggCall.filterArg + groupCount;
             newAggCalls.add(
                 aggCall.adaptTo(joinOutputProject, argList, filterArg,
-                    aggregate.getGroupCount(), groupCount));
+                    aggregate.hasEmptyGroup(), groupCount == 0));
         }
 
         ImmutableBitSet groupSet =

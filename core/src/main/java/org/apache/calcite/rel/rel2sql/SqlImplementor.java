@@ -2477,7 +2477,7 @@ public abstract class SqlImplementor {
 
       return new Result(node, clauses, alias, typeToUse,
           typeMap, anon, ignoreClauses,
-          expectedClauses, expectedRel);
+          expectedClauses, expectedRel, false);
     }
 
     /**

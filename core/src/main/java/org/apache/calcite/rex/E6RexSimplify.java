@@ -55,6 +55,7 @@ import static java.util.Objects.requireNonNull;
 /**
  * Context required to simplify a row-expression.
  */
+@SuppressWarnings("deprecation")
 public class E6RexSimplify extends RexSimplify
 {
 
