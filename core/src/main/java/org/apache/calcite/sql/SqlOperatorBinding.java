@@ -33,8 +33,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.AbstractList;
 import java.util.List;
 
-// Shaded from calcite commit - e810d8becb3544d141e7d4bf4fe65de24d0595c7 to port fixes to decorrelation
-// Remove when upgraded to 1.42
 /**
  * <code>SqlOperatorBinding</code> represents the binding of an
  * {@link SqlOperator} to actual operands, along with any additional information

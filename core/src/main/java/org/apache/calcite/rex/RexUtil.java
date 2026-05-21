@@ -83,6 +83,7 @@ import static org.apache.calcite.rel.type.RelDataType.PRECISION_NOT_SPECIFIED;
 
 import static java.util.Objects.requireNonNull;
 
+// Shaded for converting into SetSearch at line. 632
 /**
  * Utility methods concerning row-expressions.
  */

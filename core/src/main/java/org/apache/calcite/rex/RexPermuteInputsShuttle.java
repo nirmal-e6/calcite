@@ -26,7 +26,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 
-// Backport
 /**
  * Shuttle which applies a permutation to its input fields.
  *

@@ -763,8 +763,8 @@ private boolean hasPivotWithStar = false;
         replaceMap.isEmpty() ? new boolean[0]
             : new boolean[replaceMap.size()];
     final int originalSize = selectItems.size();
-    final int fieldsBeforeStar = fields.size();
     final SqlParserPos startPosition = identifier.getParserPosition();
+    final int fieldsBeforeStar = fields.size();
     switch (identifier.names.size()) {
     case 1:
       SqlNode from = scope.getNode().getFrom();
@@ -2044,7 +2044,7 @@ private boolean hasPivotWithStar = false;
       } else {
         orderList = orderBy.orderList;
       }
-      return new SqlSelect(SqlParserPos.ZERO, null, selectList,  null, orderBy.query,
+      return new SqlSelect(SqlParserPos.ZERO, null, selectList, orderBy.query,
           null, null, null, null, null, orderList, orderBy.offset,
           orderBy.fetch, null);
     }
@@ -2054,7 +2054,7 @@ private boolean hasPivotWithStar = false;
       SqlCall call = (SqlCall) node;
       final SqlNodeList selectList = new SqlNodeList(SqlParserPos.ZERO);
       selectList.add(SqlIdentifier.star(SqlParserPos.ZERO));
-      return new SqlSelect(SqlParserPos.ZERO, null, selectList, null, call.operand(0),
+      return new SqlSelect(SqlParserPos.ZERO, null, selectList, call.operand(0),
           null, null, null, null, null, null, null, null, null);
     }
 
@@ -2120,7 +2120,7 @@ private boolean hasPivotWithStar = false;
       // what we want for the select list of the merge source -- '*'
       // followed by the update set expressions
       SqlSelect sourceSelect = SqlNonNullableAccessors.getSourceSelect(updateStmt);
-      selectList = deepClone(SqlNonNullableAccessors.getSelectList(sourceSelect));
+      selectList = SqlNode.clone(SqlNonNullableAccessors.getSelectList(sourceSelect));
     } else {
       // otherwise, just use select *
       selectList = new SqlNodeList(SqlParserPos.ZERO);
@@ -2152,7 +2152,7 @@ private boolean hasPivotWithStar = false;
             JoinConditionType.ON.symbol(SqlParserPos.ZERO),
             call.getCondition());
     SqlSelect select =
-        new SqlSelect(SqlParserPos.ZERO, null, selectList,  null, outerJoin, null,
+        new SqlSelect(SqlParserPos.ZERO, null, selectList, outerJoin, null,
             null, null, null, null, null, null, null, null);
     call.setSourceSelect(select);
 
@@ -2170,20 +2170,12 @@ private boolean hasPivotWithStar = false;
               SqlParserPos.ZERO);
       final SqlNode insertSource = SqlNode.clone(sourceTableRef);
       select =
-          new SqlSelect(SqlParserPos.ZERO, null, selectList,  null, insertSource, null,
+          new SqlSelect(SqlParserPos.ZERO, null, selectList, insertSource, null,
               null, null, null, null, null, null, null, null);
       insertCall.setSource(select);
     }
 
-  }
-
-  private static SqlNodeList deepClone(SqlNodeList list) {
-    final SqlNodeList clone = new SqlNodeList(list.getParserPosition());
-    for (SqlNode node : list) {
-      clone.add(SqlNode.clone(node));
-    }
-    return clone;
-  }
+}
 
 // e6data change - Planner-local support for MERGE action star shorthand.
 // Expands parser marker nodes before Calcite's MERGE rewrite builds source selects.
@@ -2347,7 +2339,7 @@ private static SqlNodeList createMergeStarSourceExpressionList(SqlMerge call, Re
       ++i;
     }
     source =
-        new SqlSelect(SqlParserPos.ZERO, null, selectList,  null, source, null, null,
+        new SqlSelect(SqlParserPos.ZERO, null, selectList, source, null, null,
             null, null, null, null, null, null, null);
     source = SqlValidatorUtil.addAlias(source, UPDATE_SRC_ALIAS);
     SqlMerge mergeCall =
@@ -2403,7 +2395,7 @@ private static SqlNodeList createMergeStarSourceExpressionList(SqlMerge call, Re
               sourceTable,
               alias.getSimple());
     }
-    return new SqlSelect(SqlParserPos.ZERO, null, selectList,  null, sourceTable,
+    return new SqlSelect(SqlParserPos.ZERO, null, selectList, sourceTable,
         call.getCondition(), null, null, null, null, null, null, null, null);
   }
 
@@ -2425,7 +2417,7 @@ private static SqlNodeList createMergeStarSourceExpressionList(SqlMerge call, Re
               sourceTable,
               alias.getSimple());
     }
-    return new SqlSelect(SqlParserPos.ZERO, null, selectList, null, sourceTable,
+    return new SqlSelect(SqlParserPos.ZERO, null, selectList, sourceTable,
         call.getCondition(), null, null, null, null, null, null, null, null);
   }
 
@@ -3872,15 +3864,7 @@ private void addSqlNodeToGroupByList(SqlNode sqlNode, List<SqlNode> newGroupByLi
     {
         if (sqlNode.getKind().equals(SqlKind.AS))
         {
-            SqlCall asCall = (SqlCall) sqlNode;
-            if (isExplodeProjection(asCall.operand(0)))
-            {
-                newGroupByList.add(asCall.operand(1));
-            }
-            else
-            {
-                newGroupByList.add(asCall.operand(0));
-            }
+            newGroupByList.add(((SqlCall) sqlNode).operand(1));
             return;
         }
         if (sqlNode instanceof SqlIdentifier
@@ -3935,15 +3919,6 @@ private void addSqlNodeToGroupByList(SqlNode sqlNode, List<SqlNode> newGroupByLi
             newGroupByList.add(sqlNode);
         }
     }
-  }
-
-  private static boolean isExplodeProjection(SqlNode node) {
-    if (!(node instanceof SqlCall)) {
-      return false;
-    }
-    String operatorName = ((SqlCall) node).getOperator().getName();
-    return operatorName.equalsIgnoreCase("explode")
-        || operatorName.equalsIgnoreCase("explode_outer");
   }
 
   private void registerSetop(
@@ -4781,11 +4756,10 @@ private void addSqlNodeToGroupByList(SqlNode sqlNode, List<SqlNode> newGroupByLi
     String name = id.names.get(0);
     SqlNameMatcher nameMatcher = getCatalogReader().nameMatcher();
     RelDataType rowType = getNamespaceOrThrow(node).getRowType();
-
-    RelDataType colType  =
+    final RelDataTypeField field =
         requireNonNull(nameMatcher.field(rowType, name),
-            () -> "unable to find left field " + name + " in " + rowType).getType();
-    return colType;
+            () -> "unable to find left field " + name + " in " + rowType);
+    return field.getType();
   }
 
   /** Validates a column in a USING clause, or an inferred join key in a
@@ -5957,8 +5931,7 @@ private void addSqlNodeToGroupByList(SqlNode sqlNode, List<SqlNode> newGroupByLi
   private void validateExpr(SqlNode expr, SqlValidatorScope scope) {
     if (expr instanceof SqlCall) {
       final SqlOperator op = ((SqlCall) expr).getOperator();
-      if (op.isAggregator() && op.requiresOver()
-          && !(scope instanceof MatchRecognizeScope)) {
+      if (op.isAggregator() && op.requiresOver()) {
         throw newValidationError(expr,
             RESOURCE.absentOverClause());
       }
@@ -6529,16 +6502,14 @@ private void addSqlNodeToGroupByList(SqlNode sqlNode, List<SqlNode> newGroupByLi
     checkTypeAssignment(scopes.get(select), table, sourceRowType, targetRowType,
         call);
 
-    if (!validatingSqlMerge) {
-      // Set validated sourceExpressionList from the source select.
-      // The last elements of sourceSelect are the expression list.
-      List<SqlNode> sourceExpressionList =
-          Util.last(select.getSelectList(), call.getSourceExpressionList().size());
-      call.setOperand(
-          2, SqlUtil.stripListAs(
-          new SqlNodeList(sourceExpressionList,
-              call.getSourceExpressionList().getParserPosition())));
-    }
+    // Set validated sourceExpressionList from the source select.
+    // The last elements of sourceSelect are the expression list.
+    List<SqlNode> sourceExpressionList =
+        Util.last(select.getSelectList(), call.getSourceExpressionList().size());
+    call.setOperand(
+        2, SqlUtil.stripListAs(
+        new SqlNodeList(sourceExpressionList,
+            call.getSourceExpressionList().getParserPosition())));
     checkConstraint(table, call, targetRowType);
 
     validateAccess(call.getTargetTable(), table, SqlAccessEnum.UPDATE);
@@ -6568,8 +6539,6 @@ private void addSqlNodeToGroupByList(SqlNode sqlNode, List<SqlNode> newGroupByLi
     RelDataType targetRowType = unknownType;
 
     SqlUpdate updateCall = call.getUpdateCall();
-    final SqlNodeList originalUpdateSourceExpressionList =
-        updateCall == null ? null : SqlNode.clone(updateCall.getSourceExpressionList());
     if (updateCall != null) {
       requireNonNull(table, () -> "ns.getTable() for " + targetNamespace);
       targetRowType =
@@ -6589,10 +6558,6 @@ private void addSqlNodeToGroupByList(SqlNode sqlNode, List<SqlNode> newGroupByLi
     SqlUpdate updateCallAfterValidate = call.getUpdateCall();
     if (updateCallAfterValidate != null) {
       validateUpdate(updateCallAfterValidate);
-      if (originalUpdateSourceExpressionList != null) {
-        updateCallAfterValidate.setOperand(2,
-            SqlNode.clone(originalUpdateSourceExpressionList));
-      }
     }
     SqlInsert insertCallAfterValidate = call.getInsertCall();
     if (insertCallAfterValidate != null) {
@@ -8403,22 +8368,26 @@ public boolean hasPivotWithStar()
 
           assert qualifiedNode.size() == 2;
 
-          if (join.getConditionType() == JoinConditionType.USING) {
-            return qualifiedNode.get(0);
-          }
 
-          final SqlCall coalesceCall =
-              SqlStdOperatorTable.COALESCE.createCall(SqlParserPos.ZERO, qualifiedNode.get(0),
-                  qualifiedNode.get(1));
+          // E6Data Change
+          // use first operator only instead of coalesce
+          return  qualifiedNode.get(0);
+
+
 
           // If there is an alias for the column, no need to wrap the coalesce with an AS operator
-          boolean haveAlias = fieldAliases.contains(name);
-          if (haveAlias) {
-            return coalesceCall;
-          } else {
-            return SqlStdOperatorTable.AS.createCall(SqlParserPos.ZERO, coalesceCall,
-                new SqlIdentifier(identifier.getSimple(), SqlParserPos.ZERO));
-          }
+          //            boolean haveAlias = fieldAliases.containsKey(name);
+          //
+          //            final SqlCall coalesceCall =
+          //                SqlStdOperatorTable.COALESCE.createCall(SqlParserPos.ZERO, qualifiedNode.get(0),
+          //                    qualifiedNode.get(1));
+          //
+          //            if (haveAlias) {
+          //                return coalesceCall;
+          //            } else {
+          //                return SqlStdOperatorTable.AS.createCall(SqlParserPos.ZERO, coalesceCall,
+          //                    new SqlIdentifier(name, SqlParserPos.ZERO));
+          //            }
         }
       }
 

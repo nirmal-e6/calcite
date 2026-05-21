@@ -30,7 +30,6 @@ import java.util.List;
 
 import static java.util.Objects.requireNonNull;
 
-// Shaded to support Except() Clause in select
 /**
  * A <code>SqlSelect</code> is a node of a parse tree which represents a select
  * statement. It warrants its own node type just because we have a lot of
@@ -40,14 +39,13 @@ public class SqlSelect extends SqlCall {
   //~ Static fields/initializers ---------------------------------------------
 
   // constants representing operand positions
-public static final int FROM_OPERAND = 3;
-public static final int WHERE_OPERAND = 4;
-public static final int HAVING_OPERAND = 6;
-public static final int QUALIFY_OPERAND = 8;
+  public static final int FROM_OPERAND = 2;
+  public static final int WHERE_OPERAND = 3;
+  public static final int HAVING_OPERAND = 5;
+  public static final int QUALIFY_OPERAND = 7;
 
   SqlNodeList keywordList;
   SqlNodeList selectList;
-SqlNodeList exceptList; // E6data Variable for Except
   @Nullable SqlNode from;
   @Nullable SqlNode where;
   @Nullable SqlNodeList groupBy;
@@ -65,7 +63,6 @@ SqlNodeList exceptList; // E6data Variable for Except
   public SqlSelect(SqlParserPos pos,
       @Nullable SqlNodeList keywordList,
       SqlNodeList selectList,
-    @Nullable SqlNodeList exceptList,
       @Nullable SqlNode from,
       @Nullable SqlNode where,
       @Nullable SqlNodeList groupBy,
@@ -80,7 +77,6 @@ SqlNodeList exceptList; // E6data Variable for Except
     this.keywordList = requireNonNull(keywordList != null
         ? keywordList : new SqlNodeList(pos));
     this.selectList = requireNonNull(selectList, "selectList");
-    this.exceptList = exceptList;
     this.from = from;
     this.where = where;
     this.groupBy = groupBy;
@@ -95,7 +91,8 @@ SqlNodeList exceptList; // E6data Variable for Except
     this.hasByClause = false;
   }
 
-/** Legacy constructor without {@code exceptList}. */
+  /** deprecated, without {@code qualify}. */
+  @Deprecated // to be removed before 2.0
   public SqlSelect(SqlParserPos pos,
       @Nullable SqlNodeList keywordList,
       SqlNodeList selectList,
@@ -104,13 +101,12 @@ SqlNodeList exceptList; // E6data Variable for Except
       @Nullable SqlNodeList groupBy,
       @Nullable SqlNode having,
       @Nullable SqlNodeList windowDecls,
-    @Nullable SqlNode qualify,
       @Nullable SqlNodeList orderBy,
       @Nullable SqlNode offset,
       @Nullable SqlNode fetch,
       @Nullable SqlNodeList hints) {
-    this(pos, keywordList, selectList, null, from, where, groupBy, having,
-        windowDecls, qualify, orderBy, offset, fetch, hints);
+    this(pos, keywordList, selectList, from, where, groupBy, having,
+        windowDecls, null, orderBy, offset, fetch, hints);
   }
 
   //~ Methods ----------------------------------------------------------------
@@ -125,7 +121,7 @@ SqlNodeList exceptList; // E6data Variable for Except
 
   @SuppressWarnings("nullness")
   @Override public List<SqlNode> getOperandList() {
-    return ImmutableNullableList.of(keywordList, selectList, exceptList,from, where,
+    return ImmutableNullableList.of(keywordList, selectList, from, where,
         groupBy, having, windowDecls, qualify, orderBy, offset, fetch, hints);
   }
 
@@ -137,35 +133,31 @@ SqlNodeList exceptList; // E6data Variable for Except
     case 1:
       selectList = requireNonNull((SqlNodeList) operand);
       break;
-        // E6data change for Except clause
     case 2:
-            exceptList = (SqlNodeList) operand;
-      break;
-    case 3:
       from = operand;
       break;
-    case 4:
+    case 3:
       where = operand;
       break;
-    case 5:
+    case 4:
       groupBy = (SqlNodeList) operand;
       break;
-    case 6:
+    case 5:
       having = operand;
       break;
-    case 7:
+    case 6:
       windowDecls = requireNonNull((SqlNodeList) operand);
       break;
-    case 8:
+    case 7:
       qualify = operand;
       break;
-    case 9:
+    case 8:
       orderBy = (SqlNodeList) operand;
       break;
-    case 10:
+    case 9:
       offset = operand;
       break;
-        case 11:
+    case 10:
       fetch = operand;
       break;
     default:
@@ -222,18 +214,6 @@ SqlNodeList exceptList; // E6data Variable for Except
 
   public void setSelectList(SqlNodeList selectList) {
     this.selectList = selectList;
-  }
-
-// E6data methods : getExcept, setExcept
-@Pure
-public final @Nullable SqlNodeList getExcept()
-{
-    return exceptList;
-}
-
-public void setExcept(@Nullable SqlNodeList except)
-{
-    this.exceptList = except;
   }
 
   @Pure

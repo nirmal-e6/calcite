@@ -20,8 +20,6 @@ import org.apiguardian.api.API;
 
 import java.util.Locale;
 
-// e6data shade - Port SubQueryRemoveRule from commit b04f744f7fbc6d5a4f12b2bb591be000265a88b2
-// Remove this file once calcite upgraded
 /**
  * Enumeration of join types.
  */

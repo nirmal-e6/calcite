@@ -18,7 +18,6 @@ package org.apache.calcite.rex;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-// E6data shade - Added for hypergraph backport from 1.41
 /**
  * Default implementation of {@link RexBiVisitor}, which visits each node but
  * does nothing while it's there.

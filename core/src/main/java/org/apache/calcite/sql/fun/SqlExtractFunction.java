@@ -19,6 +19,7 @@ package org.apache.calcite.sql.fun;
 import org.apache.calcite.avatica.util.TimeUnitRange;
 import org.apache.calcite.config.CalciteForkSettings;
 import org.apache.calcite.sql.SqlCall;
+import org.apache.calcite.sql.SqlCharStringLiteral;
 import org.apache.calcite.sql.SqlFunction;
 import org.apache.calcite.sql.SqlFunctionCategory;
 import org.apache.calcite.sql.SqlIntervalQualifier;
@@ -28,14 +29,17 @@ import org.apache.calcite.sql.SqlWriter;
 import org.apache.calcite.sql.type.OperandTypes;
 import org.apache.calcite.sql.type.ReturnTypes;
 import org.apache.calcite.sql.type.SqlReturnTypeInference;
+import org.apache.calcite.sql.type.SqlSingleOperandTypeChecker;
 import org.apache.calcite.sql.type.SqlTypeFamily;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.validate.SqlMonotonicity;
+import org.apache.calcite.sql.validate.SqlValidator;
+import org.apache.calcite.sql.validate.SqlValidatorScope;
 import org.apache.calcite.util.Util;
 
-import static org.apache.calcite.sql.validate.SqlNonNullableAccessors.getOperandLiteralValueOrThrow;
+import com.google.common.collect.ImmutableSet;
 
-import static java.util.Objects.requireNonNull;
+import static org.apache.calcite.sql.validate.SqlNonNullableAccessors.getOperandLiteralValueOrThrow;
 
 /**
  * The SQL <code>EXTRACT</code> operator. Extracts a specified field value from
@@ -46,22 +50,42 @@ import static java.util.Objects.requireNonNull;
 public class SqlExtractFunction extends SqlFunction {
   //~ Constructors -----------------------------------------------------------
 
+
+
+private static final SqlSingleOperandTypeChecker INTERVAL_TIMESTAMP = OperandTypes.family(
+    SqlTypeFamily.DATETIME_INTERVAL, SqlTypeFamily.TIMESTAMP);
+
+private static final SqlSingleOperandTypeChecker INTERVAL_TIME = OperandTypes.family(SqlTypeFamily.DATETIME_INTERVAL,
+    SqlTypeFamily.TIME);
+
+private static final SqlSingleOperandTypeChecker OPERAND_TYPE_CHECKER = OperandTypes.or(OperandTypes.INTERVAL_SAME_SAME,
+    INTERVAL_TIMESTAMP, INTERVAL_TIME);
+
   // SQL2003, Part 2, Section 4.4.3 - extract returns a exact numeric
   // TODO: Return type should be decimal for seconds
-  // Native executor returns Int32 for date component extraction functions,
-  // while the Java executor returns Int64.
-  private static final SqlReturnTypeInference EXTRACT_RETURN_TYPE = opBinding ->
-      (CalciteForkSettings.nativeExecutor() ? ReturnTypes.INTEGER_NULLABLE
-          : ReturnTypes.BIGINT_NULLABLE).inferReturnType(opBinding);
+
+// Native executor returns Int32 for date component extraction functions,
+// while the Java executor returns Int64.
+private static final SqlReturnTypeInference EXTRACT_RETURN_TYPE = opBinding ->
+    (CalciteForkSettings.nativeExecutor() ? ReturnTypes.INTEGER_NULLABLE : ReturnTypes.BIGINT_NULLABLE)
+        .inferReturnType(opBinding);
 
   public SqlExtractFunction(String name, boolean allowString) {
-    super(name, SqlKind.EXTRACT, EXTRACT_RETURN_TYPE, null,
+    super(name, SqlKind.EXTRACT,  EXTRACT_RETURN_TYPE, null,
         allowString
             ? OperandTypes.INTERVALINTERVAL_INTERVALDATETIME
                 .or(OperandTypes.family(SqlTypeFamily.STRING, SqlTypeFamily.DATETIME))
-                .or(OperandTypes.family(SqlTypeFamily.DATETIME_INTERVAL,
-                    SqlTypeFamily.TIMESTAMP))
+
+            .or(OperandTypes.family(SqlTypeFamily.DATETIME_INTERVAL, SqlTypeFamily.TIMESTAMP))
             : OperandTypes.INTERVALINTERVAL_INTERVALDATETIME,
+        SqlFunctionCategory.SYSTEM);
+}
+
+// SQL2003, Part 2, Section 4.4.3 - extract returns a exact numeric
+// TODO: Return type should be decimal for seconds
+public SqlExtractFunction(String name)
+{
+    super(name, SqlKind.EXTRACT, EXTRACT_RETURN_TYPE, null, OPERAND_TYPE_CHECKER,
         SqlFunctionCategory.SYSTEM);
   }
 
@@ -78,24 +102,19 @@ public class SqlExtractFunction extends SqlFunction {
       int leftPrec,
       int rightPrec) {
     final SqlWriter.Frame frame = writer.startFunCall(getName());
-    SqlIntervalQualifier.asIdentifier(call.operand(0))
+    call.operand(0)
         .unparse(writer, 0, 0);
     writer.sep("FROM");
     call.operand(1).unparse(writer, 0, 0);
     writer.endFunCall(frame);
   }
 
+
+
   @Override public SqlMonotonicity getMonotonicity(SqlOperatorBinding call) {
-    final TimeUnitRange value;
-    if (SqlTypeName.CHAR_TYPES.contains(call.getOperandType(0).getSqlTypeName())) {
-      value =
-          TimeUnitRange.of(
-              SqlIntervalQualifier.stringToDatePartTimeUnit(
-                  requireNonNull(call.getOperandLiteralValue(0, String.class))),
-          null);
-    } else {
+     TimeUnitRange
       value = getOperandLiteralValueOrThrow(call, 0, TimeUnitRange.class);
-    }
+
 
     switch (value) {
     case YEAR:

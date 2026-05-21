@@ -80,6 +80,7 @@ import static org.apache.calcite.rex.RexUnknownAs.UNKNOWN;
 
 import static java.util.Objects.requireNonNull;
 
+// TODO : REMOVE THIS CLASS AND USE E6RexSimplifyInstead VIA USING E6RelBuilder
 /**
  * Context required to simplify a row-expression.
  */

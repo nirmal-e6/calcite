@@ -31,7 +31,6 @@ import static org.apache.calcite.linq4j.Nullness.castNonNull;
 
 import static java.util.Objects.requireNonNull;
 
-// Shaded to support Except() Clause in select
 /**
  * An operator describing a query. (Not a query itself.)
  *
@@ -64,7 +63,6 @@ public class SqlSelectOperator extends SqlOperator {
     return SqlSyntax.SPECIAL;
   }
 
-// modified by e6data
   @Override public SqlCall createCall(
       @Nullable SqlLiteral functionQualifier,
       SqlParserPos pos,
@@ -73,17 +71,16 @@ public class SqlSelectOperator extends SqlOperator {
     return new SqlSelect(pos,
         (SqlNodeList) operands[0],
         requireNonNull((SqlNodeList) operands[1], "selectList"),
-        (SqlNodeList) operands[2],
+        operands[2],
         operands[3],
-        operands[4],
-        (SqlNodeList) operands[5],
-        operands[6],
-        (SqlNodeList) operands[7],
-        operands[8],
-        (SqlNodeList) operands[9],
+        (SqlNodeList) operands[4],
+        operands[5],
+        (SqlNodeList) operands[6],
+        operands[7],
+        (SqlNodeList) operands[8],
+        operands[9],
         operands[10],
-        operands[11],
-        (SqlNodeList) operands[12]);
+        (SqlNodeList) operands[11]);
   }
 
   /**

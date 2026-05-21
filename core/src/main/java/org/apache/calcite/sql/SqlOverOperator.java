@@ -102,14 +102,14 @@ public class SqlOverOperator extends SqlBinaryOperator {
           + " should be SqlCall, got " + agg.getClass() + ": " + agg);
     }
 
+    SqlNode window = call.operand(1);
+    SqlWindow w = validator.resolveWindow(window, scope);
+
     // E6data change - Unwrap WITHIN GROUP to get the inner aggregate call
     SqlCall aggCall = (SqlCall) agg;
     if (aggCall.getKind() == SqlKind.WITHIN_GROUP) {
       aggCall = aggCall.operand(0);
     }
-
-    SqlNode window = call.operand(1);
-    SqlWindow w = validator.resolveWindow(window, scope);
 
     SqlCallBinding opBinding = new SqlCallBinding(validator, scope, aggCall) {
       @Override public boolean hasEmptyGroup() {
