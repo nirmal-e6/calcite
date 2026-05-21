@@ -2400,7 +2400,6 @@ protected void replaceSubQueries(
 
     final Blackboard lambdaBb = createBlackboard(scope, nameToNodeMap, false);
     lambdaBb.setRoot(castNonNull(bb.inputs));
-    // E6data fix for lambda
     replaceSubQueries(lambdaBb, call.getExpression(), RelOptUtil.Logic.TRUE_FALSE_UNKNOWN);
     final RexNode expr = lambdaBb.convertExpression(call.getExpression());
     return rexBuilder.makeLambdaCall(expr, parameters);
@@ -4013,10 +4012,10 @@ protected List<RelHint> applyHintStrategy(@Nullable SqlNodeList tableHint, RelNo
       return JoinRelType.ASOF;
     case LEFT_ASOF:
       return JoinRelType.LEFT_ASOF;
-        case LEFT_SEMI_JOIN:
-            return JoinRelType.SEMI;
-        case LEFT_ANTI_JOIN:
-            return JoinRelType.ANTI;
+    case LEFT_SEMI_JOIN:
+      return JoinRelType.SEMI;
+    case LEFT_ANTI_JOIN:
+      return JoinRelType.ANTI;
     default:
       throw Util.unexpected(joinType);
     }

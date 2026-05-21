@@ -174,6 +174,9 @@ import static org.apache.calcite.util.Util.first;
 
 import static java.util.Objects.requireNonNull;
 
+// SHADED FOR PROJECT NAMING FIX
+// SEE LINE NO.
+// TODO : Fix it's implementation for unnest, unnest now able to get proper projection names
 /**
  * Builder for relational expressions.
  *

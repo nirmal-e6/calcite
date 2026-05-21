@@ -493,22 +493,18 @@ private static String extractColonAlias(SqlNode node)
   }
 
 
-
-
   /**
    * Makes sure that the names in a list are unique.
    *
    * <p>Does not modify the input list. Returns the input list if the strings
    * are unique, otherwise allocates a new list.
    *
+   * @deprecated Use {@link #uniquify(List, Suggester, boolean)}
+   *
    * @param nameList List of strings
    * @param suggester How to generate new names if duplicate names are found
- *
    * @return List of unique strings
- *
- * @deprecated Use {@link #uniquify(List, Suggester, boolean)}
    */
-
   @Deprecated // to be removed before 2.0
   public static List<String> uniquify(List<? extends @Nullable String> nameList,
       Suggester suggester) {
@@ -732,18 +728,14 @@ private static String extractColonAlias(SqlNode node)
     }
   }
 
-
-
   /**
    * Resolve a target column name in the target table.
    *
+   * @return the target field or null if the name cannot be resolved
    * @param rowType the target row type
    * @param id      the target column identifier
    * @param table   the target table or null if it is not a RelOptTable instance
- *
- * @return the target field or null if the name cannot be resolved
    */
-
   public static @Nullable RelDataTypeField getTargetField(
       RelDataType rowType, RelDataTypeFactory typeFactory,
       SqlIdentifier id, SqlValidatorCatalogReader catalogReader,
@@ -870,7 +862,7 @@ private static String extractColonAlias(SqlNode node)
       fields.add(type.getFieldList().get(field.getIndex()));
     }
     return typeFactory.createStructType(fields);
-}
+  }
 
   /**
    * Returns whether there are empty groups in the GROUP BY clause. The final grouping sets of
