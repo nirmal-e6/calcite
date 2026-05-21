@@ -315,9 +315,7 @@ protected RexNode convertFromJson(SqlRexContext cx, final SqlCall call)
         }
     };
 
-    // convert the second operand (type)
-    SqlDataTypeSpec dataType = call.operand(1);
-    RelDataType type = dataType.deriveType(cx.getValidator());
+    RelDataType type = cx.getValidator().getValidatedNodeType(call);
 
     return rexBuilder.makeCall(type, call.getOperator(), exprs);
 }

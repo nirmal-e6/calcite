@@ -24,6 +24,7 @@ import org.apache.calcite.sql.fun.SqlBasicAggFunction;
 import org.apache.calcite.sql.type.SqlOperandTypeChecker;
 import org.apache.calcite.sql.type.SqlOperandTypeInference;
 import org.apache.calcite.sql.type.SqlReturnTypeInference;
+import org.apache.calcite.sql.validate.MatchRecognizeScope;
 import org.apache.calcite.sql.validate.SqlValidator;
 import org.apache.calcite.sql.validate.SqlValidatorScope;
 import org.apache.calcite.util.Optionality;
@@ -136,12 +137,25 @@ public abstract class SqlAggFunction extends SqlFunction implements Context {
       SqlValidator validator,
       SqlValidatorScope scope,
       SqlValidatorScope operandScope) {
-    if (requiresOver() && !validator.isInWindow()) {
+    if (requiresOver()
+        && !validator.isInWindow()
+        && !(operandScope instanceof MatchRecognizeScope)
+        && !allowsE6AggregateWithoutOver(call)) {
       throw validator.newValidationError(call,
           Static.RESOURCE.absentOverClause());
     }
     super.validateCall(call, validator, scope, operandScope);
     validator.validateAggregateParams(call, null, null, null, scope);
+  }
+
+  private static boolean allowsE6AggregateWithoutOver(SqlCall call) {
+    switch (call.getKind()) {
+    case FIRST_VALUE:
+    case LAST_VALUE:
+      return true;
+    default:
+      return false;
+    }
   }
 
   @Override public final boolean requiresOrder() {
