@@ -2145,7 +2145,7 @@ private boolean hasPivotWithStar = false;
       // what we want for the select list of the merge source -- '*'
       // followed by the update set expressions
       SqlSelect sourceSelect = SqlNonNullableAccessors.getSourceSelect(updateStmt);
-      selectList = SqlNode.clone(SqlNonNullableAccessors.getSelectList(sourceSelect));
+      selectList = deepClone(SqlNonNullableAccessors.getSelectList(sourceSelect));
     } else {
       // otherwise, just use select *
       selectList = new SqlNodeList(SqlParserPos.ZERO);
@@ -2200,7 +2200,15 @@ private boolean hasPivotWithStar = false;
       insertCall.setSource(select);
     }
 
-}
+  }
+
+  private static SqlNodeList deepClone(SqlNodeList list) {
+    final SqlNodeList clone = new SqlNodeList(list.getParserPosition());
+    for (SqlNode node : list) {
+      clone.add(SqlNode.clone(node));
+    }
+    return clone;
+  }
 
 // e6data change - Planner-local support for MERGE action star shorthand.
 // Expands parser marker nodes before Calcite's MERGE rewrite builds source selects.
@@ -3889,7 +3897,15 @@ private void addSqlNodeToGroupByList(SqlNode sqlNode, List<SqlNode> newGroupByLi
     {
         if (sqlNode.getKind().equals(SqlKind.AS))
         {
-            newGroupByList.add(((SqlCall) sqlNode).operand(1));
+            SqlCall asCall = (SqlCall) sqlNode;
+            if (isExplodeProjection(asCall.operand(0)))
+            {
+                newGroupByList.add(asCall.operand(1));
+            }
+            else
+            {
+                newGroupByList.add(asCall.operand(0));
+            }
             return;
         }
         if (sqlNode instanceof SqlIdentifier
@@ -3944,6 +3960,15 @@ private void addSqlNodeToGroupByList(SqlNode sqlNode, List<SqlNode> newGroupByLi
             newGroupByList.add(sqlNode);
         }
     }
+  }
+
+  private static boolean isExplodeProjection(SqlNode node) {
+    if (!(node instanceof SqlCall)) {
+      return false;
+    }
+    String operatorName = ((SqlCall) node).getOperator().getName();
+    return operatorName.equalsIgnoreCase("explode")
+        || operatorName.equalsIgnoreCase("explode_outer");
   }
 
   private void registerSetop(
@@ -5987,7 +6012,8 @@ private void addSqlNodeToGroupByList(SqlNode sqlNode, List<SqlNode> newGroupByLi
   private void validateExpr(SqlNode expr, SqlValidatorScope scope) {
     if (expr instanceof SqlCall) {
       final SqlOperator op = ((SqlCall) expr).getOperator();
-      if (op.isAggregator() && op.requiresOver()) {
+      if (op.isAggregator() && op.requiresOver()
+          && !(scope instanceof MatchRecognizeScope)) {
         throw newValidationError(expr,
             RESOURCE.absentOverClause());
       }
@@ -6558,14 +6584,16 @@ private void addSqlNodeToGroupByList(SqlNode sqlNode, List<SqlNode> newGroupByLi
     checkTypeAssignment(scopes.get(select), table, sourceRowType, targetRowType,
         call);
 
-    // Set validated sourceExpressionList from the source select.
-    // The last elements of sourceSelect are the expression list.
-    List<SqlNode> sourceExpressionList =
-        Util.last(select.getSelectList(), call.getSourceExpressionList().size());
-    call.setOperand(
-        2, SqlUtil.stripListAs(
-        new SqlNodeList(sourceExpressionList,
-            call.getSourceExpressionList().getParserPosition())));
+    if (!validatingSqlMerge) {
+      // Set validated sourceExpressionList from the source select.
+      // The last elements of sourceSelect are the expression list.
+      List<SqlNode> sourceExpressionList =
+          Util.last(select.getSelectList(), call.getSourceExpressionList().size());
+      call.setOperand(
+          2, SqlUtil.stripListAs(
+          new SqlNodeList(sourceExpressionList,
+              call.getSourceExpressionList().getParserPosition())));
+    }
     checkConstraint(table, call, targetRowType);
 
     validateAccess(call.getTargetTable(), table, SqlAccessEnum.UPDATE);
@@ -6595,6 +6623,8 @@ private void addSqlNodeToGroupByList(SqlNode sqlNode, List<SqlNode> newGroupByLi
     RelDataType targetRowType = unknownType;
 
     SqlUpdate updateCall = call.getUpdateCall();
+    final SqlNodeList originalUpdateSourceExpressionList =
+        updateCall == null ? null : SqlNode.clone(updateCall.getSourceExpressionList());
     if (updateCall != null) {
       requireNonNull(table, () -> "ns.getTable() for " + targetNamespace);
       targetRowType =
@@ -6614,6 +6644,10 @@ private void addSqlNodeToGroupByList(SqlNode sqlNode, List<SqlNode> newGroupByLi
     SqlUpdate updateCallAfterValidate = call.getUpdateCall();
     if (updateCallAfterValidate != null) {
       validateUpdate(updateCallAfterValidate);
+      if (originalUpdateSourceExpressionList != null) {
+        updateCallAfterValidate.setOperand(2,
+            SqlNode.clone(originalUpdateSourceExpressionList));
+      }
     }
     SqlInsert insertCallAfterValidate = call.getInsertCall();
     if (insertCallAfterValidate != null) {

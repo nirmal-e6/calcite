@@ -3630,8 +3630,10 @@ public class RexUtil {
             (RexLiteral) deref(program, call.operands.get(1));
         final Sarg sarg = requireNonNull(literal.getValueAs(Sarg.class), "Sarg");
         if (maxComplexity < 0 || sarg.complexity() < maxComplexity) {
-          return sargRef(call.pos, rexBuilder, ref, sarg, literal.getType(),
+          RexNode sargRef = sargRef(call.pos, rexBuilder, ref, sarg, literal.getType(),
               RexUnknownAs.UNKNOWN);
+          return sargRef.accept(
+              new SearchExpandingShuttle(program, rexBuilder, maxComplexity));
         }
         // Sarg is complex (therefore useful); fall through
       default:

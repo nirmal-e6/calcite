@@ -18,9 +18,7 @@ package org.apache.calcite.sql.fun;
 
 import org.apache.calcite.avatica.util.TimeUnitRange;
 import org.apache.calcite.config.CalciteForkSettings;
-import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.sql.SqlCall;
-import org.apache.calcite.sql.SqlCharStringLiteral;
 import org.apache.calcite.sql.SqlFunction;
 import org.apache.calcite.sql.SqlFunctionCategory;
 import org.apache.calcite.sql.SqlIntervalQualifier;
@@ -33,14 +31,9 @@ import org.apache.calcite.sql.type.SqlReturnTypeInference;
 import org.apache.calcite.sql.type.SqlTypeFamily;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.validate.SqlMonotonicity;
-import org.apache.calcite.sql.validate.SqlValidator;
-import org.apache.calcite.sql.validate.SqlValidatorScope;
 import org.apache.calcite.util.Util;
 
-import com.google.common.collect.ImmutableSet;
-
 import static org.apache.calcite.sql.validate.SqlNonNullableAccessors.getOperandLiteralValueOrThrow;
-import static org.apache.calcite.util.Static.RESOURCE;
 
 import static java.util.Objects.requireNonNull;
 
@@ -90,147 +83,6 @@ public class SqlExtractFunction extends SqlFunction {
     writer.sep("FROM");
     call.operand(1).unparse(writer, 0, 0);
     writer.endFunCall(frame);
-  }
-
-  // List of types that support EXTRACT(X, ...) where X is MONTH or larger
-  private static final ImmutableSet<SqlTypeName> MONTH_AND_ABOVE_TYPES =
-      new ImmutableSet.Builder<SqlTypeName>()
-      .add(SqlTypeName.DATE)
-      .add(SqlTypeName.TIMESTAMP)
-      .add(SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE)
-      .add(SqlTypeName.TIMESTAMP_TZ)
-      .addAll(SqlTypeName.YEAR_INTERVAL_TYPES)
-      .build();
-
-  // List of types that support EXTRACT(X, ...) where X is between DAY and WEEK
-  private static final ImmutableSet<SqlTypeName> DAY_TO_WEEK_TYPES =
-      new ImmutableSet.Builder<SqlTypeName>()
-          .add(SqlTypeName.DATE)
-          .add(SqlTypeName.TIMESTAMP)
-          .add(SqlTypeName.TIMESTAMP_TZ)
-          .add(SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE)
-          .build();
-
-  // List of types that support EXTRACT(EPOCH, ...)
-  private static final ImmutableSet<SqlTypeName> EPOCH_TYPES =
-      new ImmutableSet.Builder<SqlTypeName>()
-          .add(SqlTypeName.DATE)
-          .add(SqlTypeName.TIMESTAMP)
-          .add(SqlTypeName.TIMESTAMP_TZ)
-          .add(SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE)
-          .addAll(SqlTypeName.YEAR_INTERVAL_TYPES)
-          .addAll(SqlTypeName.DAY_INTERVAL_TYPES)
-          .build();
-
-  // List of types that support EXTRACT(DAY, ...)
-  private static final ImmutableSet<SqlTypeName> DAY_TYPES =
-      new ImmutableSet.Builder<SqlTypeName>()
-          .add(SqlTypeName.DATE)
-          .add(SqlTypeName.TIMESTAMP)
-          .add(SqlTypeName.TIMESTAMP_TZ)
-          .add(SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE)
-          .add(SqlTypeName.INTERVAL_DAY)
-          .add(SqlTypeName.INTERVAL_DAY_HOUR)
-          .add(SqlTypeName.INTERVAL_DAY_MINUTE)
-          .add(SqlTypeName.INTERVAL_DAY_SECOND)
-          .addAll(SqlTypeName.YEAR_INTERVAL_TYPES)
-          .build();
-
-  // List of types that support EXTRACT(X, ...) where X is
-  // between HOUR and NANOSECOND
-  private static final ImmutableSet<SqlTypeName> HOUR_TO_NANOSECOND_TYPES =
-      new ImmutableSet.Builder<SqlTypeName>()
-          .add(SqlTypeName.DATE)
-          .add(SqlTypeName.TIMESTAMP)
-          .add(SqlTypeName.TIMESTAMP_TZ)
-          .add(SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE)
-          .add(SqlTypeName.TIME)
-          .add(SqlTypeName.TIME_TZ)
-          .add(SqlTypeName.TIME_WITH_LOCAL_TIME_ZONE)
-          .addAll(SqlTypeName.YEAR_INTERVAL_TYPES)
-          .addAll(SqlTypeName.DAY_INTERVAL_TYPES)
-          .build();
-
-  @Override public void validateCall(SqlCall call, SqlValidator validator,
-      SqlValidatorScope scope, SqlValidatorScope operandScope) {
-    super.validateCall(call, validator, scope, operandScope);
-
-    // This is either a time unit or a time frame:
-    //
-    //  * In "EXTRACT(YEAR FROM x)" operand 0 is a SqlIntervalQualifier with
-    //    startUnit = YEAR and timeFrameName = null.
-    //
-    //  * In "EXTRACT(MINUTE15 FROM x)" operand 0 is a SqlIntervalQualifier with
-    //    startUnit = EPOCH and timeFrameName = 'MINUTE15'.
-    //
-    // If the latter, check that timeFrameName is valid.
-    SqlIntervalQualifier qualifier;
-    if (call.operand(0) instanceof SqlCharStringLiteral) {
-      final SqlCharStringLiteral stringLiteral = call.operand(0);
-      qualifier =
-          new SqlIntervalQualifier(requireNonNull(stringLiteral.toValue()),
-              call.operand(0).getParserPosition());
-    } else {
-      qualifier = call.operand(0);
-    }
-    validator.validateTimeFrame(qualifier);
-    TimeUnitRange range = qualifier.timeUnitRange;
-
-    RelDataType type = validator.getValidatedNodeTypeIfKnown(call.operand(1));
-    if (type == null) {
-      return;
-    }
-
-    SqlTypeName typeName = type.getSqlTypeName();
-    boolean legal;
-    switch (range) {
-    case YEAR:
-    case MONTH:
-    case ISOYEAR:
-    case QUARTER:
-    case DECADE:
-    case CENTURY:
-    case MILLENNIUM:
-      legal = MONTH_AND_ABOVE_TYPES.contains(typeName);
-      break;
-    case WEEK:
-    case DOW:
-    case ISODOW:
-    case DOY:
-      legal = DAY_TO_WEEK_TYPES.contains(typeName);
-      break;
-    case EPOCH:
-      legal = EPOCH_TYPES.contains(typeName);
-      break;
-    case DAY:
-      legal = DAY_TYPES.contains(typeName);
-      break;
-    case HOUR:
-    case MINUTE:
-    case SECOND:
-    case MILLISECOND:
-    case MICROSECOND:
-    case NANOSECOND:
-      legal = HOUR_TO_NANOSECOND_TYPES.contains(typeName);
-      break;
-    case YEAR_TO_MONTH:
-    case DAY_TO_HOUR:
-    case DAY_TO_MINUTE:
-    case DAY_TO_SECOND:
-    case HOUR_TO_MINUTE:
-    case HOUR_TO_SECOND:
-    case MINUTE_TO_SECOND:
-    default:
-      legal = false;
-      break;
-    }
-
-    if (!legal) {
-      throw validator.newValidationError(call,
-          RESOURCE.canNotApplyOp2Type(call.getOperator().getName(),
-              call.getCallSignature(validator, scope),
-              call.getOperator().getAllowedSignatures()));
-    }
   }
 
   @Override public SqlMonotonicity getMonotonicity(SqlOperatorBinding call) {
