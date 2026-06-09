@@ -216,6 +216,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -2556,6 +2557,28 @@ protected void replaceSubQueries(
             }
             // Fall through to default error
 
+        case GENERATOR:
+            // Snowflake row-spine generator: TABLE(GENERATOR(ROWCOUNT => N)).
+            if (from instanceof SqlCall)
+            {
+                final SqlCall funcCall = (SqlCall) from;
+                if (funcCall.getOperator() instanceof SqlTableFunction)
+                {
+                    convertCollectionTable(bb, funcCall);
+                    return;
+                }
+            }
+            // Fall through to default error
+
+        case FLATTEN:
+            // Snowflake LATERAL FLATTEN: LATERAL FLATTEN(INPUT => arr [, OUTER => true]).
+            if (from instanceof SqlCall)
+            {
+                convertFlatten(bb, (SqlCall) from);
+                return;
+            }
+            // Fall through to default error
+
     default:
       throw new AssertionError("not a join operator " + from);
     }
@@ -3318,6 +3341,60 @@ protected List<RelHint> applyHintStrategy(@Nullable SqlNodeList tableHint, RelNo
       SqlToRelConverter.Blackboard bb,
       SqlCall call,
       LogicalTableFunctionScan callRel) {
+  }
+
+  /**
+   * Lowers a Snowflake LATERAL FLATTEN call directly to a
+   * LogicalTableFunctionScan, bypassing convertCollectionTable's
+   * bb.convertExpression step. The operator implementation remains product
+   * owned; this method only depends on Calcite call shape and named arguments.
+   */
+  protected void convertFlatten(Blackboard bb, SqlCall flatCall) {
+    SqlNode inputArg = null;
+    SqlNode outerArg = null;
+    for (SqlNode op : flatCall.getOperandList()) {
+      if (op.getKind() == SqlKind.ARGUMENT_ASSIGNMENT) {
+        SqlCall assign = (SqlCall) op;
+        String name =
+            ((SqlIdentifier) assign.operand(1)).getSimple().toLowerCase(Locale.ROOT);
+        SqlNode value = assign.operand(0);
+        if ("input".equals(name)) {
+          inputArg = value;
+        } else if ("outer".equals(name)) {
+          outerArg = value;
+        }
+      }
+    }
+    if (inputArg == null) {
+      throw new IllegalStateException(
+          "FLATTEN call missing required 'input' argument: " + flatCall);
+    }
+
+    replaceSubQueries(bb, flatCall, RelOptUtil.Logic.TRUE_FALSE_UNKNOWN);
+
+    final List<RexNode> rexOperands = new ArrayList<>();
+    rexOperands.add(bb.convertExpression(inputArg));
+    if (outerArg != null) {
+      rexOperands.add(bb.convertExpression(outerArg));
+    }
+
+    final RelDataType returnType = validator().getValidatedNodeType(flatCall);
+    final RexBuilder rexBuilder = cluster.getRexBuilder();
+    final RexNode rexCall = rexBuilder.makeCall(flatCall.getParserPosition(),
+        returnType, flatCall.getOperator(), rexOperands);
+
+    final List<RelNode> inputs = bb.retrieveCursors();
+    LogicalTableFunctionScan callRel =
+        LogicalTableFunctionScan.create(
+            cluster,
+            inputs,
+            rexCall,
+            null,
+            returnType,
+            null);
+
+    bb.setRoot(callRel, true);
+    afterTableFunction(bb, flatCall, callRel);
   }
 
   private void convertTemporalTable(Blackboard bb, SqlCall call) {
