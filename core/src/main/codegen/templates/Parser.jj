@@ -2502,11 +2502,12 @@ SqlNode TableRef3(ExprContext exprContext, boolean lateral) :
             tableRef = unnestOp.createCall(s.end(this), (List<SqlNode>) args);
         }
     |
+        LOOKAHEAD(2)
+        tableRef = ExtendedTableRef()
+    |
         [ <LATERAL> { lateral = true; } ]
         tableRef = TableFunctionCall()
         tableRef = addLateral(tableRef, lateral)
-    |
-        tableRef = ExtendedTableRef()
     |
         tableRef = TableConstructor(false)
     )

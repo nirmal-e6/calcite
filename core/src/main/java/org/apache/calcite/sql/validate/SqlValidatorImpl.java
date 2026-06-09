@@ -2670,11 +2670,25 @@ private static SqlNodeList createMergeStarSourceExpressionList(SqlMerge call, Re
       if ((fun.getSqlIdentifier() == null)
           && (fun.getSyntax() != SqlSyntax.FUNCTION_ID
           && fun.getSyntax() != SqlSyntax.FUNCTION_ID_CONSTANT)) {
-        final int expectedArgCount =
-            fun.getOperandCountRange().getMin();
-        throw newValidationError(call,
-            RESOURCE.invalidArgCount(call.getOperator().getName(),
-                expectedArgCount));
+        org.apache.calcite.sql.SqlOperandCountRange range =
+            fun.getOperandCountRange();
+        int min = range.getMin();
+        int max = range.getMax();
+        if (min == max) {
+          throw newValidationError(call,
+              RESOURCE.invalidArgCount(call.getOperator().getName(), min));
+        }
+        String message = String.format(Locale.ROOT,
+            "Invalid number of arguments to function '%s'. Was expecting %d to %d arguments",
+            call.getOperator().getName(), min, max);
+        SqlParserPos pos = call.getParserPosition();
+        throw new CalciteContextException(
+            "From line " + pos.getLineNum() + ", column "
+                + pos.getColumnNum() + " to line " + pos.getEndLineNum()
+                + ", column " + pos.getEndColumnNum(),
+            new CalciteException(message, null),
+            pos.getLineNum(), pos.getColumnNum(),
+            pos.getEndLineNum(), pos.getEndColumnNum());
       }
     }
 
