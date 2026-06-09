@@ -3302,6 +3302,8 @@ private static SqlNodeList createMergeStarSourceExpressionList(SqlMerge call, Re
     case VALUES:
     case WITH:
     case  RANGE:
+    case GENERATOR:
+    case FLATTEN:
     case OTHER_FUNCTION:
       if (alias == null) {
         alias = SqlValidatorUtil.alias(node, nextGeneratedId++);
@@ -3841,6 +3843,7 @@ private static SqlNodeList createMergeStarSourceExpressionList(SqlMerge call, Re
       scopes.put(node, parentScope);
       break;
     case  RANGE:
+    case GENERATOR:
     case OTHER_FUNCTION:
       call = (SqlCall) node;
       ProcedureNamespace procNs =
@@ -3855,6 +3858,24 @@ private static SqlNodeList createMergeStarSourceExpressionList(SqlMerge call, Re
           procNs,
           forceNullable);
       registerSubQueries(parentScope, call);
+      break;
+    case FLATTEN:
+      // Snowflake FLATTEN is implicitly lateral: resolve INPUT against the
+      // surrounding FROM list, not only the procedure call's own scope.
+      call = (SqlCall) node;
+      ProcedureNamespace flattenNs =
+          new ProcedureNamespace(
+              this,
+              parentScope,
+              call,
+              enclosingNode);
+      registerNamespace(
+          usingScope,
+          alias,
+          flattenNs,
+          forceNullable);
+      registerSubQueries(parentScope, call);
+      scopes.put(node, usingScope);
       break;
 
     case MULTISET_QUERY_CONSTRUCTOR:
@@ -8577,6 +8598,7 @@ static class ExtendedAliasExpander extends Expander
 {
 
     SqlSelect select;
+    int callCount = 0;
 
     ExtendedAliasExpander(SqlValidatorImpl validator, SqlValidatorScope scope, SqlSelect select)
     {
@@ -8618,6 +8640,10 @@ static class ExtendedAliasExpander extends Expander
                     // More than one column has this alias.
                     throw validator.newValidationError(id, RESOURCE.columnAmbiguous(name));
                 }
+                else if (callCount > 50)
+                {
+                    throw validator.newValidationError(id, RESOURCE.columnNotFound(name));
+                }
                 expr = stripAs(expr);
                 if (expr instanceof SqlIdentifier)
                 {
@@ -8629,11 +8655,17 @@ static class ExtendedAliasExpander extends Expander
                     expr = getScope().fullyQualify((SqlIdentifier) expr).identifier;
                 }
                 //                validator.setOriginal(expr, id);
-                final Expander expander = new ExtendedAliasExpander(validator, getScope(), select);
+                final ExtendedAliasExpander expander = new ExtendedAliasExpander(validator, getScope(), select);
+                expander.setCallCount(++callCount);
                 return expr.accept(expander);
             }
         }
         return super.visit(id);
+    }
+
+    public void setCallCount(int callCount)
+    {
+        this.callCount = callCount;
     }
 
 }

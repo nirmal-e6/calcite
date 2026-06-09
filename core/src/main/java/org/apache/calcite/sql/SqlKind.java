@@ -133,6 +133,10 @@ public enum SqlKind {
 
     RANGE,
 
+    GENERATOR,
+
+    FLATTEN,
+
   /**
    * Input tables have either row semantics or set semantics.
    * <ul>
@@ -962,14 +966,24 @@ public enum SqlKind {
      */
     TRY_VARIANT_GET,
 
-    /**
-     * Parse JSON into a Variant value.
-     */
-    PARSE_JSON,
+  /**
+   * Parse JSON into a Variant value.
+   */
+  PARSE_JSON,
 
-    /**
-     * Checks if a variant value is null.
-     */
+  /**
+   * Parse JSON into a Variant value; returns NULL on parse error.
+   */
+  TRY_PARSE_JSON,
+
+  /**
+   * Extract a value from a Variant by path expression.
+   */
+  GET_PATH,
+
+  /**
+   * Checks if a variant value is null.
+   */
     IS_VARIANT_NULL,
 
   /**
@@ -1440,6 +1454,7 @@ public enum SqlKind {
     COPY_INTO,
     WRITE_INTO,
     TO_DATE,
+    TRY_TO_DATE,
     TO_CHAR,
     TRY_CAST,
     UPPER,
