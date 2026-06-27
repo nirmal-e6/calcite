@@ -23,6 +23,7 @@ import org.apache.calcite.rel.metadata.RelMetadataQuery;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.fun.SqlLibraryOperators;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
+import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.tools.FrameworkConfig;
 import org.apache.calcite.tools.RelBuilder;
 
@@ -116,6 +117,21 @@ public class RelMdPredicatesTest {
       assertTrue(list.constantMap.isEmpty(),
           "Operator " + randomOp + " considered constant: " + list.constantMap);
     }
+  }
+
+  @Test void testPullUpPredicatesFromProjectExpression() {
+    FrameworkConfig config = RelBuilderTest.config().build();
+    RelBuilder b = RelBuilder.create(config);
+    RelNode rel = b
+        .scan("EMP")
+        .filter(b.greaterThan(
+            b.cast(b.field("DEPTNO"), SqlTypeName.BIGINT),
+            b.literal(7L)))
+        .project(b.cast(b.field("DEPTNO"), SqlTypeName.BIGINT))
+        .build();
+    RelMetadataQuery mq = rel.getCluster().getMetadataQuery();
+    RelOptPredicateList list = mq.getPulledUpPredicates(rel);
+    assertThat(list.pulledUpPredicates, sortsAs("[>($0, 7)]"));
   }
 
 }

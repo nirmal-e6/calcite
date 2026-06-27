@@ -6546,6 +6546,15 @@ class RelOptRulesTest extends RelOptTestBase {
         .withRule(CoreRules.JOIN_PUSH_TRANSITIVE_PREDICATES).check();
   }
 
+  @Test void testTransitiveInferenceProjectExpression() {
+    final String sql = "select 1 from\n"
+        + "(select * from sales.emp where cast(deptno as bigint) > 7) d\n"
+        + "left outer join (select cast(deptno as bigint) deptno_big from sales.emp) e\n"
+        + "on cast(d.deptno as bigint) = e.deptno_big";
+    sql(sql).withPre(getTransitiveProgram())
+        .withRule(CoreRules.JOIN_PUSH_TRANSITIVE_PREDICATES).check();
+  }
+
   @Test void testTransitiveInferenceAggregate() {
     final String sql = "select 1 from (select deptno, count(*) from sales.emp where deptno > 7\n"
         + "group by deptno) d inner join sales.emp e on d.deptno = e.deptno";

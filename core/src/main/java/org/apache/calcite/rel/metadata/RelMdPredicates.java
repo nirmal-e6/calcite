@@ -111,12 +111,15 @@ import static java.util.Objects.requireNonNull;
  * </pre>
  *
  * <li> For Projections we only look at columns that are projected without
- * any function applied. So:
+ * any function applied, plus deterministic projected expressions that exactly
+ * match sub-expressions in input predicates. So:
  * <pre>
  * select a from R1 where a &gt; 7
  *   &rarr; "a &gt; 7" is pulled up from the Projection.
  * select a + 1 from R1 where a + 1 &gt; 7
- *   &rarr; "a + 1 &gt; 7" is not pulled up
+ *   &rarr; "EXPR$0 &gt; 7" is pulled up from the Projection.
+ * select a + 1 from R1 where a + 2 &gt; 7
+ *   &rarr; "a + 2 &gt; 7" is not pulled up
  * </pre>
  *
  * <li> There are several restrictions on Joins:
@@ -141,6 +144,7 @@ public class RelMdPredicates
       .reflectiveSource(new RelMdPredicates(), BuiltInMetadata.Predicates.Handler.class);
 
   private static final List<RexNode> EMPTY_LIST = ImmutableList.of();
+  private static final int MAX_PROJECT_EXPRESSION_PREDICATE_EXPANSIONS = 32;
 
   @Override public MetadataDef<BuiltInMetadata.Predicates> getDef() {
     return BuiltInMetadata.Predicates.DEF;
@@ -199,6 +203,10 @@ public class RelMdPredicates
     // The keys are field indexes (RexInputRef) that appear in the input of project,
     // values are sets of field indexes (RexInputRef) that appear in project.
     Map<Integer, BitSet> equivalence = new HashMap<>();
+    // Exact deterministic projected expressions can also have multiple output
+    // aliases. Keep them separate from input-ref equivalence because they only
+    // match whole RexCall expressions.
+    Map<RexNode, BitSet> expressionEquivalence = new HashMap<>();
     for (Ord<RexNode> expr : Ord.zip(project.getProjects())) {
       if (expr.e instanceof RexInputRef) {
         int sIdx = ((RexInputRef) expr.e).getIndex();
@@ -209,6 +217,9 @@ public class RelMdPredicates
         // include them.
         projectPullUpPredicates.add(
             eqConstant(project, rexBuilder, expr.i, expr.e));
+      } else if (isProjectExpressionRefCandidate(expr.e)) {
+        expressionEquivalence.computeIfAbsent(expr.e, k -> new BitSet())
+            .set(expr.i);
       }
     }
 
@@ -216,6 +227,8 @@ public class RelMdPredicates
     // 'columnsMapped' construct a new predicate based on mapping.
     final ImmutableBitSet columnsMapped = columnsMappedBuilder.build();
     for (RexNode r : inputInfo.pulledUpPredicates) {
+      projectExpressionPredicates(project, rexBuilder, equivalence,
+          expressionEquivalence, r, projectPullUpPredicates);
       RexNode r2 = projectPredicate(rexBuilder, input, r, columnsMapped);
       if (!r2.isAlwaysTrue()) {
         ImmutableBitSet fields = RelOptUtil.InputFinder.bits(r2);
@@ -236,6 +249,127 @@ public class RelMdPredicates
       }
     }
     return RelOptPredicateList.of(rexBuilder, projectPullUpPredicates);
+  }
+
+  private static boolean isProjectExpressionRefCandidate(RexNode expression) {
+    return expression instanceof RexCall
+        && !RexUtil.isConstant(expression)
+        && RexUtil.isDeterministic(expression);
+  }
+
+  private static void projectExpressionPredicates(Project project,
+      RexBuilder rexBuilder, Map<Integer, BitSet> inputEquivalence,
+      Map<RexNode, BitSet> expressionEquivalence, RexNode predicate,
+      List<RexNode> projectPullUpPredicates) {
+    if (expressionEquivalence.isEmpty()) {
+      return;
+    }
+    final ProjectExpressionPredicateExpander expander =
+        new ProjectExpressionPredicateExpander(project, rexBuilder,
+            inputEquivalence, expressionEquivalence);
+    final @Nullable Expansion expansion = expander.expand(predicate);
+    if (expansion != null && expansion.replacedProjectExpression) {
+      projectPullUpPredicates.addAll(expansion.nodes);
+    }
+  }
+
+  /** Rewrites input predicates in terms of project output expressions. */
+  private static class ProjectExpressionPredicateExpander {
+    private final Project project;
+    private final RexBuilder rexBuilder;
+    private final Map<Integer, BitSet> inputEquivalence;
+    private final Map<RexNode, BitSet> expressionEquivalence;
+
+    ProjectExpressionPredicateExpander(Project project, RexBuilder rexBuilder,
+        Map<Integer, BitSet> inputEquivalence,
+        Map<RexNode, BitSet> expressionEquivalence) {
+      this.project = project;
+      this.rexBuilder = rexBuilder;
+      this.inputEquivalence = inputEquivalence;
+      this.expressionEquivalence = expressionEquivalence;
+    }
+
+    private @Nullable Expansion expand(RexNode node) {
+      if (node instanceof RexInputRef) {
+        BitSet targets = inputEquivalence.get(((RexInputRef) node).getIndex());
+        if (targets == null || targets.isEmpty()) {
+          return null;
+        }
+        return new Expansion(inputRefs(targets), false);
+      }
+      if (node instanceof RexCall) {
+        RexCall call = (RexCall) node;
+        BitSet targets = expressionEquivalence.get(call);
+        if (targets != null && !targets.isEmpty()) {
+          return new Expansion(inputRefs(targets), true);
+        }
+        return expandCall(call);
+      }
+      return new Expansion(ImmutableList.of(node), false);
+    }
+
+    private @Nullable Expansion expandCall(RexCall call) {
+      final List<List<RexNode>> operandExpansions = new ArrayList<>();
+      boolean replacedProjectExpression = false;
+      long expansionCount = 1L;
+      for (RexNode operand : call.getOperands()) {
+        final @Nullable Expansion operandExpansion = expand(operand);
+        if (operandExpansion == null) {
+          return null;
+        }
+        operandExpansions.add(operandExpansion.nodes);
+        replacedProjectExpression |= operandExpansion.replacedProjectExpression;
+        final int operandCount = operandExpansion.nodes.size();
+        if (expansionCount
+            > MAX_PROJECT_EXPRESSION_PREDICATE_EXPANSIONS
+                / operandCount) {
+          return null;
+        }
+        expansionCount *= operandCount;
+      }
+      if (!replacedProjectExpression) {
+        return new Expansion(ImmutableList.of(call), false);
+      }
+      final List<RexNode> nodes = new ArrayList<>((int) expansionCount);
+      addCallExpansions(call, operandExpansions, 0, new ArrayList<>(), nodes);
+      return new Expansion(nodes, true);
+    }
+
+    private List<RexNode> inputRefs(BitSet targets) {
+      final List<RexNode> refs = new ArrayList<>();
+      for (int target = targets.nextSetBit(0); target >= 0;
+           target = targets.nextSetBit(target + 1)) {
+        refs.add(rexBuilder.makeInputRef(project, target));
+      }
+      return refs;
+    }
+
+    private void addCallExpansions(RexCall call,
+        List<List<RexNode>> operandExpansions, int ordinal,
+        List<RexNode> currentOperands, List<RexNode> nodes) {
+      if (ordinal == operandExpansions.size()) {
+        nodes.add(call.clone(call.getType(),
+            ImmutableList.copyOf(currentOperands)));
+        return;
+      }
+      for (RexNode operand : operandExpansions.get(ordinal)) {
+        currentOperands.add(operand);
+        addCallExpansions(call, operandExpansions, ordinal + 1,
+            currentOperands, nodes);
+        currentOperands.remove(currentOperands.size() - 1);
+      }
+    }
+  }
+
+  /** Result of expanding an input predicate through a project. */
+  private static class Expansion {
+    final List<RexNode> nodes;
+    final boolean replacedProjectExpression;
+
+    Expansion(List<RexNode> nodes, boolean replacedProjectExpression) {
+      this.nodes = nodes;
+      this.replacedProjectExpression = replacedProjectExpression;
+    }
   }
 
   /** Returns a predicate that field {@code i} of relational expression

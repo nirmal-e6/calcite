@@ -21194,6 +21194,37 @@ LogicalProject(EXPR$0=[1])
 ]]>
     </Resource>
   </TestCase>
+  <TestCase name="testTransitiveInferenceProjectExpression">
+    <Resource name="sql">
+      <![CDATA[select 1 from
+(select * from sales.emp where cast(deptno as bigint) > 7) d
+left outer join (select cast(deptno as bigint) deptno_big from sales.emp) e
+on cast(d.deptno as bigint) = e.deptno_big]]>
+    </Resource>
+    <Resource name="planBefore">
+      <![CDATA[
+LogicalProject(EXPR$0=[1])
+  LogicalJoin(condition=[=($9, $10)], joinType=[left])
+    LogicalProject(EMPNO=[$0], ENAME=[$1], JOB=[$2], MGR=[$3], HIREDATE=[$4], SAL=[$5], COMM=[$6], DEPTNO=[$7], SLACKER=[$8], DEPTNO0=[CAST($7):BIGINT NOT NULL])
+      LogicalFilter(condition=[>(CAST($7):BIGINT NOT NULL, 7)])
+        LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+    LogicalProject(DEPTNO_BIG=[CAST($7):BIGINT NOT NULL])
+      LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+]]>
+    </Resource>
+    <Resource name="planAfter">
+      <![CDATA[
+LogicalProject(EXPR$0=[1])
+  LogicalJoin(condition=[=($9, $10)], joinType=[left])
+    LogicalProject(EMPNO=[$0], ENAME=[$1], JOB=[$2], MGR=[$3], HIREDATE=[$4], SAL=[$5], COMM=[$6], DEPTNO=[$7], SLACKER=[$8], DEPTNO0=[CAST($7):BIGINT NOT NULL])
+      LogicalFilter(condition=[>(CAST($7):BIGINT NOT NULL, 7)])
+        LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+    LogicalFilter(condition=[>($0, 7)])
+      LogicalProject(DEPTNO_BIG=[CAST($7):BIGINT NOT NULL])
+        LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+]]>
+    </Resource>
+  </TestCase>
   <TestCase name="testTransitiveInferencePullUpThruAlias">
     <Resource name="sql">
       <![CDATA[select 1 from (select comm as deptno from sales.emp where comm > 7) d
